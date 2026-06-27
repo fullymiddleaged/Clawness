@@ -104,6 +104,9 @@ def main() -> None:
     except Exception:
         pass
 
+    log("clawness bootstrap: ensuring Python deps are present "
+        "(PyYAML required; model2vec+numpy optional, for semantic search)")
+
     # Required.
     ensure("yaml", ["pyyaml>=6.0"])
 
@@ -111,7 +114,9 @@ def main() -> None:
     if not os.environ.get("WRIT_NO_SEMANTIC"):
         ensure("model2vec", ["model2vec>=0.3", "numpy>=1.24"])
     else:
-        log("WRIT_NO_SEMANTIC set — skipping model2vec")
+        log("WRIT_NO_SEMANTIC set — skipping model2vec (semantic search off)")
+
+    log("clawness bootstrap: done")
 
     sys.exit(0)
 

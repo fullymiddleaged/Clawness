@@ -8,6 +8,8 @@
 #   2. Removes the agent files copied to ~/.claude/agents/.
 #   3. Removes the skill folders copied to ~/.claude/skills/.
 #   4. Removes the embeddings cache (~/.cache/clawness).
+#   5. Uninstalls the clawness pip package (the editable install would otherwise
+#      dangle once the folder is gone).
 #
 # Plugin users: don't use this - run `claude plugin uninstall clawness` instead.
 # ----------------------------------
@@ -27,7 +29,7 @@ Write-Host 'Clawness uninstaller'
 Write-Host ''
 
 # 1. settings.json hooks
-Write-Host '[1/4] Removing hooks from settings.json...'
+Write-Host '[1/5] Removing hooks from settings.json...'
 $setup = Join-Path $ScriptDir 'hooks\setup_settings.py'
 if ($pyCmd -and (Test-Path $setup)) {
     & $pyCmd $setup --uninstall
@@ -36,7 +38,7 @@ if ($pyCmd -and (Test-Path $setup)) {
 }
 
 # 2. agents
-Write-Host "[2/4] Removing agents from $AgentsDir..."
+Write-Host "[2/5] Removing agents from $AgentsDir..."
 $srcAgents = Join-Path $ScriptDir 'agents'
 if ((Test-Path $srcAgents) -and (Test-Path $AgentsDir)) {
     Get-ChildItem -Path $srcAgents -Filter *.md | ForEach-Object {
@@ -46,7 +48,7 @@ if ((Test-Path $srcAgents) -and (Test-Path $AgentsDir)) {
 }
 
 # 3. skills
-Write-Host "[3/4] Removing skills from $SkillsDir..."
+Write-Host "[3/5] Removing skills from $SkillsDir..."
 $srcSkills = Join-Path $ScriptDir 'skills'
 if ((Test-Path $srcSkills) -and (Test-Path $SkillsDir)) {
     Get-ChildItem -Path $srcSkills -Directory | ForEach-Object {
@@ -56,9 +58,19 @@ if ((Test-Path $srcSkills) -and (Test-Path $SkillsDir)) {
 }
 
 # 4. cache
-Write-Host '[4/4] Removing embeddings cache...'
+Write-Host '[4/5] Removing embeddings cache...'
 if (Test-Path $CacheDir) { Remove-Item $CacheDir -Recurse -Force; Write-Host "  removed $CacheDir" }
 else { Write-Host '  (none)' }
+
+# 5. pip package
+Write-Host '[5/5] Uninstalling the clawness pip package...'
+if ($pyCmd) {
+    & $pyCmd -m pip uninstall -y clawness 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) { Write-Host '  removed clawness package' }
+    else { Write-Host '  (not pip-installed, or already removed)' }
+} else {
+    Write-Host '  No Python found - run: pip uninstall clawness'
+}
 
 Write-Host ''
 Write-Host 'Left in place on purpose:'

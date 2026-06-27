@@ -14,13 +14,35 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import sys
 import time
 from pathlib import Path
 
 from .core import WritLite, load_rules
 
-DEFAULT_RULES_DIR = Path(__file__).parent.parent / "rules"
+
+def _default_rules_dir() -> Path:
+    """Locate the global rules directory, robust to how writ_lite was launched —
+    run from a clone / plugin cache, pip-installed editable, or pip-installed into
+    site-packages. Order: WRIT_RULES_DIR env, package-relative ./rules, then the
+    manual-install location under the Claude config dir."""
+    env = os.environ.get("WRIT_RULES_DIR")
+    if env:
+        return Path(env)
+    cfg = os.environ.get("CLAUDE_CONFIG_DIR")
+    claude_dir = Path(cfg.split(",")[0].strip()) if cfg else Path.home() / ".claude"
+    candidates = [
+        Path(__file__).resolve().parent.parent / "rules",  # clone / plugin cache / editable
+        claude_dir / "clawness" / "rules",                 # manual install location
+    ]
+    for c in candidates:
+        if c.is_dir():
+            return c
+    return candidates[0]  # package-relative — used in the "not found" message
+
+
+DEFAULT_RULES_DIR = _default_rules_dir()
 
 
 def cmd_query(args: argparse.Namespace) -> None:
@@ -238,7 +260,7 @@ def main() -> None:
     p_query = sub.add_parser("query", help="Retrieve rules for a query")
     p_query.add_argument("query", help="Natural-language task description")
     p_query.add_argument("--domain", "-d", default=None, help="Filter to domain")
-    p_query.add_argument("--top-k", "-k", type=int, default=8)
+    p_query.add_argument("--top-k", "-k", type=int, default=6)
     p_query.add_argument("--budget", "-b", type=int, default=4000, help="Token budget")
 
     # stats

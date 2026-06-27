@@ -2,7 +2,7 @@
 
 **Install once. Works everywhere. Your AI coding agent gets the right rules for every task — automatically.**
 
-Clawness is a lightweight rule retrieval system for Claude Code. It ships 106 coding rules across 17 domains, 7 adversarial sub-agents, output compression, and a default-on plan-approval gate — all in under 1 MB with zero infrastructure. You install it once, and it silently injects the relevant rules into every Claude Code session across every project on your machine.
+Clawness is a Claude Code plugin that puts the right coding rules in context on every prompt, automatically. It ships 106 coding rules across 17 domains, 7 adversarial review sub-agents, output compression, and a default-on plan-approval gate — all in under 1 MB with zero infrastructure. You install it once, and it silently injects the relevant rules into every Claude Code session across every project on your machine.
 
 Inspired by [infinri/Writ](https://github.com/infinri/Writ), rebuilt from ~2GB of infrastructure to pure Python.
 
@@ -17,6 +17,10 @@ claude plugin install clawness@clawness
 ```
 
 Done. Open Claude Code in any project and start working. Type `/clawness:status` to verify.
+
+> **You need Python 3.10+ on your PATH** — the rule-injection hook is a small Python script (`python` on Windows, `python3` on macOS/Linux). If Python is missing, Clawness installs but silently injects nothing. Don't have it? See [Installing Python](#installing-python-if-you-dont-have-it).
+>
+> `clawness@clawness` isn't a typo — it's `plugin@marketplace`, and both happen to be named *clawness*.
 
 ---
 
@@ -71,6 +75,8 @@ You type a prompt in Claude Code
 └──────────────────────────┘
 ```
 
+**In plain terms:** for each prompt, Clawness scores every rule by how well it matches what you're working on — both by shared keywords and by meaning — and quietly adds the few that fit (plus the always-on mandatory ones). BM25, TF-IDF, RRF, and model2vec are just the techniques that do the scoring; you never touch them.
+
 **Two layers of rules:**
 - **Global** (`~/.claude/clawness/rules/`) — installed once, applies to every project
 - **Project** (`<your-project>/.writ/rules/`) — optional, layers on top for project-specific conventions. Commit to git so your whole team shares them.
@@ -78,6 +84,38 @@ You type a prompt in Claude Code
 ---
 
 ## Install
+
+### Installing Python (if you don't have it)
+
+Clawness needs **Python 3.10+** on your PATH. Check first:
+
+```bash
+python --version     # or: python3 --version
+```
+
+If that prints `3.10` or higher, you're set — skip to Option 1. Otherwise:
+
+**Windows** — install from [python.org/downloads](https://www.python.org/downloads/) and **tick "Add python.exe to PATH"** on the first screen (easy to miss, and the usual reason `python` "isn't found" later). Or with winget:
+
+```powershell
+winget install Python.Python.3.12
+```
+
+**macOS** — usually preinstalled as `python3`. If not:
+
+```bash
+brew install python
+```
+
+**Linux** — use your package manager:
+
+```bash
+sudo apt install python3      # Debian / Ubuntu
+sudo dnf install python3      # Fedora / RHEL
+sudo pacman -S python         # Arch
+```
+
+Then open a **new** terminal (so PATH refreshes) and re-run the check above.
 
 ### Option 1: Plugin Install (Recommended)
 
@@ -90,11 +128,16 @@ claude plugin install clawness@clawness
 
 That's it. Skills, agents, hooks, and rules are all registered automatically. Run `/reload-plugins` if you're already in a session.
 
+> **What the plugin installs on first run.** Claude Code's install screen lists the components (commands, agents, hooks) but doesn't spell out what the hooks *do*. For transparency:
+> - **Requires Python 3.10+ on your PATH** — the hooks are Python scripts. No Python, no rules (Clawness installs but silently injects nothing). Need it? See [Installing Python](#installing-python-if-you-dont-have-it).
+> - **On your first session, a background `SessionStart` hook runs `pip install`** to fetch its Python dependencies into your environment: **PyYAML** (required) and **model2vec + numpy** (semantic search — skip these with `WRIT_NO_SEMANTIC=1`). Nothing is installed at plugin-install time; it happens on first session and is logged to `bootstrap.log` in the plugin's data directory.
+> - **The plan gate is on by default** — it blocks file edits until you approve a plan (via plan mode, or disable with `WRIT_NO_PLAN_GATE=1`). See [Plan Gate](#plan-gate-on-by-default).
+
 ### Option 2: Manual Install
 
 For more control, or if the plugin system isn't available in your environment.
 
-**Requirements:** Python 3.10+ and Claude Code. No Docker, no Node, no databases. Semantic retrieval (model2vec embeddings) is installed by default and is optional — pass `--no-semantic` to skip it; retrieval falls back to lexical + concept matching.
+**Requirements:** Python 3.10+ (see [Installing Python](#installing-python-if-you-dont-have-it)) and Claude Code. No Docker, no Node, no databases. Semantic retrieval (model2vec embeddings) is installed by default and is optional — pass `--no-semantic` to skip it; retrieval falls back to lexical + concept matching.
 
 **Windows (PowerShell):**
 
@@ -117,7 +160,7 @@ bash install.sh
 | Step | What | Why |
 |------|------|-----|
 | 1 | Check Python 3.10+ | Finds `python` / `python3` / `py` |
-| 2 | Check dependencies | Installs PyYAML, plus model2vec for semantic retrieval (skip with `--no-semantic`) |
+| 2 | Install clawness + deps | Editable `pip install` — adds the `clawness` command, pulls in PyYAML, plus model2vec for semantic retrieval (skip with `--no-semantic`) |
 | 3 | Verify files | Confirms rules and hook scripts are present |
 | 4 | Lint rules | Validates every `.yml` rule file |
 | 5 | Test retrieval | Runs a test query to confirm the engine works |
@@ -198,9 +241,11 @@ Ask Claude Code directly:
 
 If the hook is active, Claude will describe the rules it received.
 
+> **Why "writ"?** Clawness's retrieval engine is internally named `writ_lite`, so the injected block is labelled `--- WRIT RULES ---`, the env vars are `WRIT_*`, and per-project rules live in `.writ/`. It's all the same tool — *Clawness* is the package, *writ_lite* is the engine under the hood.
+
 ### Output Compression
 
-When Claude runs a bash command that produces 100+ lines of output (test suites, builds, long logs), the PostToolUse compression hook fires automatically. It extracts only the error/failure lines with context and provides a summary, keeping Claude's context clean for the next prompt.
+When Claude runs a bash command that produces 80+ lines of output (test suites, builds, long logs), the PostToolUse compression hook fires automatically. It extracts only the error/failure lines with context and provides a summary, keeping Claude's context clean for the next prompt.
 
 ### Plan Gate (on by default)
 
@@ -208,7 +253,9 @@ Clawness enforces a plan-first workflow: file edits (`Write`/`Edit`/`MultiEdit`/
 
 If Claude tries to edit before a plan is approved, you'll see a deny message explaining what to do. Approve a plan in plan mode and editing proceeds.
 
-To change the behavior:
+**To turn it off — no command needed:** set `WRIT_NO_PLAN_GATE=1` in your environment to disable the gate globally.
+
+For finer control there's a CLI (available after a manual install, or any `pip install` — see the [CLI Reference](#cli-reference)):
 
 ```bash
 clawness plan off       # disable for this project
@@ -216,8 +263,6 @@ clawness plan on        # re-enable
 clawness plan status    # show current state
 clawness plan approve   # manual override (headless / no plan mode)
 ```
-
-Or set `WRIT_NO_PLAN_GATE=1` to disable it globally via the environment.
 
 **Version control:** the plan gate stops *unplanned* edits, but recovering from a *bad* edit is git's job — Clawness deliberately doesn't reimplement checkpoints. If you open a project that isn't a git repo, a SessionStart check nudges Claude to ask whether you'd like to `git init` (it never initializes without your say-so). Silence it with `WRIT_NO_GIT_CHECK=1`.
 
@@ -229,7 +274,7 @@ Global rules handle security, testing, general best practices, and framework con
 
 ```bash
 cd ~/projects/my-app
-python -m writ_lite.cli init .
+clawness init .
 ```
 
 This scans your project and reports:
@@ -256,7 +301,7 @@ Starter project rule:
 Add `--write` to create the project rules directory:
 
 ```bash
-python -m writ_lite.cli init . --write
+clawness init . --write
 ```
 
 This creates `.writ/rules/` in your project. The hook automatically picks up rules from this directory when you're working in the project. **Commit `.writ/` to git** — your whole team gets the same rules.
@@ -380,34 +425,36 @@ Or just describe the task naturally — the workflow rules tell Claude when to r
 
 ## CLI Reference
 
+The CLI is optional — everyday use needs no commands. It's installed by the **manual installer** (and by any `pip install` of the package), which puts a `clawness` command on your PATH. **Plugin-only users:** the rule injection, agents, skills, and plan gate all work without the CLI; to get the `clawness` command too, run `pip install -e <plugin-dir>` (or just do a [manual install](#option-2-manual-install)).
+
 ```bash
 # Retrieve rules for a task description
-python -m writ_lite.cli query "implement async REST endpoint"
-python -m writ_lite.cli query "handle null values" --domain typescript
-python -m writ_lite.cli query "set up logging" --top-k 3 --budget 2000
+clawness query "implement async REST endpoint"
+clawness query "handle null values" --domain typescript
+clawness query "set up logging" --top-k 3 --budget 2000
 
 # Scan a project and suggest rules
-python -m writ_lite.cli init /path/to/project
-python -m writ_lite.cli init . --write    # create .writ/rules/ in this project
+clawness init /path/to/project
+clawness init . --write    # create .writ/rules/ in this project
 
 # Corpus management
-python -m writ_lite.cli stats             # show rule counts by domain
-python -m writ_lite.cli lint              # validate all rule files
-python -m writ_lite.cli bench             # benchmark retrieval latency
+clawness stats             # show rule counts by domain
+clawness lint              # validate all rule files
+clawness bench             # benchmark retrieval latency
 
 # Plan gate (on by default; normal flow uses native plan mode)
-python -m writ_lite.cli plan status       # show gate state
-python -m writ_lite.cli plan off          # disable for this project
-python -m writ_lite.cli plan approve      # manual override (headless use)
+clawness plan status       # show gate state
+clawness plan off          # disable for this project
+clawness plan approve      # manual override (headless use)
 
 # Emit an AGENTS.md so any agent (not just Claude Code) can use the CLI
-python -m writ_lite.cli agents-md --write
+clawness agents-md --write
 
 # Point at a different rules directory
-python -m writ_lite.cli --rules-dir /path/to/rules stats
+clawness --rules-dir /path/to/rules stats
 ```
 
-Use `python` on Windows, `python3` on macOS/Linux.
+> If `clawness` isn't found after install, your Python user-scripts directory isn't on your PATH. Either add it, or use the identical long form `python -m writ_lite.cli <command>` (`python3` on macOS/Linux), which works from any directory.
 
 ---
 
@@ -572,7 +619,7 @@ effort: max         # maximum reasoning — expensive, use sparingly
 ## Troubleshooting
 
 **Plugin install: skills/hooks not showing up**
-Run `/reload-plugins`, or check `claude plugin list`. The plugin installs its Python deps (PyYAML, and model2vec for semantic) in the background on first session via a SessionStart hook — if retrieval seems lexical-only at first, give it a moment or check the `bootstrap.log` in the plugin's data directory. Run `claude --debug` to see hook activity.
+Run `/reload-plugins`, or check `claude plugin list`. On first session, a background `SessionStart` hook installs the Python deps (PyYAML, and model2vec + numpy for semantic) into your environment — this can take a minute, and retrieval is lexical-only until model2vec finishes. Check `bootstrap.log` in the plugin's data directory for progress, and run `claude --debug` to see hook activity. (Make sure Python 3.10+ is on your PATH — without it the hooks can't run.)
 
 **Hook not firing / Claude doesn't see rules**
 Check `~/.claude/settings.json` contains the hook config. Run the installer again — it's idempotent and will report what's already configured vs what it adds.

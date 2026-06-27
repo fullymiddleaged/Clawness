@@ -72,31 +72,39 @@ if (-not $pyCmd) {
 $pyVersion = & $pyCmd --version 2>&1
 Write-Host ('  OK: ' + $pyVersion + ' (command: ' + $pyCmd + ')') -ForegroundColor Green
 
-# -- step 2: check pyyaml ------------------------------------------
+# -- step 2: install clawness + dependencies -----------------------
 Write-Host ''
-Write-Host '[2/7] Checking dependencies...' -ForegroundColor Yellow
+Write-Host '[2/7] Installing clawness + dependencies...' -ForegroundColor Yellow
+Write-Host ("  Installs the 'clawness' command + PyYAML into your Python (" + $pyCmd + ').') -ForegroundColor Gray
+Write-Host '  Downloads from PyPI - this can take a minute.' -ForegroundColor Gray
 
+# Editable install so `clawness` and `python -m writ_lite.cli` work from any
+# directory, while rules keep loading from this folder. PyYAML comes as a
+# dependency; the [semantic] extra (next) adds model2vec + numpy.
+& $pyCmd -m pip install -e $WritDir --user 2>&1 | Out-Null
 & $pyCmd -c 'import yaml' 2>$null
 if ($LASTEXITCODE -ne 0) {
-    Write-Host '  PyYAML not found. Installing...' -ForegroundColor DarkYellow
-    & $pyCmd -m pip install pyyaml --user 2>&1
+    & $pyCmd -m pip install -e $WritDir --user --break-system-packages 2>&1 | Out-Null
     & $pyCmd -c 'import yaml' 2>$null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host '  ERROR: Failed to install PyYAML.' -ForegroundColor Red
-        Write-Host '  Try running manually: python -m pip install pyyaml --user' -ForegroundColor Red
-        exit 1
-    }
-    Write-Host '  OK: PyYAML installed' -ForegroundColor Green
-} else {
-    Write-Host '  OK: PyYAML available' -ForegroundColor Green
 }
+if ($LASTEXITCODE -ne 0) {
+    Write-Host '  ERROR: Failed to install clawness (PyYAML not importable).' -ForegroundColor Red
+    Write-Host ('  Try manually: ' + $pyCmd + ' -m pip install -e "' + $WritDir + '" --user') -ForegroundColor Red
+    exit 1
+}
+Write-Host "  OK: clawness installed - 'clawness' command available (PyYAML ready)" -ForegroundColor Green
 
 # Semantic (model2vec) embeddings - ON by default; skip with -NoSemantic.
 $SemanticOk = $false
 if ($Semantic) {
-    Write-Host '  Semantic retrieval requested - installing model2vec + numpy...' -ForegroundColor DarkYellow
-    & $pyCmd -m pip install 'model2vec>=0.3' 'numpy>=1.24' --user 2>&1 | Out-Null
+    Write-Host '  Semantic retrieval requested - installing model2vec + numpy (~50 MB, may take a few minutes)...' -ForegroundColor DarkYellow
+    $pkgSpec = "$WritDir[semantic]"
+    & $pyCmd -m pip install -e $pkgSpec --user 2>&1 | Out-Null
     & $pyCmd -c 'import model2vec' 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        & $pyCmd -m pip install -e $pkgSpec --user --break-system-packages 2>&1 | Out-Null
+        & $pyCmd -c 'import model2vec' 2>$null
+    }
     if ($LASTEXITCODE -eq 0) {
         $SemanticOk = $true
         Write-Host '  OK: model2vec installed' -ForegroundColor Green
@@ -250,9 +258,12 @@ Write-Host '  Clawness is ready.'                     -ForegroundColor Cyan
 Write-Host '  ======================================' -ForegroundColor Cyan
 Write-Host ''
 Write-Host '  Usage:' -ForegroundColor White
-Write-Host ('    ' + $pyCmd + ' -m writ_lite.cli query "your task here"') -ForegroundColor Gray
-Write-Host ('    ' + $pyCmd + ' -m writ_lite.cli stats')                  -ForegroundColor Gray
-Write-Host ('    ' + $pyCmd + ' -m writ_lite.cli bench')                  -ForegroundColor Gray
+Write-Host '    clawness query "your task here"' -ForegroundColor Gray
+Write-Host '    clawness stats'                  -ForegroundColor Gray
+Write-Host '    clawness plan status'            -ForegroundColor Gray
+Write-Host ''
+Write-Host "  If 'clawness' isn't found, your Python user-scripts dir isn't on PATH -" -ForegroundColor White
+Write-Host ('  use ' + $pyCmd + ' -m writ_lite.cli ... instead (identical, works anywhere).') -ForegroundColor Gray
 Write-Host ''
 Write-Host ('  Add rules:  drop .yml files into ' + $RulesDir + '\<domain>\') -ForegroundColor White
 if ($SemanticOk) {

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "clawness"
 version = "0.2.0"
-description = "Lightweight hybrid rule retrieval for AI coding agents"
+description = "A Claude Code plugin that puts the right coding rules in context on every prompt, automatically"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

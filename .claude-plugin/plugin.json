@@ -1,7 +1,7 @@
 {
   "name": "clawness",
   "version": "0.2.0",
-  "description": "Lightweight hybrid rule retrieval based harness for Claude Code. 106 rules across 15 domains, per-prompt rule injection (BM25 + TF-IDF + concept expansion, optional model2vec embeddings), Bash-output compression, adversarial sub-agents, slash commands, and an opt-in plan-approval gate. No Docker, no services.",
+  "description": "A Claude Code plugin that puts the right coding rules in context on every prompt, automatically. 106 rules across 17 domains, per-prompt rule injection (BM25 + TF-IDF + concept expansion, optional model2vec embeddings), Bash-output compression, adversarial review sub-agents, slash commands, and a default-on (opt-out) plan-approval gate. No Docker, no services. Requires Python 3.10+ on PATH; on first session a background hook installs its Python deps (PyYAML, plus optional model2vec) into your environment.",
   "author": {
     "name": "fullymiddleaged"
   },
@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/ensure_deps.py\"",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/ensure_deps.py\"; done",
             "async": true,
             "timeout": 600
           }
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/git_check.py\"",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/git_check.py\"; done",
             "timeout": 10
           }
         ]
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\"",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\"; done",
             "timeout": 30
           }
         ]
@@ -58,7 +58,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/compress_output.py\"",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/compress_output.py\"; done",
             "timeout": 10
           }
         ]
@@ -68,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/plan_gate.py\"",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/plan_gate.py\"; done",
             "timeout": 10
           }
         ]
@@ -80,7 +80,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/plan_gate.py\"",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/plan_gate.py\"; done",
             "timeout": 10
           }
         ]

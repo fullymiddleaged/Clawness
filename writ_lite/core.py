@@ -484,7 +484,7 @@ class WritLite:
 
         if not self._ranked_rules:
             self._bm25 = None
-            self._tfidf = TfIdfIndex()
+            self._tfidf = None
             return
 
         # build search texts

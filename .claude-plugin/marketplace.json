@@ -3,7 +3,7 @@
   "owner": {
     "name": "fullymiddleaged"
   },
-  "description": "Lightweight, extensible rule-retrieval harness for Claude Code.",
+  "description": "The right coding rules, in context, on every prompt — automatically.",
   "plugins": [
     {
       "name": "clawness",
@@ -12,7 +12,7 @@
         "repo": "fullymiddleaged/clawness"
       },
       "version": "0.2.0",
-      "description": "106 rules across 15 domains (Go, Rust, Java, SQL, bash, CSS, Docker, Python, TS, React, Next.js, FastAPI, Capacitor + cross-cutting general rules). Per-prompt rule injection via BM25 + TF-IDF + concept expansion, with optional model2vec semantic embeddings. Adversarial sub-agents (security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger), slash commands, Bash-output compression, and an opt-in plan-approval gate. No Docker, no services.",
+      "description": "A Claude Code plugin that puts the right coding rules in context on every prompt, automatically. 106 rules across 17 domains (Go, Rust, Java, SQL, bash, CSS, Docker, Python, TypeScript, React, Next.js, FastAPI, Capacitor, security, testing, workflows, and cross-cutting general rules). Per-prompt rule injection via BM25 + TF-IDF + concept expansion, with optional model2vec semantic embeddings. Adversarial review sub-agents (security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger), slash commands, Bash-output compression, and a default-on (opt-out) plan-approval gate. No Docker, no services. Requires Python 3.10+ on PATH; on first session a background hook installs its Python deps (PyYAML, plus optional model2vec) into your environment.",
       "category": "productivity",
       "license": "MIT",
       "keywords": [
