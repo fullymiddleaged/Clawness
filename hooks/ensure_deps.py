@@ -43,7 +43,7 @@ def data_dir() -> Path:
 
 def log(msg: str) -> None:
     try:
-        with open(data_dir() / "bootstrap.log", "a") as f:
+        with open(data_dir() / "bootstrap.log", "a", encoding="utf-8") as f:
             f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')}  {msg}\n")
     except Exception:
         pass

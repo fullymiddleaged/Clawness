@@ -47,6 +47,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `.clawness/memory.md` immediately when asked to "remember" something, or on the
   *second* occurrence of a mistake/gotcha otherwise — keeping entries short and
   deduplicated, and reading the log before repeating work in an area it covers.
+- **`{{CURRENT_DATE}}` placeholder in rules.** Any rule field containing
+  `{{CURRENT_DATE}}` is replaced at render time with the live month + year (e.g.
+  "June 2026"). `ENF-CURRENT-001` now reads "use current best practices as of
+  June 2026 …" instead of a static "present month and year", so the directive
+  self-dates without edits. Substituted only on render, not in the search text, so
+  retrieval stays date-independent.
 
 ### Changed
 - **Ranked rules now display `relevance=` (TF-IDF cosine), not `score=` (RRF).**
@@ -58,10 +64,19 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   fusion, so retrieval quality (and the eval) is unchanged.
 
 ### Fixed
-- **Hook forces UTF-8 stdout.** The injected rules/memory blocks contain
-  non-ASCII (em-dashes, etc.); on a Windows console defaulting to cp1252 these
-  could be mangled or raise `UnicodeEncodeError` and drop rule injection. The
-  `UserPromptSubmit` hook now reconfigures stdout to UTF-8 regardless of platform.
+- **Rule YAML is read as UTF-8 (the real mojibake root cause).** `load_rules`
+  opened files without an explicit encoding, so on Windows it used the locale
+  default (cp1252) and corrupted every em-dash/smart-quote in the corpus into
+  mojibake (`—` → `â€"`) *at load time* — before any rendering. Now pinned to
+  UTF-8, and resilient: a genuinely malformed file is skipped (with strict UTF-8 it
+  would otherwise raise and crash the prompt hook). All other file reads/writes
+  across the package and hooks were given explicit `encoding="utf-8"` too, and the
+  hooks pin **stdin** to UTF-8 as well (so a non-ASCII prompt or project path isn't
+  mangled on Windows). `clawness lint` now flags any rule file that isn't valid
+  UTF-8 or contains a U+FFFD replacement char.
+- **Hook forces UTF-8 stdout.** Belt-and-suspenders alongside the above: the
+  `UserPromptSubmit` hook reconfigures stdout to UTF-8 so the injected block can't
+  be mangled or raise `UnicodeEncodeError` on a cp1252 console.
 - **Memory block footer no longer reads as a lesson.** `render_memory_block` now
   puts a blank line before its upkeep footer, so it isn't glued to the file's
   `## Lessons` heading.

@@ -77,10 +77,18 @@ dependency**. No ML models, no services, no Docker.
 - CI (`.github/workflows/ci.yml`) runs lint + tests + eval across ubuntu/macOS/windows × py3.10–3.14.
 
 ## Gotchas
+- **Always pass `encoding="utf-8"` on file I/O and stdin/stdout.** The corpus uses
+  em-dashes/smart-quotes; bare `open()`/`read_text()`/`sys.stdin` default to cp1252
+  on Windows and mangle them into mojibake (`—` → `â€"`) *at load time*. `clawness
+  lint` now flags non-UTF-8 / U+FFFD rule files; keep new reads/writes UTF-8.
 - **Keep the hook ~1ms** — no heavy imports or model loads in `claude_hook.py`/`core.py`.
 - **Version lives in 3 places** — bump `pyproject.toml`, `.claude-plugin/plugin.json`,
   `.claude-plugin/marketplace.json` together, and add a CHANGELOG entry.
 - Rule YAML: `id, domain, severity, tags, triggers, when, rule, violation, correct`
   (concept terms must be single tokens; multi-word phrases never match).
+- **`{{CURRENT_DATE}}`** in any rule field is replaced at render time with the live
+  month + year (e.g. "June 2026") — see `_DATE_TOKEN`/`_current_date` in `core.py`.
+  Substituted only on render, not in the search text, so retrieval stays
+  date-independent. `ENF-CURRENT-001` uses it.
 - Two things can't be tested from a sandbox: a real `pip install -e .` completing,
   and plugin hooks on a real Windows + python.org box. Smoke-test both before release.

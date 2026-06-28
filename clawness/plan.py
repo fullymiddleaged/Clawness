@@ -102,7 +102,7 @@ def load_config(root: Path) -> dict:
     base = default_config()
     path = clawness_dir(root) / "config.json"
     try:
-        cfg = json.loads(path.read_text())
+        cfg = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(cfg.get("plan_gate"), dict):
             base["plan_gate"].update(cfg["plan_gate"])
     except Exception:
@@ -113,7 +113,7 @@ def load_config(root: Path) -> dict:
 def save_config(root: Path, cfg: dict) -> None:
     d = clawness_dir(root)
     d.mkdir(parents=True, exist_ok=True)
-    (d / "config.json").write_text(json.dumps(cfg, indent=2) + "\n")
+    (d / "config.json").write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
 
 
 def gate_enabled(root: Path) -> bool:
@@ -130,7 +130,7 @@ def _sessions_path(root: Path) -> Path:
 
 def _load_sessions(root: Path) -> dict:
     try:
-        return json.loads(_sessions_path(root).read_text())
+        return json.loads(_sessions_path(root).read_text(encoding="utf-8"))
     except Exception:
         return {}
 
@@ -138,7 +138,7 @@ def _load_sessions(root: Path) -> dict:
 def _save_sessions(root: Path, sessions: dict) -> None:
     d = clawness_dir(root)
     d.mkdir(parents=True, exist_ok=True)
-    _sessions_path(root).write_text(json.dumps(sessions, indent=2) + "\n")
+    _sessions_path(root).write_text(json.dumps(sessions, indent=2) + "\n", encoding="utf-8")
 
 
 def record_session_approval(root: Path, session_id: str) -> None:
@@ -173,7 +173,7 @@ def default_state() -> dict:
 def load_state(root: Path) -> dict:
     base = default_state()
     try:
-        st = json.loads((clawness_dir(root) / "plan.json").read_text())
+        st = json.loads((clawness_dir(root) / "plan.json").read_text(encoding="utf-8"))
         base.update({k: st[k] for k in base if k in st})
     except Exception:
         pass
@@ -183,7 +183,7 @@ def load_state(root: Path) -> dict:
 def save_state(root: Path, state: dict) -> None:
     d = clawness_dir(root)
     d.mkdir(parents=True, exist_ok=True)
-    (d / "plan.json").write_text(json.dumps(state, indent=2) + "\n")
+    (d / "plan.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
 
 def approve(root: Path) -> dict:

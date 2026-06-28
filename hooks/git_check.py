@@ -19,6 +19,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+# The payload (incl. the project cwd) arrives as UTF-8 on stdin; on Windows stdin
+# defaults to cp1252 and would mangle a non-ASCII project path. Pin UTF-8.
+try:
+    sys.stdin.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 # Directories never worth descending into when scanning for nested repos —
 # heavy/vendored trees that won't be a project's own .git and would slow the scan.
 _SKIP_DIRS = {

@@ -20,10 +20,15 @@ import os
 import sys
 from pathlib import Path
 
-# The rules + memory blocks contain non-ASCII (em-dashes, arrows, etc.). On
-# Windows the default console encoding is cp1252, which mangles or crashes
-# (UnicodeEncodeError) on characters it can't represent — which would drop rule
-# injection entirely. Claude reads hook stdout as UTF-8, so emit UTF-8 always.
+# Force UTF-8 on both stdin and stdout. On Windows these default to the locale
+# code page (cp1252), which (a) mangles non-ASCII in a prompt read from stdin —
+# em-dashes, accents, emoji — before we ever see it, and (b) mangles or crashes
+# (UnicodeEncodeError) when emitting the rules/memory blocks, dropping injection.
+# Claude speaks UTF-8 on both ends, so pin it regardless of platform.
+try:
+    sys.stdin.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:

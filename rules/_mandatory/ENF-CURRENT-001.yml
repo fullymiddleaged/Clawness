@@ -5,8 +5,8 @@ tags: [current, modern, up-to-date, deprecated, legacy, best-practice]
 triggers: [install, create, init, scaffold, setup, boilerplate, starter, template]
 when: Writing any new code, choosing libraries, or suggesting patterns.
 rule: >
-  Always use current best practices for the present month and year.
-  Never suggest deprecated APIs, abandoned libraries, or legacy patterns.
+  Always use current best practices as of {{CURRENT_DATE}} (the present month
+  and year). Never suggest deprecated APIs, abandoned libraries, or legacy patterns.
   If unsure whether something is current, check — do not guess. Prefer
   the official documentation's recommended approach over blog posts or
   Stack Overflow answers that may be outdated.

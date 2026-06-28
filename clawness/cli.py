@@ -100,6 +100,23 @@ def cmd_lint(args: argparse.Namespace) -> None:
     ranked, mandatory = load_rules(rules_dir)
     issues = 0
 
+    # Encoding pass: load_rules silently skips files that don't decode as UTF-8
+    # or won't parse (so one bad file can't crash the hook). Lint must surface
+    # them loudly, and flag any U+FFFD replacement char that signals a prior
+    # decode mishap baked into the file.
+    for yml_path in sorted(rules_dir.rglob("*.yml")):
+        try:
+            text = yml_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            issues += 1
+            print(f"  {yml_path}:")
+            print(f"    - not valid UTF-8 ({e.__class__.__name__}) — re-save the file as UTF-8")
+            continue
+        if "�" in text:
+            issues += 1
+            print(f"  {yml_path}:")
+            print("    - contains the Unicode replacement char (U+FFFD) — encoding corruption")
+
     for r in ranked + mandatory:
         problems = []
         if not r.id:
@@ -262,7 +279,7 @@ def cmd_agents(args: argparse.Namespace) -> None:
             print(f"{target} already exists — not overwriting. Snippet to add:\n")
             print(AGENTS_MD_TEMPLATE)
         else:
-            target.write_text(AGENTS_MD_TEMPLATE)
+            target.write_text(AGENTS_MD_TEMPLATE, encoding="utf-8")
             print(f"Wrote {target}")
     else:
         print(AGENTS_MD_TEMPLATE)

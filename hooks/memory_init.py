@@ -23,6 +23,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+# The payload (incl. the project cwd) arrives as UTF-8 on stdin; on Windows stdin
+# defaults to cp1252 and would mangle a non-ASCII project path. Pin UTF-8.
+try:
+    sys.stdin.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 NOTE = (

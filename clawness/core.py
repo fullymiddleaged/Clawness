@@ -30,6 +30,7 @@ import os
 import re
 import time
 from collections import Counter
+from datetime import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Optional
@@ -40,6 +41,17 @@ import yaml
 # ---------------------------------------------------------------------------
 # Rule model
 # ---------------------------------------------------------------------------
+
+# Placeholder any rule's text may contain; replaced at render time with the live
+# month + year (e.g. "June 2026"). Lets a rule stay accurate without edits as time
+# passes — the hook is a fresh process every prompt, so the date is always current.
+_DATE_TOKEN = "{{CURRENT_DATE}}"
+
+
+def _current_date() -> str:
+    """Current month and year, e.g. 'June 2026'."""
+    return datetime.now().strftime("%B %Y")
+
 
 @dataclass
 class Rule:
@@ -96,7 +108,13 @@ class Rule:
                 lines.append(f"  BAD:  {self.violation}")
             if self.correct:
                 lines.append(f"  GOOD: {self.correct}")
-        return "\n".join(lines)
+        out = "\n".join(lines)
+        # Substitute the dynamic-date placeholder only at render (not in the search
+        # text), so retrieval stays date-independent while the injected rule always
+        # shows the live month + year. Computed lazily — only if a token is present.
+        if _DATE_TOKEN in out:
+            out = out.replace(_DATE_TOKEN, _current_date())
+        return out
 
 
 # ---------------------------------------------------------------------------
@@ -115,8 +133,17 @@ def load_rules(rules_dir: str | Path) -> tuple[list[Rule], list[Rule]]:
     mandatory: list[Rule] = []
 
     for yml_path in sorted(rules_dir.rglob("*.yml")):
-        with open(yml_path) as f:
-            data = yaml.safe_load(f)
+        # Always decode rule YAML as UTF-8. Without this, open() uses the locale
+        # default (cp1252 on Windows), which mangles em-dashes/smart-quotes in the
+        # rules into mojibake (— → â€") at load time — before any rendering.
+        # Strict UTF-8 raises on a genuinely malformed file, so skip any file that
+        # won't decode or parse — one bad rule must never crash the prompt hook.
+        # (`clawness lint` surfaces such files loudly; see cmd_lint.)
+        try:
+            with open(yml_path, encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+        except (OSError, UnicodeDecodeError, yaml.YAMLError):
+            continue
         if not data or not isinstance(data, dict):
             continue
 
