@@ -48,6 +48,15 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stack_detect.py\"; done",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

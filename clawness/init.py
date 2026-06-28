@@ -19,7 +19,9 @@ from pathlib import Path
 # Map from detected file/pattern to rule domains
 DETECTORS: list[tuple[str, list[str], str]] = [
     # (glob_pattern, domains_to_enable, human_description)
-    ("package.json",           ["typescript", "general", "react"],  "Node.js project"),
+    # Bare package.json → Node/TS only. React/Next/etc. come from the deep
+    # dependency scan below, so a plain Express or CLI project isn't mislabelled.
+    ("package.json",           ["typescript", "general"],            "Node.js project"),
     ("tsconfig.json",          ["typescript"],                      "TypeScript"),
     ("next.config.*",          ["nextjs", "react"],                 "Next.js"),
     ("capacitor.config.*",     ["capacitor"],                       "Capacitor (mobile)"),

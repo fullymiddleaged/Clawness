@@ -16,7 +16,9 @@ dependency**. No ML models, no services, no Docker.
 2. Retrieval engine = `clawness/core.py`: **BM25 + TF-IDF fused via RRF**, over a
    **concept-expanded** token stream (`_CONCEPT_GROUPS`) + light stemming.
    Mandatory rules (`rules/_mandatory/`) always injected; rest ranked + budget-capped.
-   ~1ms/prompt.
+   A **relevance floor** (`CLAW_MIN_RELEVANCE`, default 0.06, gauged on TF-IDF cosine —
+   not RRF, which is rank-based) drops scattershot matches so signal-less prompts
+   inject few/no ranked rules. ~1ms/prompt.
 3. **Project memory** (`<project>/.clawness/memory.md`): if present, the hook appends
    it verbatim after the rules block (`render_memory_block` in `core.py`) — a
    per-codebase lessons log, not a ranked rule, so it never touches the engine.
@@ -32,7 +34,7 @@ dependency**. No ML models, no services, no Docker.
 - `clawness/cli.py` — `clawness` CLI: query, stats, lint, bench, eval, init, plan, agents-md.
 - `clawness/plan.py` — plan-gate logic (`gate_decision`, `is_plan_file`, session approval).
 - `hooks/` — runtime hooks (`claude_hook`, `compress_output`, `plan_gate`, `git_check`,
-  `memory_init`, `ensure_deps`) + setup helpers (`setup_settings/agents/skills` — manual install only).
+  `memory_init`, `stack_detect`, `ensure_deps`) + setup helpers (`setup_settings/agents/skills` — manual install only).
 - `rules/<domain>/*.yml` — the corpus (115 rules / 18 domains; `_mandatory/` = always-on).
 - `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin.
 - `.claude-plugin/{plugin.json,marketplace.json}` — plugin + marketplace manifests.

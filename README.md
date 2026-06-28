@@ -261,6 +261,8 @@ The mandatory rules always appear. The ranked rules change based on your prompt.
 
 **Token cost.** A typical turn injects **~1,300 tokens** — roughly **~470 fixed** for the always-on mandatory block plus the selected ranked rules. To keep that fixed cost down, mandatory rules render **compactly** (just the directive, not the `WHEN`/`BAD`/`GOOD` examples, which would repeat identically every turn). Ranked rules render in full, since their examples are prompt-relevant. Run `clawness stats` to see your exact per-turn estimate, and tune it with `CLAW_TOP_K` / `CLAW_BUDGET`, `CLAW_VERBOSE` (full mandatory examples), or `CLAW_COMPACT` (trim ranked too).
 
+**Relevance floor.** Ranked rules are only injected when the prompt actually matches them — a TF-IDF cosine floor (`CLAW_MIN_RELEVANCE`, default `0.06`) drops coincidental matches, so a prompt with no topical signal returns few or zero ranked rules instead of filling all `CLAW_TOP_K` slots with scattershot. Mandatory rules are unaffected. Raise the floor to be stricter, or set it to `0` to disable.
+
 ### Verify It's Working
 
 Three ways, depending on what you want to see:
@@ -293,6 +295,8 @@ clawness plan approve   # manual override (headless / no plan mode)
 ```
 
 **Version control:** the plan gate stops *unplanned* edits, but recovering from a *bad* edit is git's job — Clawness deliberately doesn't reimplement checkpoints. If you open a project that isn't a git repo, a SessionStart check nudges Claude to ask whether you'd like to `git init` (it never initializes without your say-so). The check looks upward (cwd and its parents) *and* a few levels down, so opening a workspace or monorepo parent whose repos live in subfolders won't trigger a false "no git" nudge. Silence it with `CLAW_NO_GIT_CHECK=1`.
+
+**Stack awareness:** at session start Clawness detects your project's stack from its files (the same detection as `clawness init`) and injects a one-line note — e.g. *"Detected project stack: Python, FastAPI, SQL"* — so Claude starts already knowing the ecosystem instead of inferring it. It's a heuristic, stated as such, and complements the per-prompt rule retrieval. Silence it with `CLAW_NO_STACK_NOTE=1`.
 
 ---
 
@@ -568,6 +572,10 @@ The 7 **mandatory** rules (always injected) are the 5 `security` rules, the 1 `t
 | `CLAW_RULES_DIR` | (next to hook script) | Override global rules directory |
 | `CLAW_TOP_K` | `5` | Max ranked rules per prompt |
 | `CLAW_BUDGET` | `4000` | Max tokens for the rule block |
+| `CLAW_MIN_RELEVANCE` | `0.06` | TF-IDF cosine floor for ranked rules — below it a rule is treated as noise and not injected. Raise it to be stricter (fewer, more on-topic rules), set `0` to disable the floor |
+| `CLAW_NO_MEMORY` | (unset) | Don't auto-create `.clawness/memory.md` on first session |
+| `CLAW_MEMORY_BUDGET` | `2000` | Max characters of project memory injected per turn (keeps the tail on overflow) |
+| `CLAW_NO_STACK_NOTE` | (unset) | Don't inject the detected-stack note at session start |
 | `CLAW_VERBOSE` | (unset) | Render mandatory rules in full (`WHEN`/`BAD`/`GOOD`) instead of compact — more tokens per turn |
 | `CLAW_COMPACT` | (unset) | Also render ranked rules compactly (directive only) — fewer tokens per turn |
 | `CLAW_NO_PLAN_GATE` | (unset) | Disable the plan gate globally |

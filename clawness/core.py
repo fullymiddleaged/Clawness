@@ -198,6 +198,8 @@ def render_memory_block(memory_path: str | Path, char_budget: int = 2000) -> str
     if truncated:
         parts.append("(older lessons trimmed)")
     parts.append(text)
+    # Blank line so the upkeep footer never reads as the first lesson entry.
+    parts.append("")
     parts.append(footer)
     parts.append("--- END CLAWNESS MEMORY ---")
     return "\n".join(parts)
@@ -577,10 +579,25 @@ class Clawness:
         rules_dir: str | Path,
         context_budget: int = 4000,     # max tokens for rule block
         top_k: int = 5,                 # max ranked rules to return
+        min_relevance: Optional[float] = None,  # TF-IDF cosine floor for ranked rules
     ) -> None:
         self.rules_dir = Path(rules_dir)
         self.context_budget = context_budget
         self.top_k = top_k
+
+        # Relevance floor: a ranked rule is only injected if its TF-IDF cosine
+        # clears this bar. RRF scores are rank-based (they don't encode match
+        # strength), so without a floor a signal-less prompt still fills every
+        # slot with weak, scattershot matches. TF-IDF cosine is the discriminating
+        # signal — genuine matches sit well above the ~0.05–0.08 noise tail. The
+        # strong matches the eval checks are far above it, so this trims noise
+        # without hurting recall. Tunable via CLAW_MIN_RELEVANCE; 0 disables.
+        if min_relevance is None:
+            try:
+                min_relevance = float(os.environ.get("CLAW_MIN_RELEVANCE", "0.06"))
+            except ValueError:
+                min_relevance = 0.06
+        self.min_relevance = max(0.0, min_relevance)
 
         # Rendering verbosity (token efficiency). Mandatory rules repeat on
         # every turn, so they render compact (id + RULE only) unless
@@ -670,7 +687,21 @@ class Clawness:
         )
 
         # --- RRF fusion ---
-        return rrf([bm25_ranked, tfidf_ranked])
+        fused = rrf([bm25_ranked, tfidf_ranked])
+
+        # --- relevance floor ---
+        # Drop fused candidates whose TF-IDF cosine is below the noise floor, so a
+        # signal-less prompt returns few/no scattershot rules instead of filling
+        # top_k with coincidental token matches. Gauged on TF-IDF (the calibrated
+        # 0..1 relevance signal), not RRF (rank-based) or BM25 (magnitudes overlap
+        # noise). Disabled when min_relevance == 0.
+        if self.min_relevance > 0.0:
+            tfidf_map = dict(tfidf_ranked)
+            fused = [
+                (i, s) for (i, s) in fused
+                if tfidf_map.get(i, 0.0) >= self.min_relevance
+            ]
+        return fused
 
     def rank_ids(
         self,

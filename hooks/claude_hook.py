@@ -20,6 +20,15 @@ import os
 import sys
 from pathlib import Path
 
+# The rules + memory blocks contain non-ASCII (em-dashes, arrows, etc.). On
+# Windows the default console encoding is cp1252, which mangles or crashes
+# (UnicodeEncodeError) on characters it can't represent — which would drop rule
+# injection entirely. Claude reads hook stdout as UTF-8, so emit UTF-8 always.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 try:

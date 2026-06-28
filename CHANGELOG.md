@@ -15,6 +15,18 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   survive across sessions instead of being re-discovered each time. Bounded by
   `CLAW_MEMORY_BUDGET` (chars, default 2000); when it overflows, the most recent
   lessons (file tail) are kept. `clawness init --write` seeds a starter file.
+- **Relevance floor for ranked rules.** Ranked rules are now only injected when
+  the prompt actually matches them, gauged on TF-IDF cosine (`CLAW_MIN_RELEVANCE`,
+  default 0.06; `0` disables). RRF fusion scores are rank-based and don't encode
+  match strength, so without a floor a signal-less prompt filled every `CLAW_TOP_K`
+  slot with scattershot matches. Strong matches sit far above the floor, so the
+  eval is unaffected (MRR@5 0.978, hit-rate 1.000 unchanged); only the noise tail
+  is trimmed. Mandatory rules are never floored.
+- **Project stack awareness (`hooks/stack_detect.py`, SessionStart).** Detects the
+  project's language/framework stack from its files (same detection as `clawness
+  init`) and injects a one-line note — e.g. "Detected project stack: Python,
+  FastAPI, SQL" — so Claude starts the session already knowing the ecosystem.
+  Opt-out `CLAW_NO_STACK_NOTE`.
 - **Auto-bootstrap on first session (`hooks/memory_init.py`, SessionStart).** The
   first time you open a project, Clawness creates `.clawness/memory.md` (seeded with
   a how-to line) and injects a note so Claude tells you it exists and that you can
@@ -28,12 +40,23 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   deduplicated, and reading the log before repeating work in an area it covers.
 
 ### Fixed
+- **Hook forces UTF-8 stdout.** The injected rules/memory blocks contain
+  non-ASCII (em-dashes, etc.); on a Windows console defaulting to cp1252 these
+  could be mangled or raise `UnicodeEncodeError` and drop rule injection. The
+  `UserPromptSubmit` hook now reconfigures stdout to UTF-8 regardless of platform.
+- **Memory block footer no longer reads as a lesson.** `render_memory_block` now
+  puts a blank line before its upkeep footer, so it isn't glued to the file's
+  `## Lessons` heading.
 - **git-presence check no longer false-alarms on workspace/monorepo parents.**
   `git rev-parse` only searches upward, so opening a parent folder whose actual
   repositories live in subfolders made `git_check` wrongly report "not under
   version control". It now also does a bounded downward scan (depth ≤ 4, capped
   dir count, skipping `node_modules`/`.venv`/build dirs and other vendored trees)
   so a tree that does use git isn't flagged.
+- **Stack detection no longer mislabels plain Node projects as React.** A bare
+  `package.json` now maps to Node/TypeScript only; React/Next/etc. are inferred
+  from actual dependencies (deep scan), so an Express or CLI project isn't tagged
+  React. Improves both `clawness init` and the new stack-awareness note.
 
 ## [0.3.0] - 2026-06-28
 
