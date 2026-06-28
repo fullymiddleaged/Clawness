@@ -27,6 +27,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   init`) and injects a one-line note — e.g. "Detected project stack: Python,
   FastAPI, SQL" — so Claude starts the session already knowing the ecosystem.
   Opt-out `CLAW_NO_STACK_NOTE`.
+- **Codebase-aware retrieval.** The `UserPromptSubmit` hook now detects the project
+  stack (fresh each prompt) and applies a higher relevance floor
+  (`CLAW_OFFSTACK_MIN_RELEVANCE`, default 0.15) to language/framework rules from
+  stacks the project doesn't use. So a vague prompt in a Python repo no longer
+  surfaces SQL/React/Capacitor noise — while a genuinely strong cross-domain match
+  still passes (a real React question gets React rules, even after a mid-session
+  `npm install`). Cross-cutting domains (general/meta/workflows/security/testing)
+  are never penalized; an unknown stack disables the penalty. Opt-out
+  `CLAW_NO_STACK_FILTER`. CLI/eval pass no stack, so retrieval quality is unchanged.
 - **Auto-bootstrap on first session (`hooks/memory_init.py`, SessionStart).** The
   first time you open a project, Clawness creates `.clawness/memory.md` (seeded with
   a how-to line) and injects a note so Claude tells you it exists and that you can
@@ -38,6 +47,15 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `.clawness/memory.md` immediately when asked to "remember" something, or on the
   *second* occurrence of a mistake/gotcha otherwise — keeping entries short and
   deduplicated, and reading the log before repeating work in an area it covers.
+
+### Changed
+- **Ranked rules now display `relevance=` (TF-IDF cosine), not `score=` (RRF).**
+  The old `score` was the rank-based RRF value — ~0.03 for every rule regardless
+  of match strength — which read as if it were below the `CLAW_MIN_RELEVANCE=0.06`
+  floor and falsely suggested the floor wasn't working. The shown number is now
+  the actual TF-IDF relevance the floor is gauged on (e.g. `relevance=0.133`), so
+  it's interpretable and directly comparable to the floor. Ordering is still RRF
+  fusion, so retrieval quality (and the eval) is unchanged.
 
 ### Fixed
 - **Hook forces UTF-8 stdout.** The injected rules/memory blocks contain

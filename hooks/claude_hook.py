@@ -83,6 +83,31 @@ def find_project_memory(cwd: str) -> Path | None:
     return None
 
 
+def detect_stack(cwd: str) -> set[str] | None:
+    """Detect the project's stack domains for codebase-aware retrieval.
+
+    Returns the set of detected domains (e.g. {"python","fastapi","general"}) when
+    at least one language/framework is recognized, else None — and None means "do
+    not penalize off-stack rules", so an unknown/empty project behaves exactly as
+    before. Opt out entirely with CLAW_NO_STACK_FILTER. Fails open to None."""
+    if os.environ.get("CLAW_NO_STACK_FILTER"):
+        return None
+    try:
+        from clawness.core import _STACK_DOMAINS
+        from clawness.init import scan_project
+
+        # Scan the project root (the dir that holds .clawness/) when we found one,
+        # else cwd — so detection matches where rules/memory are anchored.
+        proj = find_project_rules(cwd)
+        scan_root = proj.parent.parent if proj else Path(cwd)
+        domains = set(scan_project(scan_root).get("domains", []))
+        # Only enable the off-stack penalty once we actually recognize a language
+        # or framework — otherwise we'd penalize everything on a bare/unknown repo.
+        return domains if (domains & _STACK_DOMAINS) else None
+    except Exception:
+        return None
+
+
 def suggest_actions(prompt: str) -> str:
     """Detect audit/review/perf intent and return a short, deterministic nudge
     so Claude reliably *offers* the relevant skill (auto-invocation alone isn't
@@ -145,6 +170,14 @@ def main() -> None:
     budget = int(os.environ.get("CLAW_BUDGET", "4000"))
     top_k = int(os.environ.get("CLAW_TOP_K", "5"))
 
+    # --- Detect the project's stack (codebase-aware retrieval) ---
+    # Off-stack language/framework rules then face a higher relevance floor, so a
+    # vague prompt in a Python repo won't surface SQL/Capacitor/React noise — while
+    # a genuinely strong cross-domain match still gets through. Scanned fresh each
+    # prompt (~3ms) so a mid-session dependency is picked up immediately. If no
+    # language/framework is recognized (unknown stack), pass None → no penalty.
+    stack_domains = detect_stack(cwd)
+
     # --- Load global rules (always) ---
     global_dir = find_global_rules()
     if not global_dir.exists():
@@ -152,7 +185,8 @@ def main() -> None:
 
     # Pure-Python lexical + concept retrieval — ~1ms, no model, no deps beyond
     # PyYAML. Fast enough to run on every prompt without risking the hook timeout.
-    wl = Clawness(global_dir, context_budget=budget, top_k=top_k)
+    wl = Clawness(global_dir, context_budget=budget, top_k=top_k,
+                  stack_domains=stack_domains)
 
     # --- Load project rules (if present) ---
     project_dir = find_project_rules(cwd)

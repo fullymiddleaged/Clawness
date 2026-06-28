@@ -18,7 +18,13 @@ dependency**. No ML models, no services, no Docker.
    Mandatory rules (`rules/_mandatory/`) always injected; rest ranked + budget-capped.
    A **relevance floor** (`CLAW_MIN_RELEVANCE`, default 0.06, gauged on TF-IDF cosine —
    not RRF, which is rank-based) drops scattershot matches so signal-less prompts
-   inject few/no ranked rules. ~1ms/prompt.
+   inject few/no ranked rules. **Codebase-aware:** the hook detects the project stack
+   (`detect_stack` → `scan_project`, fresh each prompt) and passes it to `Clawness`;
+   off-stack language/framework rules (`_STACK_DOMAINS` minus detected) face a higher
+   floor (`CLAW_OFFSTACK_MIN_RELEVANCE`, default 0.15) so e.g. a Python repo doesn't
+   surface SQL/React noise, while strong cross-domain matches still pass. Cross-cutting
+   domains (general/meta/workflows/security/testing) are never penalized. Passing no
+   stack (CLI/eval) disables the penalty, so eval is unaffected. ~1ms/prompt + ~3ms scan.
 3. **Project memory** (`<project>/.clawness/memory.md`): if present, the hook appends
    it verbatim after the rules block (`render_memory_block` in `core.py`) — a
    per-codebase lessons log, not a ranked rule, so it never touches the engine.

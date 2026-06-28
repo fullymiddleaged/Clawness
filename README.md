@@ -247,10 +247,10 @@ When you type *"implement the user registration endpoint"*, Claude receives this
 ...
 
 # RELEVANT (2)
-[FA-PYDANTIC-001] (fastapi/error) score=0.033
+[FA-PYDANTIC-001] (fastapi/error) relevance=0.314
   WHEN: Defining request or response shapes for any endpoint.
   RULE: Define Pydantic models for every request body and response...
-[GEN-VALIDATE-001] (general/error) score=0.031
+[GEN-VALIDATE-001] (general/error) relevance=0.308
   WHEN: Receiving any input from users, APIs, files, or external systems.
   RULE: Validate and sanitize all external input at the boundary...
 
@@ -261,7 +261,9 @@ The mandatory rules always appear. The ranked rules change based on your prompt.
 
 **Token cost.** A typical turn injects **~1,300 tokens** — roughly **~470 fixed** for the always-on mandatory block plus the selected ranked rules. To keep that fixed cost down, mandatory rules render **compactly** (just the directive, not the `WHEN`/`BAD`/`GOOD` examples, which would repeat identically every turn). Ranked rules render in full, since their examples are prompt-relevant. Run `clawness stats` to see your exact per-turn estimate, and tune it with `CLAW_TOP_K` / `CLAW_BUDGET`, `CLAW_VERBOSE` (full mandatory examples), or `CLAW_COMPACT` (trim ranked too).
 
-**Relevance floor.** Ranked rules are only injected when the prompt actually matches them — a TF-IDF cosine floor (`CLAW_MIN_RELEVANCE`, default `0.06`) drops coincidental matches, so a prompt with no topical signal returns few or zero ranked rules instead of filling all `CLAW_TOP_K` slots with scattershot. Mandatory rules are unaffected. Raise the floor to be stricter, or set it to `0` to disable.
+**Relevance floor.** Ranked rules are only injected when the prompt actually matches them — a TF-IDF cosine floor (`CLAW_MIN_RELEVANCE`, default `0.06`) drops coincidental matches, so a prompt with no topical signal returns few or zero ranked rules instead of filling all `CLAW_TOP_K` slots with scattershot. Mandatory rules are unaffected. Raise the floor to be stricter, or set it to `0` to disable. (The number shown next to each ranked rule, `relevance=…`, *is* this TF-IDF cosine, so it's directly comparable to the floor.)
+
+**Codebase-aware filtering.** On top of the base floor, language/framework rules from a stack your project *doesn't* use face a higher bar (`CLAW_OFFSTACK_MIN_RELEVANCE`, default `0.15`). So a vague prompt in a Python repo won't surface SQL, React, or Capacitor rules — but a genuinely strong cross-domain match still gets through (ask a real React question and the React rules appear, even mid-session after `npm install react`). The stack is detected fresh each prompt from your project files; cross-cutting domains (general, security, testing, workflows, rationalization counters) are never filtered. Disable with `CLAW_NO_STACK_FILTER=1`.
 
 ### Verify It's Working
 
@@ -573,6 +575,8 @@ The 7 **mandatory** rules (always injected) are the 5 `security` rules, the 1 `t
 | `CLAW_TOP_K` | `5` | Max ranked rules per prompt |
 | `CLAW_BUDGET` | `4000` | Max tokens for the rule block |
 | `CLAW_MIN_RELEVANCE` | `0.06` | TF-IDF cosine floor for ranked rules — below it a rule is treated as noise and not injected. Raise it to be stricter (fewer, more on-topic rules), set `0` to disable the floor |
+| `CLAW_OFFSTACK_MIN_RELEVANCE` | `0.15` | Higher floor for language/framework rules from a stack the project doesn't use (e.g. SQL/React rules in a Python repo). Keeps vague prompts on-stack while letting strong cross-domain matches through. Never drops below `CLAW_MIN_RELEVANCE` |
+| `CLAW_NO_STACK_FILTER` | (unset) | Disable codebase-aware filtering — rank all domains equally regardless of detected stack |
 | `CLAW_NO_MEMORY` | (unset) | Don't auto-create `.clawness/memory.md` on first session |
 | `CLAW_MEMORY_BUDGET` | `2000` | Max characters of project memory injected per turn (keeps the tail on overflow) |
 | `CLAW_NO_STACK_NOTE` | (unset) | Don't inject the detected-stack note at session start |

@@ -32,7 +32,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Iterable, Optional
 
 import yaml
 
@@ -73,15 +73,20 @@ class Rule:
         self._search_text = " ".join(p for p in parts if p)
         return self._search_text
 
-    def render(self, score: float | None = None, compact: bool = False) -> str:
+    def render(self, relevance: float | None = None, compact: bool = False) -> str:
         """Format for injection into agent context.
+
+        *relevance* is the rule's TF-IDF cosine for the query (the same 0..1 signal
+        the relevance floor uses), shown so the number is meaningful and comparable
+        to CLAW_MIN_RELEVANCE — unlike the rank-based RRF score, which is ~0.03 for
+        everything and misleading to display.
 
         compact=True emits only the id header + RULE directive, dropping
         WHEN/BAD/GOOD. Used for always-on mandatory rules, whose WHEN/BAD/GOOD
         examples are identical every turn — re-sending them is pure repetition.
         """
-        score_str = f" score={score:.3f}" if score is not None else ""
-        lines = [f"[{self.id}] ({self.domain}/{self.severity}){score_str}"]
+        rel_str = f" relevance={relevance:.3f}" if relevance is not None else ""
+        lines = [f"[{self.id}] ({self.domain}/{self.severity}){rel_str}"]
         if not compact and self.when:
             lines.append(f"  WHEN: {self.when}")
         if self.rule:
@@ -564,6 +569,17 @@ def _estimate_tokens(text: str) -> int:
     return len(text) // 4 + 1
 
 
+# Language/framework domains — these are penalized with a higher relevance floor
+# when they're NOT part of the project's detected stack, so a Python repo doesn't
+# surface scattershot SQL/Capacitor/React rules on a vague prompt. Everything else
+# (general, meta, workflows, security, testing) is cross-cutting — it applies
+# regardless of stack and always uses the base floor.
+_STACK_DOMAINS = frozenset({
+    "python", "fastapi", "typescript", "react", "nextjs", "capacitor",
+    "go", "rust", "java", "sql", "bash", "css", "docker",
+})
+
+
 class Clawness:
     """
     Lightweight hybrid retriever.
@@ -580,10 +596,21 @@ class Clawness:
         context_budget: int = 4000,     # max tokens for rule block
         top_k: int = 5,                 # max ranked rules to return
         min_relevance: Optional[float] = None,  # TF-IDF cosine floor for ranked rules
+        stack_domains: Optional[Iterable[str]] = None,  # project's detected stack
+        off_stack_min_relevance: Optional[float] = None,  # higher floor for off-stack
     ) -> None:
         self.rules_dir = Path(rules_dir)
         self.context_budget = context_budget
         self.top_k = top_k
+
+        # The project's detected stack (e.g. {"python","fastapi"}). When provided,
+        # language/framework rules from OTHER stacks must clear a higher floor
+        # (off_stack_min_relevance) to be injected — so a vague prompt in a Python
+        # repo doesn't surface SQL/Capacitor/React noise, while a genuinely strong
+        # cross-domain match still gets through (preserving mid-session relevance
+        # when a new dependency is added). None (the CLI/eval default) disables the
+        # penalty entirely, so retrieval there is unchanged.
+        self.stack_domains = set(stack_domains) if stack_domains is not None else None
 
         # Relevance floor: a ranked rule is only injected if its TF-IDF cosine
         # clears this bar. RRF scores are rank-based (they don't encode match
@@ -598,6 +625,18 @@ class Clawness:
             except ValueError:
                 min_relevance = 0.06
         self.min_relevance = max(0.0, min_relevance)
+
+        # Higher floor applied to off-stack language/framework rules (see
+        # stack_domains above). Never below the base floor. Tunable via
+        # CLAW_OFFSTACK_MIN_RELEVANCE.
+        if off_stack_min_relevance is None:
+            try:
+                off_stack_min_relevance = float(
+                    os.environ.get("CLAW_OFFSTACK_MIN_RELEVANCE", "0.15")
+                )
+            except ValueError:
+                off_stack_min_relevance = 0.15
+        self.off_stack_min_relevance = max(self.min_relevance, off_stack_min_relevance)
 
         # Rendering verbosity (token efficiency). Mandatory rules repeat on
         # every turn, so they render compact (id + RULE only) unless
@@ -655,7 +694,9 @@ class Clawness:
         """Hybrid BM25 + TF-IDF ranking, fused via RRF (both run over the
         concept-expanded token stream). Returns fused (rule_index, score) for
         the ranked corpus, best first."""
-        if not self._ranked_rules or not self._bm25:
+        # _bm25 and _tfidf are built together (both None only when there are no
+        # ranked rules); narrow both so the type checker is satisfied below.
+        if not self._ranked_rules or self._bm25 is None or self._tfidf is None:
             return []
 
         limit = limit or self.top_k
@@ -686,22 +727,39 @@ class Clawness:
             candidates=candidate_set if domain else None,
         )
 
-        # --- RRF fusion ---
+        # --- RRF fusion (determines ordering) ---
         fused = rrf([bm25_ranked, tfidf_ranked])
 
-        # --- relevance floor ---
-        # Drop fused candidates whose TF-IDF cosine is below the noise floor, so a
-        # signal-less prompt returns few/no scattershot rules instead of filling
-        # top_k with coincidental token matches. Gauged on TF-IDF (the calibrated
-        # 0..1 relevance signal), not RRF (rank-based) or BM25 (magnitudes overlap
-        # noise). Disabled when min_relevance == 0.
-        if self.min_relevance > 0.0:
-            tfidf_map = dict(tfidf_ranked)
-            fused = [
-                (i, s) for (i, s) in fused
-                if tfidf_map.get(i, 0.0) >= self.min_relevance
-            ]
-        return fused
+        # --- attach TF-IDF relevance + apply the floor ---
+        # Ordering stays RRF (the fusion of both signals), but each rule carries
+        # its TF-IDF cosine as the reported score. That cosine is the calibrated
+        # 0..1 relevance signal the floor is gauged on — and what callers should
+        # display. RRF scores are rank-based (~0.03 for everything regardless of
+        # match strength), so showing them against the floor is misleading. The
+        # floor drops candidates below the noise threshold so a signal-less prompt
+        # returns few/no scattershot rules. Disabled when min_relevance == 0.
+        tfidf_map = dict(tfidf_ranked)
+        ranked: list[tuple[int, float]] = []
+        for i, _rrf in fused:
+            relevance = tfidf_map.get(i, 0.0)
+            ranked.append((i, relevance))
+
+        # --- apply the floor (per-rule: off-stack rules face a higher bar) ---
+        ranked = [
+            (i, rel) for (i, rel) in ranked
+            if rel >= self._floor_for(self._ranked_rules[i].domain)
+        ]
+        return ranked
+
+    def _floor_for(self, domain: str) -> float:
+        """Relevance floor for a rule's domain. Language/framework rules from a
+        stack the project doesn't use must clear the higher off-stack floor;
+        everything else uses the base floor."""
+        if (self.stack_domains is not None
+                and domain in _STACK_DOMAINS
+                and domain not in self.stack_domains):
+            return self.off_stack_min_relevance
+        return self.min_relevance
 
     def rank_ids(
         self,
@@ -739,18 +797,18 @@ class Clawness:
             elapsed_ms = (time.perf_counter_ns() - t0) / 1e6
             return self._format_block(mandatory_block, [], elapsed_ms)
 
-        # --- rank ranked-corpus candidates ---
-        fused = self._rank(query, domain, top_k)
+        # --- rank ranked-corpus candidates (idx, TF-IDF relevance) ---
+        ranked = self._rank(query, domain, top_k)
 
         # --- apply context budget ---
         selected: list[tuple[Rule, float]] = []
-        for idx, score in fused[:top_k]:
+        for idx, relevance in ranked[:top_k]:
             rule = self._ranked_rules[idx]
-            rendered = rule.render(score, compact=self._ranked_compact)
+            rendered = rule.render(relevance, compact=self._ranked_compact)
             cost = _estimate_tokens(rendered)
             if used_tokens + cost > self.context_budget:
                 break
-            selected.append((rule, score))
+            selected.append((rule, relevance))
             used_tokens += cost
 
         elapsed_ms = (time.perf_counter_ns() - t0) / 1e6
@@ -776,8 +834,8 @@ class Clawness:
         if selected:
             parts.append("")
             parts.append(f"# RELEVANT ({n_ranked})")
-            for rule, score in selected:
-                parts.append(rule.render(score, compact=self._ranked_compact))
+            for rule, relevance in selected:
+                parts.append(rule.render(relevance, compact=self._ranked_compact))
                 parts.append("")
 
         parts.append("--- END CLAWNESS RULES ---")
