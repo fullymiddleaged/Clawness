@@ -52,7 +52,7 @@ With Clawness:
 - **Adversarial sub-agents** (security red/blue team, code critic, architecture challenger) are available for deeper review
 - **Session security** — an access guard that forces a confirmation prompt on likely-exfiltration or destructive tool calls *even when the tool is allow-listed* (defeating approval fatigue), and a trust ledger that warns when a skill/agent/MCP server changes between sessions
 
-> **What the access guard is — and isn't.** It's a *harm-reduction tripwire*, not a sandbox. It catches honest mistakes, copy-pasted `curl … | sh`, careless out-of-project writes, secret-reads outside your repo, and data sent to hosts that appear nowhere in your codebase — and it breaks approval-fatigue autopilot. It is heuristics over commands the agent controls, so a determined adversary can obfuscate around it; the real boundary is running Claude Code in a container with an egress allowlist. By design it **stays out of the way of normal work**: reading your own project's `.env`, hardcoding hosts in source, and calling your APIs are never prompted — only reaching *outside* the project for secrets, *sending* data to unknown hosts, or editing the guard's own config trips a prompt. Disable it any time with `CLAW_NO_ACCESS_GUARD=1`.
+> **Tripwire, not a sandbox.** The guard is heuristics over the agent's own tool calls — it catches honest mistakes, copy-pasted `curl … | sh`, out-of-project secret reads, and data sent to hosts absent from your codebase, and breaks approval-fatigue autopilot. A determined adversary can still obfuscate around it; the real boundary is a container + egress allowlist. It stays out of normal work — your own `.env`, hardcoded hosts, and your own APIs are never prompted. Disable with `CLAW_NO_ACCESS_GUARD=1`.
 
 ---
 
@@ -89,7 +89,7 @@ You type a prompt in Claude Code
 └──────────────────────────┘
 ```
 
-**In plain terms:** for each prompt, Clawness scores every rule by how well it matches what you're working on — by shared keywords and concepts — and quietly adds the few that fit (plus the always-on mandatory ones). BM25, TF-IDF, and RRF are just the techniques that do the scoring; the concept layer bridges synonyms (login ↔ auth ↔ jwt) so wording differences don't matter. You never touch any of it. No ML models, no downloads — it runs in about a millisecond.
+**In plain terms:** for each prompt, Clawness scores every rule by how well it matches your task — shared keywords *and* concepts (login ↔ auth ↔ jwt bridges synonyms) — and quietly adds the few that fit, plus the always-on mandatory ones. No models, no downloads, ~1 ms, and you never touch any of it.
 
 **Two layers of rules:**
 - **Global** (`~/.claude/clawness/rules/`) — installed once, applies to every project
@@ -159,10 +159,7 @@ The install registers the skills, agents, hooks, and rules — but it isn't live
 2. **Let first-run setup finish** — on the first session a background hook installs PyYAML (a few seconds). Details below.
 3. **Verify** — ask Claude *"what clawness rules do you see in your context?"*, or run `/clawness:status`.
 
-> **What the plugin installs on first run.** Claude Code's install screen lists the components (commands, agents, hooks) but doesn't spell out what the hooks *do*. For transparency:
-> - **Requires Python 3.10+ on your PATH** — the hooks are Python scripts. No Python, no rules (Clawness installs but silently injects nothing). Need it? See [Installing Python](#installing-python-if-you-dont-have-it).
-> - **On your first session, a background `SessionStart` hook runs `pip install`** to fetch **PyYAML** (the only dependency) into your environment — a few seconds. That's it: retrieval is pure-Python lexical + concept matching, no models. Nothing is installed at plugin-install time; it happens on first session and is logged to `bootstrap.log` in the plugin's data directory.
-> - **The plan gate is on by default** — it blocks file edits until you approve a plan (via plan mode, or disable with `CLAW_NO_PLAN_GATE=1`). See [Plan Gate](#plan-gate-on-by-default).
+> **What runs on first launch.** The hooks are Python scripts, so **Python 3.10+ must be on your PATH** — no Python, and the plugin installs but injects nothing (see [Installing Python](#installing-python-if-you-dont-have-it)). On your first session a background `SessionStart` hook runs `pip install pyyaml` (the only dependency, a few seconds, logged to `bootstrap.log`). The plan gate and access guard are on by default — disable with `CLAW_NO_PLAN_GATE=1` / `CLAW_NO_ACCESS_GUARD=1`.
 
 ### Option 2: Manual Install
 
@@ -262,21 +259,15 @@ When you type *"implement the user registration endpoint"*, Claude receives this
 
 The mandatory rules always appear. The ranked rules change based on your prompt.
 
-**Token cost.** A typical turn injects **~1,300 tokens** — roughly **~470 fixed** for the always-on mandatory block plus the selected ranked rules. To keep that fixed cost down, mandatory rules render **compactly** (just the directive, not the `WHEN`/`BAD`/`GOOD` examples, which would repeat identically every turn). Ranked rules render in full, since their examples are prompt-relevant. Run `clawness stats` to see your exact per-turn estimate, and tune it with `CLAW_TOP_K` / `CLAW_BUDGET`, `CLAW_VERBOSE` (full mandatory examples), or `CLAW_COMPACT` (trim ranked too).
+**Token cost.** A typical turn injects **~1,300 tokens** — ~470 fixed for the always-on mandatory block (rendered compactly — directive only, no repeated examples) plus the selected ranked rules. `clawness stats` shows your exact estimate; tune with `CLAW_TOP_K` / `CLAW_BUDGET` / `CLAW_VERBOSE` / `CLAW_COMPACT`.
 
-**Relevance floor.** Ranked rules are only injected when the prompt actually matches them — a TF-IDF cosine floor (`CLAW_MIN_RELEVANCE`, default `0.06`) drops coincidental matches, so a prompt with no topical signal returns few or zero ranked rules instead of filling all `CLAW_TOP_K` slots with scattershot. Mandatory rules are unaffected. Raise the floor to be stricter, or set it to `0` to disable. (The number shown next to each ranked rule, `relevance=…`, *is* this TF-IDF cosine, so it's directly comparable to the floor.)
-
-**Codebase-aware filtering.** On top of the base floor, language/framework rules from a stack your project *doesn't* use face a higher bar (`CLAW_OFFSTACK_MIN_RELEVANCE`, default `0.15`). So a vague prompt in a Python repo won't surface SQL, React, or Capacitor rules — but a genuinely strong cross-domain match still gets through (ask a real React question and the React rules appear, even mid-session after `npm install react`). The stack is detected fresh each prompt from your project files; cross-cutting domains (general, security, testing, workflows, rationalization counters) are never filtered. Disable with `CLAW_NO_STACK_FILTER=1`.
+**Relevance floor & stack awareness.** Ranked rules appear only when the prompt actually matches — a TF-IDF cosine floor drops coincidental hits (the `relevance=…` shown next to each rule *is* that score). Off-stack language/framework rules face a higher bar, so a vague prompt in a Python repo won't surface SQL/React noise, while a genuinely strong cross-domain match still gets through. Mandatory rules are always injected. Tune via `CLAW_MIN_RELEVANCE` / `CLAW_OFFSTACK_MIN_RELEVANCE` / `CLAW_NO_STACK_FILTER` (see [Configuration](#environment-variables)).
 
 ### Verify It's Working
 
-Three ways, depending on what you want to see:
-
-- **Confirm it's live (user-facing):** run `/clawness:status`, or just ask Claude *"what clawness rules do you see in your context?"* — if the hook is active it'll describe the injected rules.
-- **Watch first-run setup happen:** launch with `claude --debug` once. Claude Code doesn't show hook output in the normal UI (hook stdout goes to the model, and the dependency bootstrap runs in the background), so `--debug` is how you see the live install activity.
-- **Read the install record:** the first-session bootstrap logs every step to **`bootstrap.log`** in the plugin's data directory — the Python interpreter used, each `pip` attempt and its result, the installed PyYAML version, and a final `bootstrap ready` line. Check it if rules aren't appearing.
-
-> Note: there's no in-UI "installer" banner — that's a Claude Code limitation (hooks can't print to the user's screen), not a Clawness setting. The three methods above are how you observe setup.
+- **Is it live?** Run `/clawness:status`, or ask *"what clawness rules do you see in your context?"* — an active hook describes the injected rules.
+- **Watch first-run setup:** launch once with `claude --debug` (Claude Code doesn't surface hook output otherwise — there's no in-UI installer banner).
+- **Install record:** the first-session bootstrap logs each step to `bootstrap.log` in the plugin's data directory — check it if rules aren't appearing.
 
 ### Output Compression
 
@@ -317,6 +308,16 @@ It is tuned to **stay out of normal dev work**: reading your *own* project's `.e
 **Trust ledger** (`SessionStart`). Fingerprints your project's skills, agents, commands, and MCP servers (TOFU) and injects a note when one **appears or changes** between sessions, so a silently-swapped skill doesn't go unnoticed. `clawness audit-skills` scans those artifacts for prompt-injection tells on demand.
 
 **Opt-outs:** `CLAW_NO_ACCESS_GUARD=1` and `CLAW_NO_TRUST_LEDGER=1`.
+
+#### Why this matters — 2026 incidents
+
+A tripwire, not a guarantee (see the [caveat above](#what-problem-does-this-solve)) — but each layer maps to a live 2026 failure:
+
+- **"Miasma" / Mini Shai-Hulud npm worms** — self-replicating packages that steal SSH keys, `.env`, and cloud/CI secrets on install. → `SEC-PKG-001` warns before installs; the guard denies secret-reads outside the project and exfil to an off-codebase host. [Microsoft](https://www.microsoft.com/en-us/security/blog/2026/06/02/preinstall-persistence-inside-red-hat-npm-miasma-credential-stealing-campaign/)
+- **MaliciousCorgi VS Code "AI assistant" extensions (Jan 2026)** — two fake AI coding extensions (~1.5M installs) remotely triggered to exfiltrate workspace files. → the guard denies data sent to a host absent from your codebase; `ENF-SEC-006` treats injected instructions as data. [The Hacker News](https://thehackernews.com/2026/01/malicious-vs-code-ai-extensions-with-15.html)
+- **MCP became the top agent attack surface** — unauthenticated servers, poisoned configs, and an RCE in Anthropic's official MCP SDK across 7,000+ servers. → the trust ledger fingerprints your project's MCP servers/skills/agents and flags any that appear or change since last session. [The Hacker News](https://thehackernews.com/2026/04/anthropic-mcp-design-vulnerability.html)
+
+None would be *guaranteed* stopped — just made louder: a prompt, a flagged drift, a denied exfil. The OS sandbox is the wall; this is the tripwire in front of it.
 
 ---
 
@@ -503,7 +504,7 @@ Or just describe the task naturally — the workflow rules tell Claude when to r
 > should we use PostgreSQL or MongoDB for this?
 ```
 
-**Proactive offers.** The agent-spawning skills (`audit`, `review`, `perf`) don't auto-run, because launching several sub-agents is expensive. Instead, when your prompt sounds like a security audit, code review, or performance check, Clawness nudges Claude to *offer* — e.g. "Sounds like you want a security audit — want me to run the red team / blue team now?" — and it only spawns the agents once you say yes. You can always skip the offer and run them directly with `/clawness:audit`, `/clawness:review`, or `/clawness:perf`.
+**Proactive offers.** Spawning sub-agents is expensive, so the `audit`/`review`/`perf` skills never auto-run. When your prompt sounds like a security audit, review, or perf check, Clawness nudges Claude to *offer* first and only spawns them once you agree — or run them directly with `/clawness:audit`, `/clawness:review`, `/clawness:perf`.
 
 ---
 
@@ -609,79 +610,19 @@ The 8 **mandatory** rules (always injected) are the 6 `security` rules, the 1 `t
 
 ### Agent Model Configuration
 
-Clawness uses a two-tier model strategy:
+Two-tier by default: your main session (orchestrator) runs **Opus** for planning and synthesis; the 7 sub-agents run **Sonnet 4.6** for focused analysis at lower cost. Start with `claude --model claude-opus-4-8` — sub-agents pick up Sonnet automatically.
 
-- **Orchestrator (your main Claude Code session):** Opus 4.8 — handles planning, synthesis, and coordination
-- **Sub-agents (the 7 worker agents):** Sonnet 4.6 — handles focused analysis tasks at ~80% lower cost
+| Agent | Model | Effort | Max Turns |
+|-------|-------|--------|-----------|
+| `security-red-team` | claude-sonnet-4-6 | high | 25 |
+| `security-blue-team` | claude-sonnet-4-6 | high | 25 |
+| `code-critic` | claude-sonnet-4-6 | medium | 15 |
+| `test-writer` | claude-sonnet-4-6 | medium | 20 |
+| `perf-auditor` | claude-sonnet-4-6 | medium | 15 |
+| `refactor-advisor` | claude-sonnet-4-6 | medium | 15 |
+| `arch-challenger` | claude-sonnet-4-6 | high | 15 |
 
-Start Claude Code with Opus for orchestration:
-
-```bash
-claude --model claude-opus-4-8
-```
-
-Sub-agents automatically run on Sonnet 4.6. When the orchestrator delegates to a sub-agent (e.g. the red team), the sub-agent runs on Sonnet 4.6 and returns its findings to Opus for synthesis. You get Opus-quality coordination with Sonnet-speed execution.
-
-| Agent | Default Model | Effort | Max Turns | Why |
-|-------|--------------|--------|-----------|-----|
-| `security-red-team` | claude-sonnet-4-6 | high | 25 | Thorough vulnerability scanning |
-| `security-blue-team` | claude-sonnet-4-6 | high | 25 | Fix proposals need reasoning |
-| `code-critic` | claude-sonnet-4-6 | medium | 15 | Read-only code analysis |
-| `test-writer` | claude-sonnet-4-6 | medium | 20 | Writes and runs test files |
-| `perf-auditor` | claude-sonnet-4-6 | medium | 15 | Performance pattern matching |
-| `refactor-advisor` | claude-sonnet-4-6 | medium | 15 | Read-only code smell detection |
-| `arch-challenger` | claude-sonnet-4-6 | high | 15 | Architecture stress-testing |
-
-### Changing Model Defaults
-
-**Change a single agent's model** — edit its `.md` file in `~/.claude/agents/`:
-
-```yaml
-# Aliases (auto-update when Anthropic releases new versions)
-model: haiku        # cheapest — fast lookups, simple tasks
-model: sonnet       # balanced — resolves to latest Sonnet
-model: opus         # premium — resolves to latest Opus
-
-# Pinned versions (exact model, won't change)
-model: claude-haiku-4-5-20251001
-model: claude-sonnet-4-6
-model: claude-opus-4-8
-model: claude-opus-4-6    # older Opus, cheaper
-```
-
-**Change ALL sub-agents at once** — set an environment variable:
-
-```bash
-# Run all sub-agents on Haiku (cheapest possible)
-export CLAUDE_CODE_SUBAGENT_MODEL="claude-haiku-4-5-20251001"
-
-# Or use the latest Sonnet (alias, auto-updates)
-export CLAUDE_CODE_SUBAGENT_MODEL="sonnet"
-```
-
-**Change the orchestrator model** — this is your main Claude Code session:
-
-```bash
-# Start with Opus 4.8 (recommended for orchestration)
-claude --model claude-opus-4-8
-
-# Or switch mid-session
-/model claude-opus-4-8
-
-# Budget option: Sonnet for everything (orchestrator + sub-agents)
-claude --model claude-sonnet-4-6
-```
-
-**The `effort:` field** controls reasoning depth independently of model:
-
-```yaml
-effort: low         # quick, shallow
-effort: medium      # balanced (default for most agents)
-effort: high        # thorough (default for security + architecture)
-effort: max         # maximum reasoning — expensive, use sparingly
-```
-
-**The `maxTurns:` field** caps tool calls per agent run, preventing runaway costs.
+**Override** by editing an agent's `.md` in `~/.claude/agents/`: `model:` takes aliases (`haiku`/`sonnet`/`opus`) or pinned IDs (`claude-opus-4-8`); `effort:` is `low`→`max`; `maxTurns:` caps tool calls. Retarget all sub-agents at once with `CLAUDE_CODE_SUBAGENT_MODEL`, or the orchestrator with `claude --model …` / `/model …`.
 
 ### Where Rules Live
 
@@ -697,17 +638,21 @@ effort: max         # maximum reasoning — expensive, use sparingly
 
 ## How It Compares
 
-| | Writ | Clawness | CLAUDE.md |
+Against [Writ](https://github.com/infinri/Writ) (the hybrid-RAG project that inspired it) and plain Claude Code with no plugin:
+
+| | Writ | **Clawness** | Vanilla Claude Code |
 |---|---|---|---|
-| Rule selection | Hybrid RAG (BM25 + vector + graph) | Hybrid (BM25 + TF-IDF + RRF + concepts) | All rules, every turn |
-| Token cost per turn | selected rules only | ~1,300/turn (~470 mandatory + ~5 selected) | all 117 rules (~13k+) every turn |
-| Infrastructure | Neo4j + Docker + ONNX (~2 GB) | PyYAML (~200 KB) | None |
-| Install time | ~5 minutes | ~5 seconds | Copy/paste |
-| Mandatory rules | Yes | Yes | Manual discipline |
-| Context budget | Yes | Yes | No |
-| Output compression | No | Yes (PostToolUse hook) | No |
-| Sub-agents | No | 7 adversarial agents | No |
-| Per-project rules | No | Yes (.clawness/rules/) | Yes (per-directory CLAUDE.md) |
+| Rule retrieval | 5-stage hybrid RAG (BM25 + vector + graph) | Hybrid lexical (BM25 + TF-IDF + RRF + concepts) | None — CLAUDE.md, loaded in full or mentioned by hand |
+| Token cost / turn | selected rules (5k budget) | ~1,300 (mandatory + selected) | all of CLAUDE.md, every turn |
+| Infrastructure | Docker + Neo4j + ONNX + daemon (~2 GB) | PyYAML (~200 KB) | none |
+| Install | ~5 min (containers) | ~5 sec | built-in |
+| Always-on mandatory rules | Yes (30) | Yes (8) | manual discipline |
+| Per-project rules | — | Yes (`.clawness/rules/`) | per-dir CLAUDE.md |
+| Plan-first gate | Yes (token approval) | Yes (rides native plan mode) | native plan mode (opt-in, not enforced) |
+| Output compression | No | Yes | No |
+| Adversarial sub-agents | No | 7 (red/blue team, critic, …) | general subagents, not preconfigured |
+| Exfil/destructive-action guard | No | Yes — **overrides the allowlist** | permission prompts (fatigue-prone) |
+| Skill/agent/MCP trust ledger | No | Yes (TOFU drift alerts) | No |
 
 ---
 
