@@ -37,20 +37,19 @@ If it describes the injected rule block, you're live. (`/clawness:status` also w
 
 ## What Problem Does This Solve?
 
-You have coding rules: *"always use parameterized SQL," "async I/O end-to-end," "all API responses use the envelope format."*
+Clawness makes Claude Code code the way your team does: your standards applied on every prompt, a gate before unplanned edits, a tripwire on dangerous tool calls, cleaner context, and adversarial review on demand — one install, ~1 ms of overhead, no infrastructure.
 
-Without Clawness, you either:
-- **Dump all rules into CLAUDE.md** → wastes tokens, dilutes attention on every turn
-- **Remember to mention rules manually** → you forget, Claude forgets
+None of that is built in. Vanilla Claude Code forgets your conventions between turns, trusts every tool call you've ever allow-listed, and gives you no cheap way to enforce a standard or rein in a runaway edit. Clawness fills each gap, automatically, per prompt.
 
-With Clawness:
-- **117 rules live in YAML files**, organized by domain
-- **A hook fires on every prompt**, retrieves only the rules relevant to your current task (under a millisecond on the lexical path)
-- **Mandatory rules** (security, testing) appear on every turn, non-negotiably
-- **Ranked rules** (Next.js patterns, React hooks, FastAPI conventions) appear only when relevant
-- **Output compression** strips noise from long bash output so Claude's context stays clean
-- **Adversarial sub-agents** (security red/blue team, code critic, architecture challenger) are available for deeper review
-- **Session security** — an access guard that forces a confirmation prompt on likely-exfiltration or destructive tool calls *even when the tool is allow-listed* (defeating approval fatigue), and a trust ledger that warns when a skill/agent/MCP server changes between sessions
+Take coding rules — *"parameterized SQL only," "async I/O end-to-end," "API responses use the envelope format."* Without Clawness you either dump them all into CLAUDE.md (wastes tokens, dilutes attention every turn) or mention them by hand (you forget, Claude forgets). With Clawness:
+
+- **The right rules, every prompt** — 117 rules in YAML; a hook injects only the ones relevant to your task, plus an always-on mandatory set (security, testing). Nothing to remember, no context bloat.
+- **A plan-first gate** — file edits wait until you approve a plan (it rides native plan mode), so the agent can't quietly rewrite half your repo.
+- **Session security** — an access guard that forces a confirmation on likely-exfiltration or destructive tool calls *even when the tool is allow-listed* (beating approval fatigue), plus a trust ledger that flags a skill/agent/MCP server that changed since last session.
+- **Cleaner context** — long bash output is compressed to the lines that matter, and a per-project memory file recalls hard-won lessons every session.
+- **Adversarial review on tap** — security red/blue team, code critic, architecture challenger, and more, one ask away.
+
+**Make them *your* standards.** The 117 built-in rules are a starting point. Add your own in seconds — run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/` and your whole team shares the same rules. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
 
 > **Tripwire, not a sandbox.** The guard is heuristics over the agent's own tool calls — it catches honest mistakes, copy-pasted `curl … | sh`, out-of-project secret reads, and data sent to hosts absent from your codebase, and breaks approval-fatigue autopilot. A determined adversary can still obfuscate around it; the real boundary is a container + egress allowlist. It stays out of normal work — your own `.env`, hardcoded hosts, and your own APIs are never prompted. Disable with `CLAW_NO_ACCESS_GUARD=1`.
 
@@ -76,8 +75,8 @@ You type a prompt in Claude Code
      └──────┬─────┘
             ▼
 ┌──────────────────────────┐
-│  BM25 + TF-IDF + RRF    │  hybrid lexical retrieval + concept expansion
-│  + concept expansion    │  picks the top rules in ~1ms (pure Python)
+│  BM25 + TF-IDF + RRF     │  hybrid lexical retrieval + concept expansion
+│  + concept expansion     │  picks the top rules in ~1ms (pure Python)
 │  context budget: 4000    │  stops adding rules when token budget is full
 └──────────┬───────────────┘
            │
@@ -402,6 +401,18 @@ the whole team shares the same hard-won knowledge.
 ---
 
 ## Writing Rules
+
+### The easy way — describe it
+
+In any Claude Code session, describe the rule and let Clawness write it:
+
+```
+/clawness:add always use server actions for form mutations in Next.js
+```
+
+It generates a properly-tagged rule (with `violation`/`correct` examples), saves it to your project's `.clawness/rules/` (or the global set if there's no project dir), and confirms before writing. No YAML by hand.
+
+Prefer to author them yourself? The format:
 
 ### Rule Format
 
