@@ -95,6 +95,26 @@ _PIPE_TO_SHELL_RE = re.compile(
     r"(?is)\b(curl|wget|fetch|iwr|invoke-webrequest|invoke-restmethod)\b[^|]*\|\s*"
     r"(sudo\s+)?(sh|bash|zsh|dash|fish|python\d?|perl|ruby|node|iex|invoke-expression)\b"
 )
+# Network content executed via shell substitution rather than a literal pipe —
+# `bash -c "$(curl …)"`, `source <(wget …)`, `eval "$(curl …)"` all run fetched
+# code exactly like `curl … | sh` but without the `|`, so _PIPE_TO_SHELL_RE
+# misses them. A network-fetcher token must appear ALONGSIDE both a shell-exec
+# marker and a substitution/process-substitution construct — three separate,
+# narrow regexes ANDed together, so `eval "$(pyenv init -)"` (no fetcher) or
+# `source .venv/bin/activate` (no substitution) never fire.
+_SHELL_EXEC_RE = re.compile(
+    r"(?i)\b(bash|sh|zsh|dash|fish|powershell|pwsh)\s+-c\b|\bsource\b|\beval\b|"
+    r"\biex\b|\binvoke-expression\b"
+)
+_NET_FETCH_TOKEN_RE = re.compile(
+    r"(?i)\b(curl|wget|iwr|invoke-webrequest|invoke-restmethod|irm)\b"
+)
+_SUBST_OR_PROC_RE = re.compile(r"\$\(|`|<\(")
+# PowerShell's `iex (irm …)` / `iex (iwr …)` — a parenthesized call, not a
+# $()/backtick/<() construct, so it needs its own shape.
+_IEX_INVOKE_RE = re.compile(
+    r"(?i)\b(iex|invoke-expression)\s*\(\s*(irm|iwr|invoke-webrequest|invoke-restmethod)\b"
+)
 _METADATA_RE = re.compile(
     r"169\.254\.169\.254|metadata\.google\.internal|metadata\.azure\.com|100\.100\.100\.200"
 )
@@ -396,6 +416,9 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
         return (ASK, _ask("recursively deleting an entire top-level directory in the home folder"))
     if _PIPE_TO_SHELL_RE.search(cmd):
         return (ASK, _ask("running a script piped straight from the network into a shell — fine for a trusted installer, risky otherwise"))
+    if ((_SHELL_EXEC_RE.search(cmd) and _NET_FETCH_TOKEN_RE.search(cmd) and _SUBST_OR_PROC_RE.search(cmd))
+            or _IEX_INVOKE_RE.search(cmd)):
+        return (ASK, _ask("runs code fetched from the network via shell/process substitution instead of a literal pipe — same risk as curl | sh"))
     if _FORCE_PUSH_RE.search(cmd):
         return (ASK, _ask("a force-push that rewrites remote history — prefer --force-with-lease"))
 
