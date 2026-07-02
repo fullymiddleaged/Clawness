@@ -29,6 +29,9 @@ dependency**. No ML models, no services, no Docker.
    it verbatim after the rules block (`render_memory_block` in `core.py`) — a
    per-codebase lessons log, not a ranked rule, so it never touches the engine.
    Char-bounded by `CLAW_MEMORY_BUDGET` (default 2000), keeping the tail on overflow.
+   Memory (and the few fixed suggested-action lines) sit *outside* `CLAW_BUDGET` by
+   design — counting them in would make rule selection vary with memory length; total
+   injection ≈ `CLAW_BUDGET` + `CLAW_MEMORY_BUDGET` + a few fixed lines.
    `WF-LESSONS-001` is the rule that tells Claude to maintain it. The file is
    auto-created on first session by `hooks/memory_init.py` (SessionStart) — gated to
    git work trees, opt-out `CLAW_NO_MEMORY`; it injects a note (like `git_check`) so

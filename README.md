@@ -603,7 +603,7 @@ The 8 **mandatory** rules (always injected) are the 6 `security` rules, the 1 `t
 |----------|---------|---------|
 | `CLAW_RULES_DIR` | (next to hook script) | Override global rules directory |
 | `CLAW_TOP_K` | `5` | Max ranked rules per prompt |
-| `CLAW_BUDGET` | `4000` | Max tokens for the rule block |
+| `CLAW_BUDGET` | `4000` | Max tokens for the rule block. Project memory is budgeted separately — total injection ≈ `CLAW_BUDGET` + `CLAW_MEMORY_BUDGET` + a few fixed lines |
 | `CLAW_MIN_RELEVANCE` | `0.06` | TF-IDF cosine floor for ranked rules — below it a rule is treated as noise and not injected. Raise it to be stricter (fewer, more on-topic rules), set `0` to disable the floor |
 | `CLAW_OFFSTACK_MIN_RELEVANCE` | `0.15` | Higher floor for language/framework rules from a stack the project doesn't use (e.g. SQL/React rules in a Python repo). Keeps vague prompts on-stack while letting strong cross-domain matches through. Never drops below `CLAW_MIN_RELEVANCE` |
 | `CLAW_NO_STACK_FILTER` | (unset) | Disable codebase-aware filtering — rank all domains equally regardless of detected stack |
