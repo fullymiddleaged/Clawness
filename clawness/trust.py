@@ -102,6 +102,15 @@ def diff_ledger(old: dict[str, str], new: dict[str, str]) -> tuple[list[str], li
 
 
 # --- injection-tell scanner (for `clawness audit-skills`) -----------------
+# Zero-width / Unicode-tag steganography: a run of >=3 invisible joiner/space
+# chars, or any codepoint in the Unicode Tag block (U+E0000-U+E007F) — both are
+# established techniques for hiding instructions inside otherwise-plain text.
+# Built from codepoints rather than embedding the (invisible, unauditable-in-a-
+# diff) characters directly in source.
+_ZERO_WIDTH_CHARS = "".join(chr(c) for c in (0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF))
+_ZERO_WIDTH_RE = re.escape(_ZERO_WIDTH_CHARS)
+_ZERO_WIDTH_RE = f"[{_ZERO_WIDTH_RE}]{{3,}}|[\U000e0000-\U000e007f]"
+
 _INJECTION_TELLS: tuple[tuple[str, "re.Pattern[str]"], ...] = (
     ("instruction override ('ignore previous')",
      re.compile(r"(?i)\bignore\s+(all\s+|any\s+)?previous\b")),
@@ -120,6 +129,16 @@ _INJECTION_TELLS: tuple[tuple[str, "re.Pattern[str]"], ...] = (
                 r"metadata\.azure\.com|100\.100\.100\.200")),
     ("long base64 blob (possible hidden payload)",
      re.compile(r"[A-Za-z0-9+/]{200,}={0,2}")),
+    ("hidden characters (zero-width / Unicode tag steganography)",
+     re.compile(_ZERO_WIDTH_RE)),
+    ("concealment phrasing ('don't tell the user')",
+     re.compile(r"(?i)\b(do\s+not|don'?t)\s+(tell|inform|mention)\b|"
+                r"\bwithout\s+(telling|informing)\s+the\s+user\b|\bsecretly\b")),
+    ("webhook/paste exfil host",
+     re.compile(r"(?i)(discord\.com/api/webhooks|hooks\.slack\.com|pastebin\.com|"
+                r"\w+\.ngrok(?:-free)?\.(?:io|app)|webhook\.site)")),
+    ("decode-and-execute pattern",
+     re.compile(r"(?i)(FromBase64String|atob\s*\(|\beval\s*\(\s*(?:atob|Buffer\.from))")),
 )
 
 
