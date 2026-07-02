@@ -74,8 +74,12 @@ def compress(output: str, command: str) -> str | None:
 
     is_verbose_cmd = bool(VERBOSE_COMMANDS.search(command))
 
-    # Phase 1: extract error lines with surrounding context
-    error_lines: list[str] = []
+    # Phase 1: extract error lines with surrounding context. Track line INDICES,
+    # not text: a text-membership dedup drops distinct lines that happen to
+    # repeat, and only indices can tell which kept lines overlap head/tail
+    # (the old "kept" count double-counted those).
+    error_idx_all: list[int] = []
+    seen: set[int] = set()
     context_radius = 2
 
     for i, line in enumerate(lines):
@@ -83,36 +87,43 @@ def compress(output: str, command: str) -> str | None:
             start = max(0, i - context_radius)
             end = min(len(lines), i + context_radius + 1)
             for j in range(start, end):
-                if lines[j] not in error_lines:
-                    error_lines.append(lines[j])
+                if j not in seen:
+                    seen.add(j)
+                    error_idx_all.append(j)
+    error_idx = error_idx_all[:MAX_COMPRESSED]
 
     # Phase 2: keep first few and last few lines for context
-    head = lines[:5]
-    tail = lines[-5:]
+    head_idx = list(range(min(5, len(lines))))
+    tail_idx = list(range(max(0, len(lines) - 5), len(lines)))
+    show_tail = tail_idx != head_idx
 
     # Phase 3: build compressed output
     body: list[str] = []
-    if head:
+    if head_idx:
         body.append("--- start ---")
-        body.extend(head)
+        body.extend(lines[j] for j in head_idx)
 
-    if error_lines:
+    if error_idx:
         body.append("")
-        body.append(f"--- errors/warnings ({len(error_lines)} lines) ---")
-        body.extend(error_lines[:MAX_COMPRESSED])
-        if len(error_lines) > MAX_COMPRESSED:
-            body.append(f"  ... {len(error_lines) - MAX_COMPRESSED} more error lines truncated")
+        body.append(f"--- errors/warnings ({len(error_idx_all)} lines) ---")
+        body.extend(lines[j] for j in error_idx)
+        if len(error_idx_all) > MAX_COMPRESSED:
+            body.append(f"  ... {len(error_idx_all) - MAX_COMPRESSED} more error lines truncated")
     elif is_verbose_cmd:
         body.append("")
         body.append("--- no errors detected ---")
 
-    if tail and tail != head:
+    if show_tail:
         body.append("")
         body.append("--- end ---")
-        body.extend(tail)
+        body.extend(lines[j] for j in tail_idx)
 
-    # Count only the actual output lines we kept, not the section headers.
-    kept = len(head) + len(error_lines[:MAX_COMPRESSED]) + (len(tail) if tail != head else 0)
+    # Count distinct output lines actually shown (headers excluded) — a line
+    # sitting in both the head and an error window counts once.
+    kept_set = set(head_idx) | set(error_idx)
+    if show_tail:
+        kept_set |= set(tail_idx)
+    kept = len(kept_set)
 
     parts = [
         f"[clawness: compressed {len(raw_lines)} lines → {kept} kept "
