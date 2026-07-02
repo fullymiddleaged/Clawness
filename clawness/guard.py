@@ -78,7 +78,7 @@ _SENSITIVE_READ_RE = re.compile(
     | (^|[\\/])\.ssh([\\/]|$)                  # ~/.ssh/...
     | (^|[\\/])\.aws([\\/]|$)                  # ~/.aws/credentials
     | (^|[\\/])\.gnupg([\\/]|$)
-    | \.pem$ | \.key$ | \.ppk$
+    | \.pem$ | \.key$ | \.ppk$ | \.p12$ | \.pfx$ | \.jks$ | \.keystore$
     | (^|[\\/])id_(rsa|dsa|ecdsa|ed25519)(\.|$)
     | (^|[\\/])\.npmrc$ | (^|[\\/])\.pypirc$ | (^|[\\/])\.netrc$
     | (^|[\\/])\.pgpass$ | (^|[\\/])\.git-credentials$
@@ -180,19 +180,26 @@ _DATA_NETWORK_RE = re.compile(
 )
 _REMOTE_COPY_RE = re.compile(r"(?i)\b(scp|rsync|sftp)\b")
 # File-shaped credential references (NOT the bare word "credentials" — that
-# false-denied legit endpoints like `curl .../credentials/rotate`).
+# false-denied legit endpoints like `curl .../credentials/rotate`). The .ssh/
+# .aws/.gnupg branches require only a LEADING separator (not a trailing one
+# too) so `tar czf - ~/.ssh | curl ...` matches — the old `[\\/]\.ssh[\\/]`
+# needed a slash on both sides and missed a bare directory reference like that.
 _CRED_REF_RE = re.compile(
-    r"(?i)(\.env\b|[\\/]\.ssh[\\/]|[\\/]\.aws[\\/]|\bid_rsa\b|\bid_ed25519\b|\.pem\b|"
-    r"\.npmrc\b|\.git-credentials\b|\.pgpass\b|\.aws[\\/]credentials|"
+    r"(?i)(\.env\b|[\\/]\.ssh(?:[\\/]|\b)|[\\/]\.aws(?:[\\/]|\b)|[\\/]\.gnupg(?:[\\/]|\b)|"
+    r"\bid_(?:rsa|dsa|ecdsa|ed25519)\b|\.pem\b|\.p12\b|\.pfx\b|\.jks\b|"
+    r"\.npmrc\b|\.git-credentials\b|\.pgpass\b|\.netrc\b|\.pypirc\b|\.aws[\\/]credentials|"
+    r"[\\/]\.kube[\\/]config\b|[\\/]\.docker[\\/]config\.json\b|[\\/]\.config[\\/]gh\b|"
+    r"terraform\.tfstate\b|service[-_]?account[\w-]*\.json\b|"
     r"AWS_SECRET\w*|SECRET_KEY|PRIVATE_KEY)"
 )
 # Secret locations that essentially never live inside a project — reading these
 # (even with no network in the same command) is exfil recon, so ASK. The user's
 # OWN project .env/config is deliberately excluded: that's normal dev work.
 _HOME_SECRET_RE = re.compile(
-    r"(?i)(~[\\/]\.(ssh|aws|gnupg)\b|[\\/]\.ssh[\\/]|[\\/]\.aws[\\/]|[\\/]\.gnupg[\\/]|"
-    r"\bid_rsa\b|\bid_ed25519\b|\.git-credentials\b|\.pgpass\b|\.aws[\\/]credentials|"
-    r"~[\\/]\.config[\\/]gh\b|[\\/]\.config[\\/]gh[\\/])"
+    r"(?i)(~[\\/]\.(ssh|aws|gnupg)\b|[\\/]\.ssh(?:[\\/]|\b)|[\\/]\.aws(?:[\\/]|\b)|[\\/]\.gnupg(?:[\\/]|\b)|"
+    r"\bid_(?:rsa|dsa|ecdsa|ed25519)\b|\.git-credentials\b|\.pgpass\b|\.netrc\b|\.pypirc\b|"
+    r"\.aws[\\/]credentials|~[\\/]\.config[\\/]gh\b|[\\/]\.config[\\/]gh[\\/]|"
+    r"[\\/]\.kube[\\/]config\b|[\\/]\.docker[\\/]config\.json\b|\.p12\b|\.pfx\b|\.jks\b)"
 )
 # Commands that read a file's contents out (so a secret-location read is visible).
 _BASH_READER_RE = re.compile(
