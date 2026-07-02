@@ -90,9 +90,25 @@ def test_cloud_metadata_denied():
 
 def test_catastrophic_rm_denied_but_relative_allowed():
     root = _project()
-    for bad in ("rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf $HOME/x", "rm -rf /etc/nginx"):
+    for bad in ("rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf $HOME", "rm -rf ${HOME}/",
+                "rm -rf $HOME/*", "rm -rf ~/.ssh", "rm -rf %USERPROFILE%",
+                "rm -rf /etc/nginx", "rm -rf /home", "rm -rf /home/alice",
+                'rm -rf "$HOME"', "rm -rf C:\\"):
         assert _classify("Bash", {"command": bad}, root)[0] == G.DENY, bad
     for ok in ("rm -rf node_modules", "rm -rf ./build", "rm -f tmpfile"):
+        assert _classify("Bash", {"command": ok}, root)[0] == G.ALLOW, ok
+
+
+def test_rm_home_topdir_asks_but_deeper_allowed():
+    # Deleting an entire top-level home dir is confirm-worthy; a build dir two
+    # levels down is routine hygiene and must never nag (the old behavior was a
+    # hard DENY on any $HOME-rooted path — a fail-closed false positive).
+    root = _project()
+    for confirm in ("rm -rf $HOME/x", "rm -rf ~/old-project", "rm -rf /home/alice/projects",
+                    "rm -rf %USERPROFILE%\\Documents"):
+        assert _classify("Bash", {"command": confirm}, root)[0] == G.ASK, confirm
+    for ok in ("rm -rf $HOME/proj/node_modules", "rm -rf ~/src/app/build",
+               "rm -rf /home/alice/proj/dist"):
         assert _classify("Bash", {"command": ok}, root)[0] == G.ALLOW, ok
 
 

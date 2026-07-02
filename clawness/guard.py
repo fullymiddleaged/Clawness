@@ -99,21 +99,35 @@ _METADATA_RE = re.compile(
     r"169\.254\.169\.254|metadata\.google\.internal|metadata\.azure\.com|100\.100\.100\.200"
 )
 # Catastrophic recursive delete: an `rm` with a recursive (-r) flag whose target is
-# the filesystem root, home, a system dir, or a Windows drive root — NOT a relative
-# path like `node_modules` or `./build` (those stay allowed). The `(?=...-\w*r)`
-# lookahead requires a recursive flag; the target alternation pins the danger.
+# the filesystem root, the home directory itself (incl. a top-level dot-dir like
+# ~/.ssh), a system dir, or a drive root. Deeper home paths are NOT denied:
+# `rm -rf $HOME/proj/node_modules` is routine build hygiene (a hard deny there is
+# a fail-closed FP) — a *top-level* home dir gets the ASK tier below instead.
+_HOME_PREFIX = r"(?:~|\$\{?HOME\}?|%USERPROFILE%|/home/[\w.-]+|/Users/[\w.-]+)"
 _RM_CATASTROPHIC_RE = re.compile(
-    r"""(?ix)
+    rf"""(?ix)
     \brm\b (?=[^\n;|&]*\B-\w*r)        # an rm whose flags include r (recursive)
-    [^\n;|&]*? \s
-    ( / (?=\s|$|\*)                    # bare / (root)
-    | /\*                             # /*
-    | ~ (?=/?\s|/?$)                  # ~ or ~/
-    | \$\{?HOME\}?                    # $HOME / ${HOME}
-    | %USERPROFILE% | %SYSTEMROOT%
-    | /(etc|usr|var|bin|sbin|lib|lib64|home|root|boot|sys|opt)(?=/|\s|$)
-    | [A-Za-z]:\\                     # C:\ ...
+    [^\n;|&]*? \s ["']?
+    ( /+ (?=\s|$|\*)                   # bare / (root)
+    | /\*                              # /*
+    | {_HOME_PREFIX} (?: [\\/]\*? | [\\/]\.[\w.-]+[\\/]? )? (?=\s|$|[;|&"'])
+                                       # home root, home/* or a top-level dotdir (~/.ssh)
+    | %SYSTEMROOT%
+    | /(etc|usr|var|bin|sbin|lib|lib64|root|boot|sys|opt)(?=/|\s|$)
+    | /home (?=/?\s|/?$)               # /home itself (per-user roots via the prefix)
+    | /Users (?=/?\s|/?$)
+    | [A-Za-z]:[\\/]+ (?=\s|$|\*)      # a drive root (C:\), not deeper Windows paths
     )
+    """
+)
+# Recursive delete of a top-level home directory (`rm -rf ~/projects`) — plausibly
+# intentional (clearing an old clone) but destructive enough to confirm. Deeper
+# paths ($HOME/proj/node_modules) are routine and stay silent.
+_RM_HOME_TOPDIR_RE = re.compile(
+    rf"""(?ix)
+    \brm\b (?=[^\n;|&]*\B-\w*r)
+    [^\n;|&]*? \s ["']?
+    {_HOME_PREFIX} [\\/] [\w.-]+ [\\/]? (?=\s|$|[;|&"'])
     """
 )
 _FORCE_PUSH_RE = re.compile(r"(?i)\bgit\s+push\b[^\n;]*?(--force\b(?!-with-lease)|\s-f\b)")
@@ -371,6 +385,8 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
     # Pipe-to-shell is how most official installers run (curl … | sh); a force-push
     # is normal on rebased branches. A hard deny would just train users to disable
     # the guard, so surface an approve prompt instead.
+    if _RM_HOME_TOPDIR_RE.search(cmd):
+        return (ASK, _ask("recursively deleting an entire top-level directory in the home folder"))
     if _PIPE_TO_SHELL_RE.search(cmd):
         return (ASK, _ask("running a script piped straight from the network into a shell — fine for a trusted installer, risky otherwise"))
     if _FORCE_PUSH_RE.search(cmd):
