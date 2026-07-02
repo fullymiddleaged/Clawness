@@ -57,8 +57,10 @@ def test_content_is_wrapped_and_injected_verbatim():
         assert "CLAWNESS MEMORY" in block
         assert "vitest needs --run in CI" in block
         assert block.strip().endswith("--- END CLAWNESS MEMORY ---")
-        # carries the self-maintenance nudge
-        assert ".clawness/memory.md" in block
+        # carries the self-maintenance nudge — kept to a single short line since
+        # it re-ships every turn (WF-LESSONS-001 has the full instructions)
+        footer_lines = [l for l in block.splitlines() if ".clawness/memory.md" in l]
+        assert len(footer_lines) == 1 and len(footer_lines[0]) < 80
 
 
 def test_budget_keeps_the_tail_and_flags_trim():

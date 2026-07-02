@@ -222,10 +222,9 @@ def render_memory_block(memory_path: str | Path, char_budget: int = 2000) -> str
         truncated = True
 
     header = "--- CLAWNESS MEMORY (project lessons) ---"
-    footer = (
-        "Keep this current: when the same mistake or frustration recurs, append a "
-        "terse one-line lesson to .clawness/memory.md (newest at the bottom)."
-    )
+    # One line only — this ships every turn; WF-LESSONS-001 carries the full
+    # upkeep instructions when a prompt is actually about recording lessons.
+    footer = "(Lesson recurs? Append one line to .clawness/memory.md.)"
     parts = [header]
     if truncated:
         parts.append("(older lessons trimmed)")
