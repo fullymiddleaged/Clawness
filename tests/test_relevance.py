@@ -46,7 +46,9 @@ def test_rendered_score_is_relevance_above_floor():
     not the rank-based RRF score (~0.03, which read as 'below floor' and misled)."""
     import re
     wl = Clawness(RULES_DIR, min_relevance=0.06)
-    block = wl.retrieve("what rules do you see")
+    # show_meta=True: scores are hidden by default (per-turn churn defeats
+    # prompt caching) — this test checks their SEMANTICS when shown.
+    block = wl.retrieve("what rules do you see", show_meta=True)
     assert "relevance=" in block
     assert "score=" not in block
     # every shown relevance must be >= the floor

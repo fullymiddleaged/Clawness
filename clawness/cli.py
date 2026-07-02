@@ -53,7 +53,9 @@ def cmd_query(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     wl = Clawness(rules_dir, context_budget=args.budget, top_k=args.top_k)
-    result = wl.retrieve(args.query, domain=args.domain)
+    # CLI output is for a human diagnosing retrieval, not model context — always
+    # show relevance/timing here even though the hook hides them.
+    result = wl.retrieve(args.query, domain=args.domain, show_meta=True)
     print(result)
 
 

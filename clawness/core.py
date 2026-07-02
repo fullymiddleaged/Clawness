@@ -668,8 +668,13 @@ class Clawness:
         # Rendering verbosity (token efficiency). Mandatory rules repeat on
         # every turn, so they render compact (id + RULE only) unless
         # CLAW_VERBOSE is set. Ranked rules render full (with WHEN/BAD/GOOD)
-        # unless CLAW_COMPACT trims them too.
-        self._mandatory_compact = not os.environ.get("CLAW_VERBOSE")
+        # unless CLAW_COMPACT trims them too. CLAW_VERBOSE also re-enables the
+        # retrieval metadata (relevance scores, timing) in the block — hidden by
+        # default because those values change every turn, making an otherwise
+        # identical block byte-different (which defeats provider prompt caching)
+        # while telling the model nothing actionable.
+        self._verbose = bool(os.environ.get("CLAW_VERBOSE"))
+        self._mandatory_compact = not self._verbose
         self._ranked_compact = bool(os.environ.get("CLAW_COMPACT"))
 
         # load
@@ -803,6 +808,7 @@ class Clawness:
         query: str,
         domain: Optional[str] = None,
         top_k: Optional[int] = None,
+        show_meta: Optional[bool] = None,
     ) -> str:
         """
         Retrieve relevant rules and return a formatted context block.
@@ -810,9 +816,16 @@ class Clawness:
         Mandatory rules are always included first (no ranking).
         Ranked rules are selected via hybrid BM25 + TF-IDF + RRF.
         A context budget caps total output.
+
+        *show_meta* controls the per-turn retrieval metadata (relevance scores,
+        timing in the header). Default (None) follows CLAW_VERBOSE — off for the
+        hook so the injected block stays byte-stable across turns (prompt-cache
+        friendly); the CLI passes True since its output isn't model context.
         """
         t0 = time.perf_counter_ns()
         top_k = top_k or self.top_k
+        if show_meta is None:
+            show_meta = self._verbose
 
         # --- mandatory rules (always present) ---
         mandatory_block = "\n\n".join(
@@ -822,7 +835,7 @@ class Clawness:
 
         if not self._ranked_rules or not self._bm25:
             elapsed_ms = (time.perf_counter_ns() - t0) / 1e6
-            return self._format_block(mandatory_block, [], elapsed_ms)
+            return self._format_block(mandatory_block, [], elapsed_ms, show_meta)
 
         # --- rank ranked-corpus candidates (idx, TF-IDF relevance) ---
         ranked = self._rank(query, domain, top_k)
@@ -839,19 +852,26 @@ class Clawness:
             used_tokens += cost
 
         elapsed_ms = (time.perf_counter_ns() - t0) / 1e6
-        return self._format_block(mandatory_block, selected, elapsed_ms)
+        return self._format_block(mandatory_block, selected, elapsed_ms, show_meta)
 
     def _format_block(
         self,
         mandatory_block: str,
         selected: list[tuple[Rule, float]],
         elapsed_ms: float,
+        show_meta: bool = False,
     ) -> str:
         n_mandatory = len(self._mandatory_rules)
         n_ranked = len(selected)
         total = n_mandatory + n_ranked
 
-        parts = [f"--- CLAWNESS RULES ({total} rules, {elapsed_ms:.2f}ms) ---"]
+        # Timing/scores are diagnostics: they vary every turn, so embedding them
+        # would make an otherwise identical block byte-different each prompt
+        # (breaking prompt-cache reuse) for zero benefit to the model.
+        if show_meta:
+            parts = [f"--- CLAWNESS RULES ({total} rules, {elapsed_ms:.2f}ms) ---"]
+        else:
+            parts = ["--- CLAWNESS RULES ---"]
 
         if mandatory_block:
             parts.append("")
@@ -862,7 +882,8 @@ class Clawness:
             parts.append("")
             parts.append(f"# RELEVANT ({n_ranked})")
             for rule, relevance in selected:
-                parts.append(rule.render(relevance, compact=self._ranked_compact))
+                parts.append(rule.render(relevance if show_meta else None,
+                                         compact=self._ranked_compact))
                 parts.append("")
 
         parts.append("--- END CLAWNESS RULES ---")

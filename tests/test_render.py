@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from clawness.core import Rule, _current_date, _DATE_TOKEN, load_rules  # noqa: E402
+from clawness.core import Clawness, Rule, _current_date, _DATE_TOKEN, load_rules  # noqa: E402
 
 RULES_DIR = Path(__file__).resolve().parent.parent / "rules"
 
@@ -46,6 +46,26 @@ def test_enf_current_rule_uses_the_placeholder():
     r = next(x for x in mand if x.id == "ENF-CURRENT-001")
     assert _DATE_TOKEN in r.rule                # stored with the token
     assert _current_date() in r.render(compact=True)  # rendered with the live date
+
+
+def test_default_block_has_no_per_turn_telemetry():
+    # relevance scores and timing vary every turn — embedding them makes an
+    # otherwise identical block byte-different each prompt (defeats prompt
+    # caching) and tells the model nothing. Hidden unless CLAW_VERBOSE.
+    wl = Clawness(RULES_DIR)
+    block = wl.retrieve("implement async fastapi endpoint with pydantic")
+    assert "relevance=" not in block
+    assert "ms)" not in block
+    assert block.startswith("--- CLAWNESS RULES ---")
+    # two retrievals of the same query render byte-identically
+    assert block == wl.retrieve("implement async fastapi endpoint with pydantic")
+
+
+def test_show_meta_restores_relevance_and_timing():
+    wl = Clawness(RULES_DIR)
+    block = wl.retrieve("implement async fastapi endpoint with pydantic", show_meta=True)
+    assert "relevance=" in block
+    assert "ms)" in block
 
 
 if __name__ == "__main__":
