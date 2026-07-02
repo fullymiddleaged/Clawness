@@ -150,6 +150,40 @@ _RM_HOME_TOPDIR_RE = re.compile(
     {_HOME_PREFIX} [\\/] [\w.-]+ [\\/]? (?=\s|$|[;|&"'])
     """
 )
+# Windows-native catastrophic delete: Remove-Item (the full cmdlet name — its
+# `rm`/`ri` aliases already match _RM_CATASTROPHIC_RE above since it literally
+# contains "rm"/"ri" as a word), rd/rmdir, and del, each requiring their own
+# recursive flag, targeting a drive root, C:\Windows, C:\Users (root only —
+# a specific deep user path is NOT denied, same root-only narrowing as above),
+# or $env:USERPROFILE root.
+_WIN_ROOT_TARGET = r"""
+    [A-Za-z]:[\\/]+ (?=\s|$|\*|["']|;)
+  | [A-Za-z]:[\\/](?:Windows|Users) (?=[\\/]?\s|[\\/]?$|["']|;)
+  | \$env:USERPROFILE (?=[\\/]?\s|[\\/]?$|["']|;)
+"""
+_RM_CATASTROPHIC_WIN_RE = re.compile(
+    rf"""(?ix)
+    (?:
+        \bRemove-Item\b (?=[^\n;|&]*-Recurse\b) [^\n;|&]*?
+      | \b(?:rd|rmdir)\b (?=[^\n;|&]*/s\b) [^\n;|&]*?
+      | \bdel\b (?=[^\n;|&]*/s\b) [^\n;|&]*?
+    )
+    \s ["']?
+    (?: {_WIN_ROOT_TARGET} )
+    """
+)
+# PowerShell download cradles — the LOLBin equivalents of `curl … | sh`. The
+# WebClient form is often written as a pipeline (`New-Object ... | %{$_.Download...}`),
+# so its wildcard allows `|` — unlike the other alternatives, where `|`/`&` would
+# cross into an unrelated adjacent command.
+_WIN_DOWNLOAD_CRADLE_RE = re.compile(
+    r"(?i)"
+    r"New-Object\s+(?:System\.)?Net\.WebClient\b[^\n;]*?\.(?:DownloadString|DownloadFile|DownloadData)\s*\("
+    r"|\bcertutil\b[^\n;|&]*-urlcache\b"
+    r"|\bbitsadmin\b[^\n;|&]*/transfer\b"
+    r"|\bStart-BitsTransfer\b"
+    r"|\bpowershell(?:\.exe)?\b[^\n;|&]*(?:-enc\b|-encodedcommand\b)"
+)
 _FORCE_PUSH_RE = re.compile(r"(?i)\bgit\s+push\b[^\n;]*?(--force\b(?!-with-lease)|\s-f\b)")
 # git config settings that persist arbitrary-code-execution: hooksPath repoints
 # git's hook directory, credential.helper/filter.*.clean|smudge run on every
@@ -170,13 +204,14 @@ _GIT_CONFIG_ABUSE_RE = re.compile(
 )
 _NETWORK_RE = re.compile(
     r"(?i)\b(curl|wget|nc|netcat|telnet|scp|rsync|sftp|ftp|"
-    r"invoke-webrequest|iwr|invoke-restmethod)\b"
+    r"invoke-webrequest|iwr|invoke-restmethod|irm)\b"
 )
 _DATA_NETWORK_RE = re.compile(
-    r"(?is)\b(curl|wget)\b.*?("
+    r"(?is)\b(curl|wget|iwr|invoke-webrequest|irm|invoke-restmethod)\b.*?("
     r"-d\b|--data\b|--data-binary\b|--data-raw\b|--data-urlencode\b|"
     r"-F\b|--form\b|-T\b|--upload-file\b|--post-data\b|--post-file\b|"
-    r"-X\s*(POST|PUT|PATCH)\b)"
+    r"-X\s*(POST|PUT|PATCH)\b|"
+    r"-Method\s+(POST|PUT|PATCH)\b|-Body\b|-InFile\b)"
 )
 _REMOTE_COPY_RE = re.compile(r"(?i)\b(scp|rsync|sftp)\b")
 # File-shaped credential references (NOT the bare word "credentials" — that
@@ -228,7 +263,9 @@ _PKG_INSTALL_RE = re.compile(
     r"npm\s+(i|install|add)|pnpm\s+(i|install|add)|yarn\s+add|bun\s+(add|install)|"
     r"pip\s+install|pip3\s+install|uv\s+(add|pip\s+install)|poetry\s+add|"
     r"gem\s+install|cargo\s+(add|install)|go\s+install|"
-    r"apt(-get)?\s+install|brew\s+install)\b"
+    r"apt(-get)?\s+install|brew\s+install|"
+    r"winget\s+install|choco(?:latey)?\s+install|scoop\s+install|"
+    r"Install-Module|dotnet\s+add\s+package)\b"
 )
 # A named package as opposed to a lockfile restore (`npm install` / `pip install
 # -r req.txt`). We only ASK when a concrete package name is being fetched.
@@ -441,7 +478,7 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
     # things a user would essentially never want pushed through by a sleepy "yes".)
     if _METADATA_RE.search(cmd):
         return (DENY, _deny("it contacts a cloud instance-metadata endpoint (credential theft vector)"))
-    if _RM_CATASTROPHIC_RE.search(cmd):
+    if _RM_CATASTROPHIC_RE.search(cmd) or _RM_CATASTROPHIC_WIN_RE.search(cmd):
         return (DENY, _deny("it recursively deletes a filesystem root, home, or system directory"))
     if _NETWORK_RE.search(cmd) and _CRED_REF_RE.search(cmd):
         return (DENY, _deny("it references a credential/secret file in a command that also touches the network"))
@@ -463,6 +500,8 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
         return (ASK, _ask("changes a git config setting that can execute arbitrary code (hooksPath, credential.helper, a filter, or a `!`-shell alias/pager/editor)"))
     if _ENV_DUMP_TO_NETWORK_RE.search(cmd):
         return (ASK, _ask("pipes environment variables into a network command — may leak secrets stored in env vars"))
+    if _WIN_DOWNLOAD_CRADLE_RE.search(cmd):
+        return (ASK, _ask("downloads and can execute content via a Windows LOLBin (WebClient/certutil/bitsadmin/encoded command) — same risk as curl | sh"))
 
     # Reading a credential store OUTSIDE the project (e.g. cat ~/.ssh/id_rsa) — the
     # Read-tool gate is bypassable via Bash, so cover it here. In-project secret

