@@ -116,7 +116,8 @@ _INJECTION_TELLS: tuple[tuple[str, "re.Pattern[str]"], ...] = (
     ("references credential/secret material",
      re.compile(r"(?i)(\.env\b|\bid_rsa\b|/\.ssh/|/\.aws/|AWS_SECRET|SECRET_KEY|PRIVATE[_ ]?KEY)")),
     ("cloud instance-metadata endpoint",
-     re.compile(r"169\.254\.169\.254|metadata\.google\.internal")),
+     re.compile(r"169\.254\.169\.254|fd00:ec2::254|metadata\.google\.internal|"
+                r"metadata\.azure\.com|100\.100\.100\.200")),
     ("long base64 blob (possible hidden payload)",
      re.compile(r"[A-Za-z0-9+/]{200,}={0,2}")),
 )

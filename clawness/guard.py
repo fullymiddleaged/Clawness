@@ -116,7 +116,8 @@ _IEX_INVOKE_RE = re.compile(
     r"(?i)\b(iex|invoke-expression)\s*\(\s*(irm|iwr|invoke-webrequest|invoke-restmethod)\b"
 )
 _METADATA_RE = re.compile(
-    r"169\.254\.169\.254|metadata\.google\.internal|metadata\.azure\.com|100\.100\.100\.200"
+    r"169\.254\.169\.254|fd00:ec2::254|metadata\.google\.internal|"
+    r"metadata\.azure\.com|100\.100\.100\.200"
 )
 # Catastrophic recursive delete: an `rm` with a recursive (-r) flag whose target is
 # the filesystem root, the home directory itself (incl. a top-level dot-dir like

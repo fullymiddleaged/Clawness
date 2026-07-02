@@ -137,6 +137,11 @@ def test_cloud_metadata_denied():
     assert _classify("Bash", {"command": "curl http://169.254.169.254/latest/meta-data/"}, root)[0] == G.DENY
 
 
+def test_cloud_metadata_ipv6_denied():
+    root = _project()
+    assert _classify("Bash", {"command": "curl http://[fd00:ec2::254]/latest/meta-data/"}, root)[0] == G.DENY
+
+
 def test_catastrophic_rm_denied_but_relative_allowed():
     root = _project()
     for bad in ("rm -rf /", "rm -rf /*", "rm -rf ~", "rm -rf $HOME", "rm -rf ${HOME}/",
