@@ -40,27 +40,35 @@ def main() -> None:
     except Exception:
         sys.exit(0)
 
-    event = payload.get("hook_event_name", "")
-    tool_name = payload.get("tool_name", "")
-    session_id = payload.get("session_id", "") or ""
-    cwd = payload.get("cwd") or None
-    root = find_project_root(Path(cwd) if cwd else None)
+    # Everything up to the decision is wrapped so a malformed payload (non-dict
+    # JSON, unexpected shapes) or a root-detection error exits 0 cleanly — the
+    # gate must fail OPEN, never crash the tool call with a traceback.
+    try:
+        event = payload.get("hook_event_name", "")
+        tool_name = payload.get("tool_name", "")
+        session_id = payload.get("session_id", "") or ""
+        cwd = payload.get("cwd") or None
+        root = find_project_root(Path(cwd) if cwd else None)
 
-    # Native plan approval: record it and clear the gate for this session.
-    if tool_name == PLAN_APPROVAL_TOOL and event == "PostToolUse":
-        try:
-            record_session_approval(root, session_id)
-        except Exception:
-            pass
-        sys.exit(0)
+        # Native plan approval: record it and clear the gate for this session.
+        if tool_name == PLAN_APPROVAL_TOOL and event == "PostToolUse":
+            try:
+                record_session_approval(root, session_id)
+            except Exception:
+                pass
+            sys.exit(0)
 
-    # Write gate. Pass the target path so writes to Claude Code's plan file
-    # (which happen during plan mode, before approval) are never blocked.
-    tool_input = payload.get("tool_input") or {}
-    target_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
-    block, reason = gate_decision(root, tool_name, session_id, target_path)
-    if not block:
-        sys.exit(0)
+        # Write gate. Pass the target path so writes to Claude Code's plan file
+        # (which happen during plan mode, before approval) are never blocked.
+        tool_input = payload.get("tool_input") or {}
+        target_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+        block, reason = gate_decision(root, tool_name, session_id, target_path)
+        if not block:
+            sys.exit(0)
+    except SystemExit:
+        raise
+    except Exception:
+        sys.exit(0)  # fail open
 
     print(json.dumps({
         "hookSpecificOutput": {

@@ -65,14 +65,6 @@ def _fresh_project():
     return d
 
 
-# --- plan gate ------------------------------------------------------------
-
-def _fresh_project():
-    d = Path(tempfile.mkdtemp())
-    (d / ".git").mkdir()  # marks project root
-    return d
-
-
 def test_gate_on_by_default_blocks_writes():
     root = _fresh_project()
     block, reason = P.gate_decision(root, "Write", "sess-1")
@@ -127,6 +119,20 @@ def test_gate_fails_open_on_bad_state():
     (root / ".clawness" / "sessions.json").write_text("{ not json")
     block, _ = P.gate_decision(root, "Write", "x")
     assert isinstance(block, bool)  # never raises
+
+
+def test_hook_fails_open_on_malformed_payloads():
+    # The hook process must exit 0 with no traceback on any payload shape —
+    # valid JSON that isn't a dict used to raise AttributeError before the
+    # decision logic even ran.
+    import json as _json
+    import subprocess
+    hook = Path(__file__).resolve().parent.parent / "hooks" / "plan_gate.py"
+    for payload in ('"hi"', "[]", "42", "null", "{ not json", _json.dumps({"tool_name": 3})):
+        r = subprocess.run([sys.executable, str(hook)], input=payload,
+                           capture_output=True, text=True)
+        assert r.returncode == 0, (payload, r.stderr)
+        assert "Traceback" not in r.stderr, payload
 
 
 def test_plan_file_writes_are_never_gated():
