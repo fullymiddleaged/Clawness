@@ -5,6 +5,38 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-07-02
+
+### Fixed
+- **Guard: `rm -rf $HOME/<subpath>` no longer hard-denied.** Deleting a project
+  subpath under home (`rm -rf $HOME/proj/node_modules`, `/home/<user>/...`, deep
+  `C:\` paths) was an unoverridable DENY — a fail-closed false positive on routine
+  build hygiene. The deny now pins home/drive **roots** and top-level dot-dirs
+  (`~/.ssh`) only; deleting an entire top-level home dir (`rm -rf ~/projects`)
+  gets a new `ask`; deeper paths stay silent. macOS `/Users/<name>` roots covered.
+- **Guard: lockfile restores no longer nag.** `pip install -r requirements.txt`,
+  `pip install -e .`, `uv pip install -r …` were asked despite being manifest
+  restores; the exemption is end-anchored so `pip install -r req.txt evil-pkg`
+  still asks.
+- **Plan gate fails open on malformed payloads** (non-dict JSON no longer
+  tracebacks; mirrors the access guard's guard-rails).
+- **Output compression: honest "kept" count.** Lines shared between head/tail and
+  error-context sections were double-counted, and distinct duplicate error lines
+  were dropped; phases now track line indices.
+
+### Changed
+- **Injected block is now byte-stable across turns (prompt-cache friendly).**
+  The per-turn timing (`…, 0.31ms`) and per-rule `relevance=0.xxx` diagnostics
+  are hidden by default — they changed every prompt, defeating provider prompt
+  caching, and told the model nothing. `CLAW_VERBOSE` (or `clawness query`)
+  still shows them.
+- **Memory upkeep footer trimmed to one line** (~160 → ~55 chars per turn);
+  `WF-LESSONS-001` carries the full instructions when relevant.
+
+### Docs
+- Documented that project memory is budgeted separately from `CLAW_BUDGET`
+  (total injection ≈ `CLAW_BUDGET` + `CLAW_MEMORY_BUDGET` + a few fixed lines).
+
 ## [0.6.0] - 2026-07-02
 
 ### Changed

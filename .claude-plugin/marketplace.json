@@ -8,7 +8,7 @@
     {
       "name": "clawness",
       "source": "./",
-      "version": "0.6.0",
+      "version": "0.6.1",
       "description": "A Claude Code plugin that puts the right coding rules in context on every prompt, automatically. 117 rules across 18 domains (Go, Rust, Java, SQL, bash, CSS, Docker, Python, TypeScript, React, Next.js, FastAPI, Capacitor, security, testing, workflows, rationalization counters, and cross-cutting general rules). Per-prompt rule injection via BM25 + TF-IDF + RRF + concept expansion (pure Python — no ML models), plus a per-codebase lessons-learned memory (.clawness/memory.md) injected every turn. Adversarial review sub-agents (security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger), slash commands, Bash-output compression, a default-on (opt-out) plan-approval gate, and session security hardening (an access guard that forces a confirmation prompt on likely exfiltration/destructive tool calls even when the tool is allow-listed, plus a trust ledger that flags changed skills/agents/MCP servers). No Docker, no services. Requires Python 3.10+ on PATH; on first session a background hook installs PyYAML (the only dependency) into your environment.",
       "category": "productivity",
       "license": "MIT",
