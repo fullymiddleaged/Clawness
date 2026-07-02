@@ -175,6 +175,13 @@ _PKG_INSTALL_RE = re.compile(
 # A named package as opposed to a lockfile restore (`npm install` / `pip install
 # -r req.txt`). We only ASK when a concrete package name is being fetched.
 _PKG_BARE_RE = re.compile(r"(?i)\b(npm|pnpm|yarn|bun)\s+(i|install)\s*(--?\w+\s*)*$")
+# Manifest/editable restores install only what the project already declares, not a
+# new named package, so they stay silent. Anchored to command end so a mixed form
+# (`pip install -r req.txt evil-pkg`) still asks.
+_PKG_RESTORE_RE = re.compile(
+    r"(?i)\b(pip3?|uv\s+pip)\s+install\s+(--?[\w-]+(=\S+)?\s+)*"
+    r"(-r\s+\S+|-e\s+\.|\.)\s*(--?[\w-]+(=\S+)?\s*)*$"
+)
 
 _URL_HOST_RE = re.compile(r"https?://([^/\s'\"`]+)")
 # scp/ssh destination — REQUIRE the user@host: form so we don't mistake a URL
@@ -418,7 +425,9 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
         return (ASK, _ask(f"a network upload to {', '.join(ext_hosts)} (a known/unverified destination)"))
 
     # --- package install (lifecycle scripts run arbitrary code) ---
-    if _PKG_INSTALL_RE.search(cmd) and not _PKG_BARE_RE.search(cmd):
+    if (_PKG_INSTALL_RE.search(cmd)
+            and not _PKG_BARE_RE.search(cmd)
+            and not _PKG_RESTORE_RE.search(cmd)):
         return (ASK, _ask("installing a package — its lifecycle scripts run arbitrary code; verify the name/source"))
 
     return (ALLOW, "")

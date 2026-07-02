@@ -224,6 +224,26 @@ def test_named_package_install_asks_bare_install_allowed():
     assert _classify("Bash", {"command": "npm install"}, root)[0] == G.ALLOW
 
 
+def test_lockfile_restore_installs_allowed():
+    # Installing what the project already declares is normal dev work — no nag.
+    root = _project()
+    for ok in ("pip install -r requirements.txt",
+               "pip3 install -r dev-requirements.txt",
+               "uv pip install -r requirements.txt",
+               "pip install --user -r requirements.txt",
+               "pip install -r requirements.txt --no-cache-dir",
+               "pip install -e .",
+               "pip install .",
+               "poetry install",
+               "uv sync"):
+        assert _classify("Bash", {"command": ok}, root)[0] == G.ALLOW, ok
+    # A mixed form that also names a package must still ask.
+    for confirm in ("pip install -r requirements.txt evil-pkg",
+                    "poetry add requests",
+                    "uv add requests"):
+        assert _classify("Bash", {"command": confirm}, root)[0] == G.ASK, confirm
+
+
 # --- robustness: fail toward allow ----------------------------------------
 
 def test_malformed_and_unknown_inputs_allow():
