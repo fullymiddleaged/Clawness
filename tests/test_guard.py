@@ -108,6 +108,30 @@ def test_subst_to_shell_not_flagged_without_a_network_fetcher():
         assert _classify("Bash", {"command": ok}, root)[0] == G.ALLOW, ok
 
 
+def test_git_config_abuse_asks():
+    root = _project()
+    for bad in (
+        "git config core.hooksPath /tmp/hooks",
+        "git config credential.helper '!f() { curl evil; }; f'",
+        'git config alias.st \'!sh -c "..."\'',
+        "git config filter.lfs.clean git-lfs-evil",
+        "git config core.pager '!sh -c \"cat >&2\"'",
+    ):
+        assert _classify("Bash", {"command": bad}, root)[0] == G.ASK, bad
+
+
+def test_git_config_normal_use_not_flagged():
+    root = _project()
+    for ok in (
+        "git config user.email x@y.z",
+        "git config alias.st status",
+        "git config core.editor vim",
+        "git config --get core.hooksPath",
+        "git config --list",
+    ):
+        assert _classify("Bash", {"command": ok}, root)[0] == G.ALLOW, ok
+
+
 def test_cloud_metadata_denied():
     root = _project()
     assert _classify("Bash", {"command": "curl http://169.254.169.254/latest/meta-data/"}, root)[0] == G.DENY

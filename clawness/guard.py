@@ -151,6 +151,23 @@ _RM_HOME_TOPDIR_RE = re.compile(
     """
 )
 _FORCE_PUSH_RE = re.compile(r"(?i)\bgit\s+push\b[^\n;]*?(--force\b(?!-with-lease)|\s-f\b)")
+# git config settings that persist arbitrary-code-execution: hooksPath repoints
+# git's hook directory, credential.helper/filter.*.clean|smudge run on every
+# fetch/checkout, and an alias/pager/editor whose VALUE starts with `!` is a
+# shell command in disguise. The middle wildcard excludes --get/--list so a
+# plain read never matches (git prints the current value with neither flag
+# NOR a trailing value token — the (?!--)\S after the key requires one).
+_GIT_CONFIG_ABUSE_RE = re.compile(
+    r"""(?ix)
+    \bgit\s+config\b
+    (?: (?! --get\b | --get-all\b | --get-regexp\b | --list\b | -l\b ) [^\n;|&] )*?
+    \b(?:
+        (?:core\.hooksPath|credential\.helper|filter\.[\w.-]+\.(?:clean|smudge)) \s+ (?!--) \S
+      | alias\.[\w-]+ \s+ ['"]? !
+      | core\.(?:pager|editor) \s+ ['"]? !
+    )
+    """
+)
 _NETWORK_RE = re.compile(
     r"(?i)\b(curl|wget|nc|netcat|telnet|scp|rsync|sftp|ftp|"
     r"invoke-webrequest|iwr|invoke-restmethod)\b"
@@ -421,6 +438,8 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
         return (ASK, _ask("runs code fetched from the network via shell/process substitution instead of a literal pipe — same risk as curl | sh"))
     if _FORCE_PUSH_RE.search(cmd):
         return (ASK, _ask("a force-push that rewrites remote history — prefer --force-with-lease"))
+    if _GIT_CONFIG_ABUSE_RE.search(cmd):
+        return (ASK, _ask("changes a git config setting that can execute arbitrary code (hooksPath, credential.helper, a filter, or a `!`-shell alias/pager/editor)"))
 
     # Reading a credential store OUTSIDE the project (e.g. cat ~/.ssh/id_rsa) — the
     # Read-tool gate is bypassable via Bash, so cover it here. In-project secret
