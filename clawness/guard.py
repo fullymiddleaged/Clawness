@@ -416,10 +416,18 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
         verdicts = [value_in_project(h, root) for h in ext_hosts]
         if False in verdicts:
             unknown = ", ".join(h for h, v in zip(ext_hosts, verdicts) if v is False)
-            if data_bearing:
+            # Absent-host + data-bearing is suspicious either way, but only a hard
+            # DENY when a secret/credential signal is also in the command — plain
+            # data upload to a host given inline (CLI arg, chat) rather than
+            # written into a file is legitimate and shouldn't be unoverridable.
+            secret_signal = bool(_CRED_REF_RE.search(cmd) or _CMD_SUBST_RE.search(cmd))
+            if data_bearing and secret_signal:
                 return (DENY, _deny(
                     f"it sends data to a host that appears nowhere in this codebase ({unknown}) — "
                     "the signature of data exfiltration"))
+            if data_bearing:
+                return (ASK, _ask(
+                    f"uploading data to a host that appears nowhere in this codebase ({unknown})"))
             return (ASK, _ask(
                 f"a network call to an unrecognized host ({unknown}) with shell substitution embedded"))
         return (ASK, _ask(f"a network upload to {', '.join(ext_hosts)} (a known/unverified destination)"))
