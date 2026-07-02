@@ -5,7 +5,7 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.1] - 2026-06-30
+## [0.6.0] - 2026-07-02
 
 ### Changed
 - **Hard `deny` reserved for the unrecoverable; dual-use actions downgraded to `ask`.**
@@ -23,6 +23,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   real escape hatches (run it yourself in a terminal, or `CLAW_NO_ACCESS_GUARD=1` for
   the session). Both `deny` and `ask` prompts now lead with a 🛑 / ⚠️ banner for
   at-a-glance visibility.
+
+### Docs
+- README overhauled: value-first opening (what Clawness adds over vanilla Claude Code)
+  ahead of the "none of this is native" framing; a dedicated **Session Security**
+  section; a **"Why this matters — 2026 incidents"** panel mapping each layer to a real
+  supply-chain / agent attack (Shai-Hulud, MaliciousCorgi, MCP RCE); a reworked
+  **Writ vs Clawness vs vanilla Claude Code** comparison table; and clearer
+  "make them *your* standards" customization guidance (`/clawness:add`). Trimmed
+  verbose sections (~60 lines).
+- Verified live on Windows + Python: plugin loads, access-guard `deny`/`ask` fire and are
+  honored, normal in-project work is not prompted.
 
 ## [0.5.0] - 2026-06-30
 
