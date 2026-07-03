@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 try:
     from clawness.core import Clawness, load_rules, Rule, render_memory_block
+    from clawness.session_state import bump_prompt_count, memory_changed, should_show_full
 except Exception:
     # Dependencies not ready yet (e.g. the SessionStart bootstrap is still
     # installing pyyaml). Degrade silently rather than erroring the prompt.
@@ -175,6 +176,22 @@ def main() -> None:
     budget = int(os.environ.get("CLAW_BUDGET", "4000"))
     top_k = int(os.environ.get("CLAW_TOP_K", "5"))
 
+    # --- Session-aware re-injection ---
+    # The mandatory block is identical every prompt, yet re-sent in full on
+    # every single turn. Show it in full on prompt 1 and every CLAW_FULL_EVERY
+    # prompts after (default 5); abbreviate to an id list in between — the
+    # rules stay just as binding, only their re-statement is compressed.
+    # CLAW_FULL_EVERY=1 restores the old always-full behavior. Any failure in
+    # the session-state lookup defaults to a full render (fail toward showing
+    # more, never less).
+    session_id = event.get("session_id", "") or ""
+    try:
+        full_every = int(os.environ.get("CLAW_FULL_EVERY", "5"))
+    except ValueError:
+        full_every = 5
+    prompt_count = bump_prompt_count(session_id)
+    show_full = should_show_full(prompt_count, full_every)
+
     # --- Detect the project's stack (codebase-aware retrieval) ---
     # Off-stack language/framework rules then face a higher relevance floor, so a
     # vague prompt in a Python repo won't surface SQL/Capacitor/React noise — while
@@ -216,15 +233,22 @@ def main() -> None:
                 wl._tfidf = TfIdfIndex()
                 wl._tfidf.build(search_texts)
 
-    block = wl.retrieve(prompt)
+    block = wl.retrieve(prompt, abbreviate_mandatory=not show_full)
 
     # --- Inject project memory (lessons-learned log), if present ---
+    # Follows the same cadence as the mandatory block, but a changed file
+    # always shows in full immediately regardless of cadence — a fresh lesson
+    # must never be abbreviated away the turn it was written.
     memory_path = find_project_memory(cwd)
     if memory_path:
-        mem_budget = int(os.environ.get("CLAW_MEMORY_BUDGET", "2000"))
-        memory_block = render_memory_block(memory_path, char_budget=mem_budget)
-        if memory_block:
-            block = block + "\n\n" + memory_block
+        show_memory_full = show_full or memory_changed(session_id, memory_path)
+        if show_memory_full:
+            mem_budget = int(os.environ.get("CLAW_MEMORY_BUDGET", "2000"))
+            memory_block = render_memory_block(memory_path, char_budget=mem_budget)
+            if memory_block:
+                block = block + "\n\n" + memory_block
+        else:
+            block = block + "\n\n(CLAWNESS MEMORY unchanged since last shown this session — see above.)"
 
     suggestions = suggest_actions(prompt)
     if suggestions:

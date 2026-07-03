@@ -808,6 +808,7 @@ class Clawness:
         domain: Optional[str] = None,
         top_k: Optional[int] = None,
         show_meta: Optional[bool] = None,
+        abbreviate_mandatory: bool = False,
     ) -> str:
         """
         Retrieve relevant rules and return a formatted context block.
@@ -820,6 +821,12 @@ class Clawness:
         timing in the header). Default (None) follows CLAW_VERBOSE — off for the
         hook so the injected block stays byte-stable across turns (prompt-cache
         friendly); the CLI passes True since its output isn't model context.
+
+        *abbreviate_mandatory*, when True, renders the mandatory block as a
+        single id-list line instead of the full rule text — the hook uses this
+        on turns where the full block was already shown earlier this session
+        (see clawness/session_state.py). The rules stay just as binding; only
+        their re-statement is compressed.
         """
         t0 = time.perf_counter_ns()
         top_k = top_k or self.top_k
@@ -827,14 +834,18 @@ class Clawness:
             show_meta = self._verbose
 
         # --- mandatory rules (always present) ---
-        mandatory_block = "\n\n".join(
-            r.render(compact=self._mandatory_compact) for r in self._mandatory_rules
-        )
+        if abbreviate_mandatory and self._mandatory_rules:
+            ids = ", ".join(r.id for r in self._mandatory_rules)
+            mandatory_block = f"MANDATORY (in context above, still binding): {ids}"
+        else:
+            mandatory_block = "\n\n".join(
+                r.render(compact=self._mandatory_compact) for r in self._mandatory_rules
+            )
         used_tokens = _estimate_tokens(mandatory_block) if mandatory_block else 0
 
         if not self._ranked_rules or not self._bm25:
             elapsed_ms = (time.perf_counter_ns() - t0) / 1e6
-            return self._format_block(mandatory_block, [], elapsed_ms, show_meta)
+            return self._format_block(mandatory_block, [], elapsed_ms, show_meta, abbreviate_mandatory)
 
         # --- rank ranked-corpus candidates (idx, TF-IDF relevance) ---
         ranked = self._rank(query, domain, top_k)
@@ -851,7 +862,7 @@ class Clawness:
             used_tokens += cost
 
         elapsed_ms = (time.perf_counter_ns() - t0) / 1e6
-        return self._format_block(mandatory_block, selected, elapsed_ms, show_meta)
+        return self._format_block(mandatory_block, selected, elapsed_ms, show_meta, abbreviate_mandatory)
 
     def _format_block(
         self,
@@ -859,6 +870,7 @@ class Clawness:
         selected: list[tuple[Rule, float]],
         elapsed_ms: float,
         show_meta: bool = False,
+        mandatory_abbreviated: bool = False,
     ) -> str:
         n_mandatory = len(self._mandatory_rules)
         n_ranked = len(selected)
@@ -874,8 +886,12 @@ class Clawness:
 
         if mandatory_block:
             parts.append("")
-            parts.append(f"# MANDATORY ({n_mandatory})")
-            parts.append(mandatory_block)
+            if mandatory_abbreviated:
+                # The one-liner already says "MANDATORY" — no separate header.
+                parts.append(mandatory_block)
+            else:
+                parts.append(f"# MANDATORY ({n_mandatory})")
+                parts.append(mandatory_block)
 
         if selected:
             parts.append("")

@@ -613,8 +613,9 @@ The 6 **mandatory** rules (always injected) are 4 `security` rules, the 1 `testi
 | `CLAW_NO_MEMORY` | (unset) | Don't auto-create `.clawness/memory.md` on first session |
 | `CLAW_MEMORY_BUDGET` | `2000` | Max characters of project memory injected per turn (keeps the tail on overflow) |
 | `CLAW_NO_STACK_NOTE` | (unset) | Don't inject the detected-stack note at session start |
-| `CLAW_VERBOSE` | (unset) | Render mandatory rules in full (`WHEN`/`BAD`/`GOOD`) instead of compact — more tokens per turn |
+| `CLAW_VERBOSE` | (unset) | Render mandatory rules in full (`WHEN`/`BAD`/`GOOD`) instead of compact, and show retrieval metadata (relevance scores, timing) — more tokens per turn |
 | `CLAW_COMPACT` | (unset) | Also render ranked rules compactly (directive only) — fewer tokens per turn |
+| `CLAW_FULL_EVERY` | `5` | Show the full mandatory block on prompt 1 and every Nth prompt after (abbreviated to an id list in between) — same rules stay binding either way. `1` restores the old every-turn-full behavior |
 | `CLAW_NO_PLAN_GATE` | (unset) | Disable the plan gate globally |
 | `CLAW_NO_ACCESS_GUARD` | (unset) | Disable the access guard (the PreToolUse exfil/destructive-action prompt) |
 | `CLAW_NO_TRUST_LEDGER` | (unset) | Don't fingerprint skills/agents/MCP or warn when they change |

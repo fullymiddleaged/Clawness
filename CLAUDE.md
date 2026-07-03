@@ -25,6 +25,13 @@ dependency**. No ML models, no services, no Docker.
    surface SQL/React noise, while strong cross-domain matches still pass. Cross-cutting
    domains (general/meta/workflows/security/testing) are never penalized. Passing no
    stack (CLI/eval) disables the penalty, so eval is unaffected. ~1ms/prompt + ~3ms scan.
+   **Session-aware re-injection** (`clawness/session_state.py`): the mandatory block
+   (identical every turn) renders in full only on prompt 1 and every `CLAW_FULL_EVERY`-th
+   prompt after (default 5); other turns get a one-line id list — the rules stay just as
+   binding, only their re-statement shrinks. State is a per-session JSON file in the OS
+   temp dir (never the project), fails toward a full render on any error. Project memory
+   follows the same cadence but reprints immediately on a changed mtime regardless of
+   cadence, so a lesson just written is never abbreviated away.
 3. **Project memory** (`<project>/.clawness/memory.md`): if present, the hook appends
    it verbatim after the rules block (`render_memory_block` in `core.py`) — a
    per-codebase lessons log, not a ranked rule, so it never touches the engine.
@@ -68,6 +75,8 @@ dependency**. No ML models, no services, no Docker.
 - `clawness/plan.py` — plan-gate logic (`gate_decision`, `is_plan_file`, session approval).
 - `clawness/guard.py` — access-guard logic (`classify_tool_call`, `value_in_project`, ask-ledger).
 - `clawness/trust.py` — trust-ledger logic (`scan_artifacts`, `diff_ledger`, `scan_injection_tells`).
+- `clawness/session_state.py` — per-session prompt-count/memory-mtime tracking for
+  session-aware re-injection (`bump_prompt_count`, `memory_changed`, `should_show_full`).
 - `hooks/` — runtime hooks (`claude_hook`, `compress_output`, `plan_gate`, `access_guard`,
   `trust_ledger`, `git_check`, `memory_init`, `stack_detect`, `ensure_deps`) + setup helpers (`setup_settings/agents/skills` — manual install only).
 - `rules/<domain>/*.yml` — the corpus (117 rules / 18 domains; `_mandatory/` = always-on).
