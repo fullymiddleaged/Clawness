@@ -1,4 +1,4 @@
-id: ENF-SEC-003
+id: SEC-XSS-001
 domain: security
 severity: error
 tags: [xss, sanitize, html, injection, escape, dangerouslySetInnerHTML]

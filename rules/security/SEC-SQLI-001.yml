@@ -1,4 +1,4 @@
-id: ENF-SEC-002
+id: SEC-SQLI-001
 domain: security
 severity: error
 tags: [sql, injection, parameterized, query, database]

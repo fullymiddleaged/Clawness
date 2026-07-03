@@ -234,22 +234,22 @@ Left in place on purpose (remove by hand if you want): the `pyyaml` pip package 
 When you type *"implement the user registration endpoint"*, Claude receives this prepended to the conversation:
 
 ```
---- CLAWNESS RULES (9 rules, 0.31ms) ---
+--- CLAWNESS RULES ---
 
-# MANDATORY (7)
+# MANDATORY (6)
 [ENF-CURRENT-001] (general/error)
   RULE: Always use current best practices for the present month and year...
 [ENF-SEC-001] (security/error)
   RULE: All secrets must come from environment variables...
-[ENF-SEC-002] (security/error)
-  RULE: Always use parameterized queries...
+[ENF-SEC-004] (security/error)
+  RULE: Use a proven auth library...
 ...
 
 # RELEVANT (2)
-[FA-PYDANTIC-001] (fastapi/error) relevance=0.314
+[FA-PYDANTIC-001] (fastapi/error)
   WHEN: Defining request or response shapes for any endpoint.
   RULE: Define Pydantic models for every request body and response...
-[GEN-VALIDATE-001] (general/error) relevance=0.308
+[GEN-VALIDATE-001] (general/error)
   WHEN: Receiving any input from users, APIs, files, or external systems.
   RULE: Validate and sanitize all external input at the boundary...
 
@@ -257,8 +257,11 @@ When you type *"implement the user registration endpoint"*, Claude receives this
 ```
 
 The mandatory rules always appear. The ranked rules change based on your prompt.
+(Relevance scores and timing are hidden by default — they change every turn,
+which would defeat prompt caching for no benefit to the model. Set
+`CLAW_VERBOSE=1` to see them, or run `clawness query` directly.)
 
-**Token cost.** A typical turn injects **~1,300 tokens** — ~470 fixed for the always-on mandatory block (rendered compactly — directive only, no repeated examples) plus the selected ranked rules. `clawness stats` shows your exact estimate; tune with `CLAW_TOP_K` / `CLAW_BUDGET` / `CLAW_VERBOSE` / `CLAW_COMPACT`.
+**Token cost.** A typical turn injects **~1,200 tokens** — ~490 fixed for the always-on mandatory block (rendered compactly — directive only, no repeated examples) plus the selected ranked rules. `clawness stats` shows your exact estimate; tune with `CLAW_TOP_K` / `CLAW_BUDGET` / `CLAW_VERBOSE` / `CLAW_COMPACT`.
 
 **Relevance floor & stack awareness.** Ranked rules appear only when the prompt actually matches — a TF-IDF cosine floor drops coincidental hits (the `relevance=…` shown next to each rule *is* that score). Off-stack language/framework rules face a higher bar, so a vague prompt in a Python repo won't surface SQL/React noise, while a genuinely strong cross-domain match still gets through. Mandatory rules are always injected. Tune via `CLAW_MIN_RELEVANCE` / `CLAW_OFFSTACK_MIN_RELEVANCE` / `CLAW_NO_STACK_FILTER` (see [Configuration](#environment-variables)).
 
@@ -585,13 +588,13 @@ clawness --rules-dir /path/to/rules stats
 | `go` | 5 | Error handling, nil maps, context, goroutine lifecycle, data races |
 | `rust` | 5 | unwrap/expect, error handling, clone, unsafe, iterators |
 | `sql` | 5 | N+1 queries, indexes, transactions, `SELECT *`, migrations |
-| `security` | 7 | XSS, SQLi, auth, secrets, deps, untrusted-content/exfil *(6 mandatory)*; package supply-chain hardening *(ranked)* |
+| `security` | 7 | Auth, secrets, deps, untrusted-content/exfil *(4 mandatory)*; SQLi, XSS, package supply-chain hardening *(ranked)* |
 | `react` | 4 | Hooks, state management, list keys, forms |
 | `typescript` | 4 | Null safety, async errors, strict mode, Zod |
 | `bash` | 4 | Strict mode, quoting, error checking, shellcheck |
 | `testing` | 1 | Test coverage for new code *(mandatory)* |
 
-The 8 **mandatory** rules (always injected) are the 6 `security` rules, the 1 `testing` rule, and 1 current-practices rule (counted under `general`).
+The 6 **mandatory** rules (always injected) are 4 `security` rules, the 1 `testing` rule, and 1 current-practices rule (counted under `general`). SQLi and XSS moved to ranked `security` rules in 0.7.0 — they still surface reliably whenever a prompt touches SQL or HTML rendering, at a lower always-on token cost.
 
 ---
 
