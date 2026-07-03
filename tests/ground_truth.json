@@ -45,6 +45,16 @@
     { "q": "we keep hitting the same gotcha every session, record this lesson so it sticks", "expect": ["WF-LESSONS-001"] },
     { "q": "this change is too simple so i'll skip writing a test", "expect": ["RAT-SKIP-TEST-001", "RAT-SIMPLE-001"] },
     { "q": "i'll just hardcode this value for now and fix it later", "expect": ["RAT-TEMP-HACK-001"] },
-    { "q": "the input comes from an internal service so i don't need to validate it", "expect": ["RAT-TRUST-INPUT-001"] }
+    { "q": "the input comes from an internal service so i don't need to validate it", "expect": ["RAT-TRUST-INPUT-001"] },
+    { "q": "is this npm package safe to install, check for typosquatting", "expect": ["SEC-PKG-001"] },
+    { "q": "should i disable postinstall lifecycle scripts for an untrusted package", "expect": ["SEC-PKG-001"] },
+    { "q": "build a sql query using a value from a form", "expect": ["SEC-SQLI-001"] },
+    { "q": "execute a database query with a user-supplied id", "expect": ["SEC-SQLI-001"] },
+    { "q": "render user-submitted comments as html in a react component", "expect": ["SEC-XSS-001"] },
+    { "q": "use dangerouslySetInnerHTML to display user content", "expect": ["SEC-XSS-001"] },
+    { "q": "commit the lockfile and pin dependency versions", "expect": ["GEN-DEPVER-001"] },
+    { "q": "set up dependabot to keep dependency versions updated", "expect": ["GEN-DEPVER-001"] },
+    { "q": "validate and sanitize input from an api request body", "expect": ["GEN-VALIDATE-001"] },
+    { "q": "fix a missing dependency in my useEffect hook", "expect": ["RCT-HOOKS-001"] }
   ]
 }
