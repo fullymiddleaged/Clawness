@@ -624,6 +624,7 @@ class Clawness:
         min_relevance: Optional[float] = None,  # TF-IDF cosine floor for ranked rules
         stack_domains: Optional[Iterable[str]] = None,  # project's detected stack
         off_stack_min_relevance: Optional[float] = None,  # higher floor for off-stack
+        build_index: bool = True,       # False: caller will add_rules() then build_index()
     ) -> None:
         self.rules_dir = Path(rules_dir)
         self.context_budget = context_budget
@@ -678,23 +679,42 @@ class Clawness:
 
         # load
         self._ranked_rules, self._mandatory_rules = load_rules(self.rules_dir)
+        self._bm25: Optional[BM25] = None
+        self._tfidf: Optional[TfIdfIndex] = None
+        self._indexed = False
 
+        if build_index:
+            self.build_index()
+
+    def add_rules(self, ranked: list["Rule"], mandatory: list["Rule"]) -> None:
+        """Merge additional rules (e.g. a project's `.clawness/rules/`) into the
+        corpus. Call `build_index()` once after all `add_rules()` calls are done —
+        this does not rebuild the index itself, so multiple merges stay cheap."""
+        self._ranked_rules += ranked
+        self._mandatory_rules += mandatory
+        self._indexed = False
+
+    def build_index(self) -> None:
+        """Build (or rebuild) the BM25/TF-IDF indexes over the current ranked
+        corpus. Runs automatically in `__init__` unless `build_index=False` was
+        passed — callers that merge project rules via `add_rules()` first (e.g.
+        the hook, avoiding a wasted build-then-rebuild) must call this once
+        after. `retrieve()`/`rank_ids()` raise if this hasn't run yet."""
         if not self._ranked_rules:
             self._bm25 = None
             self._tfidf = None
+            self._indexed = True
             return
 
-        # build search texts
         search_texts = [r._search_text for r in self._ranked_rules]
         tokenized = [_tokenize(t) for t in search_texts]
 
-        # BM25 index
         self._bm25 = BM25()
         self._bm25.build(tokenized)
 
-        # TF-IDF index
         self._tfidf = TfIdfIndex()
         self._tfidf.build(search_texts)
+        self._indexed = True
 
     @property
     def stats(self) -> dict:
@@ -725,6 +745,12 @@ class Clawness:
         """Hybrid BM25 + TF-IDF ranking, fused via RRF (both run over the
         concept-expanded token stream). Returns fused (rule_index, score) for
         the ranked corpus, best first."""
+        if not self._indexed:
+            raise RuntimeError(
+                "build_index() must be called before retrieve()/rank_ids() — "
+                "this Clawness instance was constructed with build_index=False "
+                "(or add_rules() was called since the last build)."
+            )
         # _bm25 and _tfidf are built together (both None only when there are no
         # ranked rules); narrow both so the type checker is satisfied below.
         if not self._ranked_rules or self._bm25 is None or self._tfidf is None:
@@ -847,6 +873,12 @@ class Clawness:
         (see clawness/session_state.py). The rules stay just as binding; only
         their re-statement is compressed.
         """
+        if not self._indexed:
+            raise RuntimeError(
+                "build_index() must be called before retrieve()/rank_ids() — "
+                "this Clawness instance was constructed with build_index=False "
+                "(or add_rules() was called since the last build)."
+            )
         t0 = time.perf_counter_ns()
         top_k = top_k or self.top_k
         if show_meta is None:

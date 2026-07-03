@@ -206,32 +206,20 @@ def main() -> None:
         sys.exit(0)
 
     # Pure-Python lexical + concept retrieval — ~1ms, no model, no deps beyond
-    # PyYAML. Fast enough to run on every prompt without risking the hook timeout.
+    # PyYAML. build_index=False: defer the BM25/TF-IDF build until project rules
+    # (below) are merged in, so a project with .clawness/rules/ only builds the
+    # index once instead of once for global-only then again for the merged set.
     wl = Clawness(global_dir, context_budget=budget, top_k=top_k,
-                  stack_domains=stack_domains)
+                  stack_domains=stack_domains, build_index=False)
 
     # --- Load project rules (if present) ---
     project_dir = find_project_rules(cwd)
     if project_dir and project_dir.exists():
         proj_ranked, proj_mandatory = load_rules(project_dir)
-
-        # Merge project rules into the retriever
         if proj_ranked or proj_mandatory:
-            # Rebuild with combined rules
-            all_ranked = wl._ranked_rules + proj_ranked
-            all_mandatory = wl._mandatory_rules + proj_mandatory
-            wl._mandatory_rules = all_mandatory
-            wl._ranked_rules = all_ranked
+            wl.add_rules(proj_ranked, proj_mandatory)
 
-            # Rebuild indexes with the combined corpus
-            if all_ranked:
-                from clawness.core import _tokenize, TfIdfIndex, BM25
-                search_texts = [r._search_text for r in all_ranked]
-                tokenized = [_tokenize(t) for t in search_texts]
-                wl._bm25 = BM25()
-                wl._bm25.build(tokenized)
-                wl._tfidf = TfIdfIndex()
-                wl._tfidf.build(search_texts)
+    wl.build_index()
 
     block = wl.retrieve(prompt, abbreviate_mandatory=not show_full)
 

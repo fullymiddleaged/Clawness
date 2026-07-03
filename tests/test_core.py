@@ -250,6 +250,58 @@ class TestClawness:
         elapsed_ms = (time.perf_counter_ns() - t0) / 1e6
         assert elapsed_ms < 10  # generous threshold for CI
 
+
+# ── Deferred index build (build_index=False / add_rules / build_index()) ──
+
+class TestDeferredBuild:
+    def test_retrieve_before_build_raises(self, tmp_rules):
+        wl = Clawness(tmp_rules, build_index=False)
+        with pytest.raises(RuntimeError):
+            wl.retrieve("implement async endpoint")
+        with pytest.raises(RuntimeError):
+            wl.rank_ids("implement async endpoint")
+
+    def test_deferred_build_matches_default_build(self, tmp_rules):
+        default = Clawness(tmp_rules)
+        deferred = Clawness(tmp_rules, build_index=False)
+        deferred.build_index()
+
+        q = "async await python asyncio"
+        assert deferred.rank_ids(q) == default.rank_ids(q)
+        assert deferred.retrieve(q) == default.retrieve(q)
+
+    def test_add_rules_merges_before_build(self, tmp_rules):
+        # A separate temp root, NOT nested under tmp_rules — nesting it there
+        # would make tmp_rules' own rglob("*.yml") load pick it up too.
+        extra_dir = Path(tempfile.mkdtemp()) / "extra"
+        (extra_dir / "domain").mkdir(parents=True)
+        (extra_dir / "domain" / "EXTRA-001.yml").write_text(yaml.dump({
+            "id": "EXTRA-001",
+            "domain": "domain",
+            "severity": "warning",
+            "tags": ["extra"],
+            "triggers": ["widget"],
+            "when": "Building a widget.",
+            "rule": "Widgets must be reusable.",
+        }))
+        extra_ranked, extra_mandatory = load_rules(extra_dir)
+
+        wl = Clawness(tmp_rules, build_index=False)
+        wl.add_rules(extra_ranked, extra_mandatory)
+        wl.build_index()
+
+        assert wl.stats["ranked_rules"] == 4  # 3 from tmp_rules + 1 merged
+        assert "EXTRA-001" in wl.rank_ids("building a reusable widget")
+
+    def test_add_rules_after_build_marks_stale(self, wl):
+        assert wl._indexed is True
+        wl.add_rules([], [])
+        assert wl._indexed is False
+        with pytest.raises(RuntimeError):
+            wl.retrieve("test query")
+        wl.build_index()
+        wl.retrieve("test query")  # no longer raises
+
     def test_empty_query(self, wl):
         result = wl.retrieve("")
         # Should still return mandatory rules
