@@ -338,7 +338,8 @@ def test_bash_read_home_secret_asks_but_project_env_allowed():
 def test_control_file_writes_ask_even_in_project():
     root = _project()
     for rel in (".claude/settings.json", ".claude/settings.local.json",
-                ".clawness/trust_ledger.json", ".clawness/config.json", "hooks/access_guard.py"):
+                ".clawness/trust_ledger.json", ".clawness/config.json", "hooks/access_guard.py",
+                ".clawness/guard_provenance_cache.json"):
         d, reason = _classify("Write", {"file_path": str(root / rel)}, root)
         assert d == G.ASK, rel
         assert "control" in reason
@@ -476,6 +477,59 @@ def test_value_in_project_verdicts():
     assert G.value_in_project("found.example", root) is True
     assert G.value_in_project("absent.example", root) is False
     assert G.value_in_project("ab", root) is None  # too short to search reliably
+
+
+# --- provenance verdict cache (burst-smoothing over value_in_project) -----
+
+def test_provenance_cache_hit_skips_the_scan(monkeypatch):
+    root = _project({".env": "HOST=found.example\n"})
+    calls = []
+    real = G.value_in_project
+
+    def counting(value, r):
+        calls.append(value)
+        return real(value, r)
+
+    monkeypatch.setattr(G, "value_in_project", counting)
+    assert G.value_in_project_cached("found.example", root) is True
+    assert G.value_in_project_cached("found.example", root) is True
+    assert calls == ["found.example"]  # second call was a cache hit, no re-scan
+
+
+def test_provenance_cache_expiry_rescans(monkeypatch):
+    root = _project({".env": "HOST=found.example\n"})
+    assert G.value_in_project_cached("found.example", root) is True
+
+    cache = G._load_provenance_cache(root)
+    for rec in cache.values():
+        rec["ts"] -= (G._PROV_CACHE_TTL_SECONDS + 60)
+    G._save_provenance_cache(root, cache)
+
+    calls = []
+    real = G.value_in_project
+
+    def counting(value, r):
+        calls.append(value)
+        return real(value, r)
+
+    monkeypatch.setattr(G, "value_in_project", counting)
+    assert G.value_in_project_cached("found.example", root) is True
+    assert calls == ["found.example"]  # expired entry forced a re-scan
+
+
+def test_provenance_cache_never_caches_none(monkeypatch):
+    root = _project({".env": "HOST=found.example\n"})
+    calls = []
+    real = G.value_in_project
+
+    def counting(value, r):
+        calls.append(value)
+        return real(value, r)
+
+    monkeypatch.setattr(G, "value_in_project", counting)
+    assert G.value_in_project_cached("ab", root) is None  # too short -> unverifiable
+    assert G.value_in_project_cached("ab", root) is None
+    assert calls == ["ab", "ab"]  # both calls re-scanned; None is never cached
 
 
 def test_external_host_detection():

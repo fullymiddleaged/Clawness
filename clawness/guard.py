@@ -400,6 +400,59 @@ def value_in_project(value: str, root: Path) -> Optional[bool]:
     return False
 
 
+# Burst-smoothing cache for value_in_project — the scan can walk up to
+# _PROV_MAX_FILES files, so a retried flagged call (or several hosts checked in
+# one command) each paid the full walk. Only True/False are ever cached — None
+# (unverifiable) always re-checks rather than freezing as "ask forever". A
+# short TTL (15 min) means adding the host to a tracked file takes effect soon,
+# and it's a separate file from the ask ledger (different shape/semantics/TTL).
+_PROV_CACHE_TTL_SECONDS = 15 * 60
+
+
+def _provenance_cache_path(root: Path) -> Path:
+    return clawness_dir(root) / "guard_provenance_cache.json"
+
+
+def _load_provenance_cache(root: Path) -> dict:
+    try:
+        data = json.loads(_provenance_cache_path(root).read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_provenance_cache(root: Path, cache: dict) -> None:
+    d = clawness_dir(root)
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        _provenance_cache_path(root).write_text(json.dumps(cache, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def value_in_project_cached(value: str, root: Path) -> Optional[bool]:
+    """Cached wrapper around `value_in_project` — see its docstring for the
+    True/False/None contract. Skips the scan entirely on a fresh cache hit."""
+    now = time.time()
+    cache = _load_provenance_cache(root)
+    rec = cache.get(value)
+    if isinstance(rec, dict):
+        ts = rec.get("ts")
+        if isinstance(ts, (int, float)) and (now - ts) < _PROV_CACHE_TTL_SECONDS:
+            return rec.get("verdict")
+
+    verdict = value_in_project(value, root)
+    if verdict is not None:
+        cache = {
+            h: r for h, r in cache.items()
+            if isinstance(r, dict) and isinstance(r.get("ts"), (int, float))
+            and (now - r["ts"]) < _PROV_CACHE_TTL_SECONDS
+        }
+        cache[value] = {"verdict": verdict, "ts": now}
+        _save_provenance_cache(root, cache)
+    return verdict
+
+
 # --- the guard's own kill switches (never silently writable) --------------
 # Editing these can disable the guard / plan gate or bless a tampered ledger, so
 # they ASK even though they live inside the project. NOTE: project memory
@@ -408,6 +461,7 @@ def value_in_project(value: str, root: Path) -> Optional[bool]:
 _CLAUDE_CONTROL_JSON = {"settings.json", "settings.local.json"}
 _CLAWNESS_CONTROL_JSON = {
     "config.json", "trust_ledger.json", "guard_sessions.json", "sessions.json", "plan.json",
+    "guard_provenance_cache.json",
 }
 _GUARD_HOOK_FILES = {
     "access_guard.py", "plan_gate.py", "trust_ledger.py", "claude_hook.py", "git_check.py",
@@ -519,7 +573,7 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
     data_bearing = bool(_DATA_NETWORK_RE.search(cmd) or _REMOTE_COPY_RE.search(cmd))
     has_subst = bool(_NETWORK_RE.search(cmd) and _CMD_SUBST_RE.search(cmd))
     if ext_hosts and (data_bearing or has_subst):
-        verdicts = [value_in_project(h, root) for h in ext_hosts]
+        verdicts = [value_in_project_cached(h, root) for h in ext_hosts]
         if False in verdicts:
             unknown = ", ".join(h for h, v in zip(ext_hosts, verdicts) if v is False)
             # Absent-host + data-bearing is suspicious either way, but only a hard
