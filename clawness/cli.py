@@ -119,10 +119,25 @@ def cmd_lint(args: argparse.Namespace) -> None:
             print(f"  {yml_path}:")
             print("    - contains the Unicode replacement char (U+FFFD) — encoding corruption")
 
+    # Duplicate-id pass across the whole corpus (ranked + mandatory share one
+    # namespace — the retriever and rendering both index by id).
+    id_sources: dict[str, list[str]] = {}
+    for r in ranked + mandatory:
+        if r.id:
+            id_sources.setdefault(r.id, []).append(r.source_path)
+
+    # Mandatory rules render on EVERY prompt — an oversized one is a standing
+    # token tax. 500 chars (compact render) covers every current rule with
+    # headroom; a new one that blows past it should be trimmed or demoted.
+    MANDATORY_CHAR_CEILING = 500
+
     for r in ranked + mandatory:
         problems = []
         if not r.id:
             problems.append("missing 'id'")
+        elif len(id_sources.get(r.id, [])) > 1:
+            others = ", ".join(p for p in id_sources[r.id] if p != r.source_path)
+            problems.append(f"duplicate id '{r.id}' also used by: {others}")
         if not r.rule:
             problems.append("missing 'rule'")
         if not r.when:
@@ -131,12 +146,28 @@ def cmd_lint(args: argparse.Namespace) -> None:
             problems.append(f"invalid severity '{r.severity}'")
         if not r.tags:
             problems.append("no tags (retrieval quality will suffer)")
-        for field_name in ("rule", "when"):
+        if not r.triggers:
+            problems.append("no triggers (retrieval quality will suffer)")
+        for field_name in ("rule", "when", "violation", "correct"):
             m = VAGUE_RE.search(getattr(r, field_name))
             if m:
                 problems.append(
                     f"vague phrasing in '{field_name}': \"{m.group(0)}\" — "
                     "state the rule precisely"
+                )
+        if r.source_path:
+            folder = Path(r.source_path).parent.name
+            if folder != "_mandatory" and r.domain != folder:
+                problems.append(
+                    f"domain '{r.domain}' doesn't match its folder '{folder}'"
+                )
+        if r.mandatory:
+            rendered_len = len(r.render(compact=True))
+            if rendered_len > MANDATORY_CHAR_CEILING:
+                problems.append(
+                    f"mandatory rule renders {rendered_len} chars (compact) — "
+                    f"exceeds the {MANDATORY_CHAR_CEILING}-char always-on budget; "
+                    "trim the rule text or demote it to a ranked domain"
                 )
 
         if problems:
