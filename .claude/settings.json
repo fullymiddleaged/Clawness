@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "PowerShell(python -m clawness.cli lint 2>&1)",
+      "PowerShell(python -m clawness.cli stats 2>&1)",
+      "PowerShell(python -m pytest tests/ -q 2>&1)",
+      "PowerShell(python -m clawness.cli eval --floor-mrr 0.85 --floor-hit 0.95 2>&1)",
+      "PowerShell(python -m clawness.cli bench 2>&1)",
+      "PowerShell(python -m pytest tests/test_core.py -q 2>&1)",
+      "PowerShell(python -m pytest tests/test_guard.py -q -k \"ledger\" 2>&1)"
+    ]
+  }
+}
