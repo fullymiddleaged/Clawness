@@ -6,6 +6,7 @@ Runs under pytest, or standalone:  python tests/test_relevance.py
 """
 
 import sys
+import textwrap
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -13,6 +14,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from clawness.core import Clawness  # noqa: E402
 
 RULES_DIR = Path(__file__).resolve().parent.parent / "rules"
+
+
+def _write_rule(root: Path, domain: str, rule_id: str, rule_text: str, triggers=("t",)) -> None:
+    path = root / domain / f"{rule_id}.yml"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(textwrap.dedent(f"""\
+        id: {rule_id}
+        domain: {domain}
+        severity: warning
+        tags: [t]
+        triggers: {list(triggers)}
+        when: When something happens.
+        rule: {rule_text}
+        """), encoding="utf-8")
 
 
 def test_floor_off_returns_full_top_k_for_signal_less_prompt():
@@ -62,6 +77,47 @@ def test_rank_returns_tfidf_relevance_not_rrf():
     tfidf = dict(wl._tfidf.query(q, top_k=10))
     for idx, relevance in wl._rank(q, limit=5)[:5]:
         assert abs(relevance - tfidf.get(idx, 0.0)) < 1e-9  # carries the cosine, not RRF
+
+
+def test_bm25_rescue_surfaces_a_rare_term_match_tfidf_alone_would_drop(tmp_path):
+    """A rule can rank #1 on BM25 (a rare, high-IDF trigger term) while its TF-IDF
+    cosine sits below the floor — a long document dilutes cosine similarity even
+    for a term that appears nowhere else in the corpus. Before the rescue, the
+    floor (gauged on TF-IDF alone) dropped it despite BM25's confident #1 rank,
+    silently defeating half the RRF fusion. Reproduced with a synthetic corpus
+    since it doesn't occur naturally in the real (short-document) rule corpus."""
+    filler = (
+        "common word filler text about generic programming practices software "
+        "engineering conventions style guidelines architecture patterns "
+        "maintainability readability documentation "
+    )
+    _write_rule(tmp_path, "general", "GEN-RARE-001", "zzzrareterm " + filler * 15)
+    for i in range(20):
+        _write_rule(tmp_path, "general", f"GEN-DECOY-{i:03d}",
+                    f"decoy rule number {i} about topic {i} unrelated database css docker python testing")
+
+    wl = Clawness(tmp_path, min_relevance=0.06)
+
+    # Confirm the setup actually reproduces the gap this test targets.
+    tfidf_map = dict(wl._tfidf.query("zzzrareterm", top_k=25))
+    rare_idx = next(i for i, r in enumerate(wl._ranked_rules) if r.id == "GEN-RARE-001")
+    assert tfidf_map.get(rare_idx, 0.0) < 0.06, "test setup no longer reproduces a sub-floor TF-IDF cosine"
+
+    ids = wl.rank_ids("zzzrareterm", top_k=5)
+    assert ids == ["GEN-RARE-001"], f"BM25's confident top hit was dropped at the floor: {ids}"
+
+
+def test_bm25_rescue_never_fires_when_tfidf_already_cleared_the_floor():
+    """Rescue only fires on an otherwise-empty result — a query that already
+    surfaces matches via TF-IDF (including a signal-less/noise prompt, which
+    empirically still returns something) is completely unaffected by it."""
+    wl = Clawness(RULES_DIR, min_relevance=0.06)
+    ids = wl.rank_ids("hello can you help me", top_k=5)
+    # The floor already trims this down from a full top-5 (test_floor_suppresses_
+    # scattershot_on_signal_less_prompt covers the same query via `_rank`
+    # directly) — confirm it's non-empty (so the rescue path is never reached)
+    # and still bounded (not full top-5).
+    assert 0 < len(ids) < 5
 
 
 def test_off_stack_rules_suppressed_when_stack_known():

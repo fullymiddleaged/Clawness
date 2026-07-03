@@ -776,11 +776,30 @@ class Clawness:
             ranked.append((i, relevance))
 
         # --- apply the floor (per-rule: off-stack rules face a higher bar) ---
-        ranked = [
+        floored = [
             (i, rel) for (i, rel) in ranked
             if rel >= self._floor_for(self._ranked_rules[i].domain)
         ]
-        return ranked
+
+        # --- BM25 rescue ---
+        # RRF fuses both signals, but the floor above is gauged on TF-IDF cosine
+        # alone (see the comment on `tfidf_map` above) — so a rule BM25 ranks
+        # confidently #1 (e.g. a rare-trigger-token match) can carry TF-IDF
+        # relevance 0.0 and be dropped anyway, half-neutralizing the fusion.
+        # Rescue only when the floor emptied the result ENTIRELY: this can only
+        # ADD a candidate, never crowd one out, so a query that already clears
+        # the floor via TF-IDF (including a noise/signal-less prompt, which
+        # empirically still returns something today) is completely unaffected.
+        # BM25 magnitudes aren't calibrated across queries (a noise prompt's top
+        # score can exceed a genuine narrow query's), so a ratio/absolute
+        # threshold can't be tuned reliably — "floor emptied the result" is the
+        # only additive, zero-regression trigger condition.
+        if not floored and bm25_ranked:
+            top_idx, top_score = bm25_ranked[0]
+            if top_score > 0:
+                floored = [(top_idx, tfidf_map.get(top_idx, 0.0))]
+
+        return floored
 
     def _floor_for(self, domain: str) -> float:
         """Relevance floor for a rule's domain. Language/framework rules from a
