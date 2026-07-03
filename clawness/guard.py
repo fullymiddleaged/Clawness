@@ -36,6 +36,7 @@ ledger. The decision functions never raise on bad input — they fail toward
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -581,7 +582,23 @@ def dedup_key(tool_name: str, tool_input: "dict | None") -> str:
 
 
 # --- anti-re-nag ledger (per session; mirrors plan.py sessions) -----------
-_GUARD_TTL_SECONDS = 24 * 3600
+# Two-phase: PreToolUse records a target as "pending" (record_ask); a PostToolUse
+# companion promotes it to "confirmed" (confirm_ask) once the tool actually ran.
+# already_asked only honors "confirmed" — a declined/abandoned ask stays pending
+# forever (PostToolUse never fires on a decline) and so correctly re-asks on
+# retry, instead of the old single-phase design where recording happened before
+# the user answered, silently treating a declined ask as approved for 24h.
+_GUARD_TTL_SECONDS = 24 * 3600          # confirmed: re-ask after this long
+_GUARD_PENDING_TTL_SECONDS = 10 * 60    # pending: prune (never suppresses either way)
+
+_PENDING = "pending"
+_CONFIRMED = "confirmed"
+
+
+def _hash_key(key: str) -> str:
+    """The dedup key can be a full Bash command (potentially containing
+    secrets/tokens) — only its identity needs to persist to disk, not its text."""
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
 
 def _guard_ledger_path(root: Path) -> Path:
@@ -591,9 +608,28 @@ def _guard_ledger_path(root: Path) -> Path:
 def _load_ledger(root: Path) -> dict:
     try:
         data = json.loads(_guard_ledger_path(root).read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
+    if not isinstance(data, dict):
+        return {}
+    # Migrate the pre-0.7 format (session -> {raw_key_text: timestamp_float})
+    # to the current one (session -> {hashed_key: {"state", "ts"}}) — a legacy
+    # entry is treated as already confirmed (its presence meant "already asked
+    # this session" under the old semantics), so an upgrade never re-nags for
+    # something the user already approved.
+    migrated: dict = {}
+    for sid, entry in data.items():
+        if not isinstance(entry, dict):
+            continue
+        new_entry = {}
+        for k, v in entry.items():
+            if isinstance(v, dict):
+                new_entry[k] = v
+            elif isinstance(v, (int, float)):
+                new_entry[_hash_key(k)] = {"state": _CONFIRMED, "ts": v}
+        if new_entry:
+            migrated[sid] = new_entry
+    return migrated
 
 
 def _save_ledger(root: Path, ledger: dict) -> None:
@@ -606,29 +642,58 @@ def _save_ledger(root: Path, ledger: dict) -> None:
 
 
 def already_asked(root: Path, session_id: str, key: str) -> bool:
-    """True if this (session, target) was already prompted — used to ASK once per
-    target per session rather than on every repeat call."""
+    """True only for a CONFIRMED ask within TTL. A pending (not-yet-confirmed —
+    i.e. possibly declined or abandoned) entry never suppresses a future ask."""
     if not session_id or not key:
         return False
     entry = _load_ledger(root).get(session_id)
     if not isinstance(entry, dict):
         return False
-    ts = entry.get(key)
+    rec = entry.get(_hash_key(key))
+    if not isinstance(rec, dict) or rec.get("state") != _CONFIRMED:
+        return False
+    ts = rec.get("ts")
     return isinstance(ts, (int, float)) and (time.time() - ts) < _GUARD_TTL_SECONDS
 
 
 def record_ask(root: Path, session_id: str, key: str) -> None:
+    """PreToolUse: mark (session, target) as asked-but-not-yet-confirmed. Does
+    NOT by itself suppress a future ask — see confirm_ask."""
+    _set_state(root, session_id, key, _PENDING)
+
+
+def confirm_ask(root: Path, session_id: str, key: str) -> None:
+    """PostToolUse: the tool call actually ran (the user did not decline the
+    prompt), so this target is now genuinely settled for the rest of the
+    session. Called even if no matching `pending` entry exists (e.g. state was
+    lost) — that's still a safe signal the call went through."""
+    _set_state(root, session_id, key, _CONFIRMED)
+
+
+def _set_state(root: Path, session_id: str, key: str, state: str) -> None:
     if not session_id or not key:
         return
     now = time.time()
-    ledger = _load_ledger(root)
-    # prune stale sessions to keep the file small
+    pruned = _prune_ledger(_load_ledger(root), now)
+    pruned.setdefault(session_id, {})[_hash_key(key)] = {"state": state, "ts": now}
+    _save_ledger(root, pruned)
+
+
+def _prune_ledger(ledger: dict, now: float) -> dict:
+    """Drop expired entries — confirmed ones past the full TTL, pending ones
+    past the short pending TTL (an abandoned/declined ask must not linger)."""
+    def _keep(rec) -> bool:
+        if not isinstance(rec, dict):
+            return False
+        ts = rec.get("ts")
+        if not isinstance(ts, (int, float)):
+            return False
+        ttl = _GUARD_TTL_SECONDS if rec.get("state") == _CONFIRMED else _GUARD_PENDING_TTL_SECONDS
+        return (now - ts) < ttl
+
     pruned = {
-        sid: {k: t for k, t in entry.items()
-              if isinstance(t, (int, float)) and now - t < _GUARD_TTL_SECONDS}
+        sid: {k: rec for k, rec in entry.items() if _keep(rec)}
         for sid, entry in ledger.items()
         if isinstance(entry, dict)
     }
-    pruned = {sid: e for sid, e in pruned.items() if e}
-    pruned.setdefault(session_id, {})[key] = now
-    _save_ledger(root, pruned)
+    return {sid: e for sid, e in pruned.items() if e}

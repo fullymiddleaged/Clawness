@@ -99,6 +99,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/access_guard.py\"; done",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PreToolUse": [

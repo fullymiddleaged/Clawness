@@ -62,7 +62,11 @@ dependency**. No ML models, no services, no Docker.
      project's own text files — a bounded walk that EXCLUDES `.claude/` so a hijacked
      skill can't launder a host into "trusted" — absent everywhere → deny (exfil
      signature), known/unverifiable → ask. Asks once per target/session
-     (`.clawness/guard_sessions.json`). Pure-logic core, fails open, `CLAW_NO_ACCESS_GUARD`.
+     (`.clawness/guard_sessions.json`, dedup keys sha256-hashed so raw command text
+     never touches disk) — **two-phase**: PreToolUse records a target `pending`;
+     a PostToolUse companion (same matcher) promotes it to `confirmed` only once the
+     call actually completes, so a declined/abandoned ask re-asks on retry instead of
+     going silent for the rest of the session. Pure-logic core, fails open, `CLAW_NO_ACCESS_GUARD`.
    - `hooks/trust_ledger.py` (SessionStart; logic in `clawness/trust.py`) keeps TOFU
      fingerprints of skills/agents/commands/MCP servers in `.clawness/trust_ledger.json`
      and injects a note when one changed/appeared; `clawness audit-skills` scans those
@@ -142,3 +146,7 @@ dependency**. No ML models, no services, no Docker.
   date-independent. `ENF-CURRENT-001` uses it.
 - Two things can't be tested from a sandbox: a real `pip install -e .` completing,
   and plugin hooks on a real Windows + python.org box. Smoke-test both before release.
+  Since 0.7.0, also smoke-test the access guard's decline path on a real session
+  (ask → click "no" → retry the same command → must ask again, not go silent) —
+  the PostToolUse confirm only fires when the tool actually runs, so this can't be
+  fully verified by piping payloads through the hook script directly.

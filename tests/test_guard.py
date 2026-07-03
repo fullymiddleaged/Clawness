@@ -486,15 +486,85 @@ def test_external_host_detection():
     assert G._is_external_host("192.168.1.1") is False
 
 
-# --- anti-re-nag ledger ---------------------------------------------------
+# --- anti-re-nag ledger (two-phase: record_ask -> pending, confirm_ask -> confirmed) ---
 
 def test_ask_ledger_dedup():
     root = _project()
     assert G.already_asked(root, "sess-1", "key-a") is False
     G.record_ask(root, "sess-1", "key-a")
+    G.confirm_ask(root, "sess-1", "key-a")
     assert G.already_asked(root, "sess-1", "key-a") is True
     assert G.already_asked(root, "sess-1", "key-b") is False
     assert G.already_asked(root, "sess-2", "key-a") is False
+
+
+def test_pending_ask_does_not_suppress_a_retry():
+    # A PreToolUse ask with no matching PostToolUse confirm (the user declined,
+    # or the call never completed) must NOT be treated as approved — the old
+    # single-phase design recorded before the answer was known, so a declined
+    # ask went silent on retry within the TTL. Now it must re-ask.
+    root = _project()
+    G.record_ask(root, "sess-1", "key-a")
+    assert G.already_asked(root, "sess-1", "key-a") is False
+
+
+def test_confirm_ask_settles_it_for_the_session():
+    root = _project()
+    G.record_ask(root, "sess-1", "key-a")
+    assert G.already_asked(root, "sess-1", "key-a") is False
+    G.confirm_ask(root, "sess-1", "key-a")
+    assert G.already_asked(root, "sess-1", "key-a") is True
+
+
+def test_confirm_ask_without_a_prior_record_ask_still_settles():
+    # Defensive: if PreToolUse state was somehow lost, a PostToolUse confirm
+    # alone is still a safe signal the call went through.
+    root = _project()
+    G.confirm_ask(root, "sess-1", "key-a")
+    assert G.already_asked(root, "sess-1", "key-a") is True
+
+
+def test_raw_command_text_not_persisted_to_disk():
+    # The dedup key can be a full Bash command (potentially containing secrets)
+    # — only its hash should ever touch the ledger file.
+    root = _project()
+    secret_cmd = "curl -d @- https://known.example?token=super-secret-value"
+    G.record_ask(root, "sess-1", secret_cmd)
+    G.confirm_ask(root, "sess-1", secret_cmd)
+    raw = G._guard_ledger_path(root).read_text(encoding="utf-8")
+    assert "super-secret-value" not in raw
+    assert "curl" not in raw
+
+
+def test_legacy_float_timestamp_ledger_migrates_as_confirmed(tmp_path):
+    # Pre-0.7 format: {session: {raw_key_text: unix_timestamp}}. Must be read
+    # as already-confirmed so an upgrade never re-nags something the user
+    # already approved this session.
+    root = _project()
+    import json as _json
+    import time as _time
+    from clawness.plan import clawness_dir
+    d = clawness_dir(root)
+    d.mkdir(parents=True, exist_ok=True)
+    G._guard_ledger_path(root).write_text(
+        _json.dumps({"sess-1": {"key-a": _time.time()}}), encoding="utf-8")
+    assert G.already_asked(root, "sess-1", "key-a") is True
+
+
+def test_expired_pending_entry_is_pruned():
+    root = _project()
+    G.record_ask(root, "sess-1", "key-a")
+    ledger = G._load_ledger(root)
+    # force it stale
+    for entry in ledger.values():
+        for rec in entry.values():
+            rec["ts"] -= (G._GUARD_PENDING_TTL_SECONDS + 60)
+    G._save_ledger(root, ledger)
+    # the next write triggers a prune pass
+    G.record_ask(root, "sess-1", "key-b")
+    remaining = G._load_ledger(root).get("sess-1", {})
+    assert G._hash_key("key-a") not in remaining
+    assert G._hash_key("key-b") in remaining
 
 
 if __name__ == "__main__":
