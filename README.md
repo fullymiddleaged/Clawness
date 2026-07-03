@@ -192,7 +192,7 @@ bash install.sh
 | 4 | Lint rules | Validates every `.yml` rule file |
 | 5 | Test retrieval | Runs a test query to confirm the engine works |
 | 6 | Install agents & skills | Copies to `~/.claude/agents/` and `~/.claude/skills/` |
-| 7 | Configure hooks | Adds rule injection, output compression, and the plan gate (on by default) to `settings.json` |
+| 7 | Configure hooks | Adds rule injection, output compression, the plan gate, session security (access guard + trust ledger), and the SessionStart helpers (git check, memory, stack detect) to `settings.json` — the same set the plugin install wires |
 
 The installer is idempotent — safe to re-run. It won't duplicate hooks or overwrite existing settings.
 

@@ -78,6 +78,8 @@ CLAW_HOOK_SCRIPTS = (
     "claude_hook.py",
     "compress_output.py",
     "plan_gate.py",
+    "access_guard.py",
+    "trust_ledger.py",
     "git_check.py",
     "ensure_deps.py",
     "memory_init.py",
@@ -135,9 +137,16 @@ def unmerge(settings_path: Path, dry_run: bool = False) -> str:
 def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
     """
     Merge Clawness hooks into settings.json. Returns a status message.
-    Registers both:
+    Registers (each only if its script is present, each idempotent):
       - UserPromptSubmit: rule retrieval (claude_hook.py)
       - PostToolUse on Bash: output compression (compress_output.py)
+      - PreToolUse + PostToolUse: plan gate (plan_gate.py)
+      - PreToolUse + PostToolUse: access guard (access_guard.py)
+      - SessionStart: git check, memory init, stack detect, trust ledger
+
+    Kept in sync with .claude-plugin/plugin.json (the plugin-install path) — the
+    two install methods must wire the same hooks. (ensure_deps.py is plugin-only:
+    a manual install runs a real `pip install` so the deps are already present.)
     """
     # Read or create
     if settings_path.exists():
@@ -210,6 +219,35 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
             })
             results.append("plan-gate: added (on by default; `clawness plan off` to disable)")
 
+    # --- Access guard (ON by default; PreToolUse classify + PostToolUse confirm) ---
+    # Two events, one script: PreToolUse classifies each call (allow/ask/deny);
+    # PostToolUse (same matcher) promotes an approved ask to "confirmed" so a
+    # repeat doesn't re-prompt — see the two-phase ledger in clawness/guard.py.
+    # Both must be wired or a declined ask would never get the chance to re-ask.
+    guard_script = hook_script.resolve().parent / "access_guard.py"
+    if guard_script.exists():
+        if "PreToolUse" not in data["hooks"]:
+            data["hooks"]["PreToolUse"] = []
+        if "PostToolUse" not in data["hooks"]:
+            data["hooks"]["PostToolUse"] = []
+
+        pre_events = data["hooks"]["PreToolUse"]
+        post_events = data["hooks"]["PostToolUse"]
+
+        if hook_already_present(pre_events, guard_script):
+            results.append("access-guard: already configured")
+        else:
+            guard_matcher = "Bash|Write|Edit|MultiEdit|NotebookEdit|Read"
+            pre_events.append({
+                "matcher": guard_matcher,
+                "hooks": [build_hook_entry(guard_script, timeout=10)],
+            })
+            post_events.append({
+                "matcher": guard_matcher,
+                "hooks": [build_hook_entry(guard_script, timeout=10)],
+            })
+            results.append("access-guard: added (on by default; CLAW_NO_ACCESS_GUARD=1 to disable)")
+
     # --- SessionStart: git presence check (asks before any git init) ---
     git_script = hook_script.resolve().parent / "git_check.py"
     if git_script.exists():
@@ -251,6 +289,20 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
                 "hooks": [build_hook_entry(stack_script, timeout=10)],
             })
             results.append("stack-detect: added")
+
+    # --- SessionStart: trust ledger (TOFU fingerprints of skills/agents/MCP) ---
+    trust_script = hook_script.resolve().parent / "trust_ledger.py"
+    if trust_script.exists():
+        if "SessionStart" not in data["hooks"]:
+            data["hooks"]["SessionStart"] = []
+        start_events = data["hooks"]["SessionStart"]
+        if hook_already_present(start_events, trust_script):
+            results.append("trust-ledger: already configured")
+        else:
+            start_events.append({
+                "hooks": [build_hook_entry(trust_script, timeout=10)],
+            })
+            results.append("trust-ledger: added (on by default; CLAW_NO_TRUST_LEDGER=1 to disable)")
 
     if dry_run:
         print(json.dumps(data, indent=2))

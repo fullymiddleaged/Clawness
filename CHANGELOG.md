@@ -85,6 +85,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   an uncaught traceback.
 - `compress_output.py`'s "kept" line count no longer double-counts lines shared
   between the head/tail and error-context sections.
+- **The manual installer now wires the access guard and trust ledger.**
+  `setup_settings.py` registered rule injection, compression, the plan gate,
+  and the SessionStart helpers, but silently skipped session security — so a
+  manual (non-plugin) install got no exfil/destructive-action guard and no
+  skill/agent/MCP drift alerts. It now wires the same hook set as the plugin
+  manifest (including the access guard's PreToolUse + PostToolUse pair, needed
+  for the two-phase ledger), verified by a manifest-parity test so the two
+  install paths can't drift again.
 
 ## [0.6.1] - 2026-07-02
 
