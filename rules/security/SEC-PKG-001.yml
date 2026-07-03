@@ -7,11 +7,10 @@ when: >
   Installing or adding a package, or running a package-manager install command.
 rule: >
   A package's install lifecycle scripts (npm postinstall, pip setup.py, cargo
-  build scripts) run arbitrary code on your machine the moment you install. Verify
-  the exact package name (watch for typosquats — one transposed letter), prefer
-  installing from a committed lockfile, and pin versions. For an untrusted or
-  one-off package, install with lifecycle scripts disabled (npm's
-  --ignore-scripts, pip's --no-build-isolation review) and inspect it first.
-  Commit the lockfile so installs are reproducible and auditable.
+  build scripts) run arbitrary code on your machine the moment you install.
+  Verify the exact package name (watch for typosquats — one transposed
+  letter). For an untrusted or one-off package, install with lifecycle
+  scripts disabled (npm's --ignore-scripts, pip's --no-build-isolation
+  review) and inspect it first.
 violation: "npm install react-domm   # typosquat; its postinstall runs on install"
-correct: "Confirm the name, install from the lockfile, pin the version, commit the lock"
+correct: "Confirm the exact package name, then install with lifecycle scripts disabled if untrusted"
