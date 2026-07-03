@@ -5,6 +5,87 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-03
+
+### Added
+- **Guard detection coverage, within the existing "harm-reduction, not a sandbox"
+  threat model** — all new patterns ASK (never a fresh hard DENY):
+  - Network code execution via shell/process substitution instead of a literal
+    pipe (`bash -c "$(curl ...)"`, `source <(wget ...)`, `eval "$(curl ...)"`,
+    PowerShell `iex (irm ...)`) — the same risk as `curl | sh`, previously missed
+    entirely since there's no `|`.
+  - `git config` changes that persist code execution: `core.hooksPath`,
+    `credential.helper`, `filter.*.clean|smudge`, and a `!`-shell alias/pager/editor.
+  - Env-var token/secret references and `env`/`printenv` piped into a network call.
+  - Full Windows/PowerShell parity: the catastrophic-delete deny now covers
+    `Remove-Item`/`rd`/`rmdir`/`del` (previously only the `rm`/`ri` aliases matched
+    on Windows); download cradles (`WebClient` downloads, `certutil -urlcache`,
+    `bitsadmin`, encoded `-enc` commands); `Invoke-RestMethod`/`Invoke-WebRequest`
+    POST/PUT/PATCH routed through the data-upload provenance check; and
+    `winget`/`choco`/`scoop`/`Install-Module`/`dotnet add package` treated like
+    other named installs.
+  - AWS IMDS IPv6 endpoint (`fd00:ec2::254`); the trust ledger's metadata tell
+    synced to the guard's full host list (was missing azure/alibaba).
+  - Credential-path regexes (`.kube/config`, `.docker/config.json`, `.netrc`,
+    `.pypirc`, `terraform.tfstate`, service-account JSON, more key types) aligned
+    across the DENY/ASK/Read tiers; fixed `~/.ssh` requiring a trailing separator
+    on both sides, which missed a bare directory reference like `tar czf - ~/.ssh`.
+- **Trust ledger**: zero-width/Unicode-tag steganography detection (a leading
+  skill-injection hiding channel, previously unscanned), concealment phrasing
+  ("don't tell the user", "secretly"), webhook/paste-bin exfil hosts, and
+  decode-and-execute call patterns.
+- **`clawness lint`**: duplicate-id, missing-triggers, a 500-char ceiling on
+  mandatory rules' compact render, domain-matches-folder, and vague-phrasing
+  now also scanning `violation`/`correct`.
+- 10 new `tests/ground_truth.json` queries closing zero-coverage gaps (the
+  security domain had none at all).
+
+### Changed
+- **Session-aware re-injection.** The mandatory rule block — identical every
+  turn — now renders in full only on prompt 1 and every `CLAW_FULL_EVERY`-th
+  prompt after (default 5); other turns get a one-line id list instead. Project
+  memory follows the same cadence but reprints immediately on a changed file,
+  regardless of cadence. `CLAW_FULL_EVERY=1` restores the old always-full
+  behavior.
+- **`ENF-SEC-002`/`ENF-SEC-003` demoted from mandatory to ranked**, renamed
+  `SEC-SQLI-001`/`SEC-XSS-001`. They only applied to SQL-writing and
+  HTML-rendering tasks yet paid full always-on cost on every prompt; retrieval
+  reliably surfaces them whenever a prompt actually touches SQL or HTML.
+  Mandatory set: 8 → 6.
+- **Unknown-host data upload softened**: DENY now requires a credential/secret
+  signal alongside the absent host; a plain upload with neither hard-blocks to
+  an ASK instead, since the destination may have been given inline rather than
+  hardcoded.
+- Removed duplicated pinning/lockfile guidance repeated across `ENF-SEC-005`,
+  `GEN-DEPVER-001`, and `SEC-PKG-001`.
+- **Relevance floor**: a rule BM25 ranks confidently #1 (a rare, high-IDF
+  trigger term) can no longer be silently dropped when its TF-IDF cosine
+  happens to sit below the floor — rescued only when the floor would otherwise
+  empty the result entirely (strictly additive; a query that already clears
+  the floor is unaffected).
+- **Access guard ask-ledger is now two-phase.** PreToolUse marked a target as
+  asked *before* the user answered, so a declined ask went silent on retry for
+  24h. Now PreToolUse records "pending"; a new PostToolUse companion (same
+  matcher) promotes to "confirmed" only once the call actually completes.
+  Dedup keys are sha256-hashed before touching disk (a key can be a full Bash
+  command that may contain secrets). A legacy plain-timestamp ledger migrates
+  transparently as already-confirmed.
+- Project rules no longer trigger a wasted index build-then-rebuild — `Clawness`
+  gained `build_index=False` plus public `add_rules()`/`build_index()`.
+- Provenance verdicts (`value_in_project`) cache for 15 minutes to smooth retry
+  bursts; only True/False are cached, never the unverifiable case.
+
+### Fixed
+- `rm -rf $HOME/proj/node_modules` (a subpath, not the home root) is no longer
+  a hard, unoverridable DENY — narrowed to home/drive roots and top-level
+  dotdirs; deleting an entire top-level home directory now ASKs instead.
+- Lockfile-restore installs (`pip install -r requirements.txt`, `pip install -e .`,
+  `poetry install`, `uv sync`) no longer trip the named-package ASK.
+- `plan_gate.py` fails open on a malformed (non-dict) hook payload instead of
+  an uncaught traceback.
+- `compress_output.py`'s "kept" line count no longer double-counts lines shared
+  between the head/tail and error-context sections.
+
 ## [0.6.1] - 2026-07-02
 
 ### Fixed
