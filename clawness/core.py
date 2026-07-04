@@ -1,9 +1,9 @@
 """
 Clawness — lightweight hybrid rule retrieval for AI coding agents.
 
-Keeps the ideas from infinri/Writ (hybrid ranking, mandatory rules, context
-budgets) but drops Neo4j, ONNX, Docker, and the FastAPI daemon. The entire
-retriever runs in-process in pure Python.
+Keeps the core ideas (hybrid ranking, mandatory rules, context budgets — see the
+upstream credit in README) but drops Neo4j, ONNX, Docker, and the FastAPI daemon.
+The entire retriever runs in-process in pure Python.
 
 Dependencies: pyyaml (usually preinstalled). Nothing else.
 

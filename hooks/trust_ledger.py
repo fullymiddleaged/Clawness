@@ -30,7 +30,7 @@ except Exception:
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 try:
-    from clawness.plan import clawness_dir, find_project_root
+    from clawness.plan import atomic_write_text, clawness_dir, find_project_root
     from clawness.trust import diff_ledger, scan_artifacts
 except Exception:
     sys.exit(0)
@@ -48,11 +48,7 @@ def _load_ledger(path: Path) -> "dict | None":
 
 
 def _save_ledger(path: Path, data: dict) -> None:
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    except OSError:
-        pass
+    atomic_write_text(path, json.dumps(data, indent=2, sort_keys=True) + "\n")
 
 
 def main() -> None:

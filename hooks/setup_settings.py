@@ -101,7 +101,7 @@ def unmerge(settings_path: Path, dry_run: bool = False) -> str:
     try:
         data = json.loads(settings_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, ValueError):
-        return f"ERROR: {settings_path} is not valid JSON. Remove Writ hooks manually."
+        return f"ERROR: {settings_path} is not valid JSON. Remove Clawness hooks manually."
     if not isinstance(data, dict) or not isinstance(data.get("hooks"), dict):
         return "OK: no hooks section — nothing to remove"
 
@@ -128,10 +128,10 @@ def unmerge(settings_path: Path, dry_run: bool = False) -> str:
 
     if dry_run:
         print(json.dumps(data, indent=2))
-        return f"DRY RUN: would remove {removed} Writ hook(s)."
+        return f"DRY RUN: would remove {removed} Clawness hook(s)."
 
     settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    return f"OK: removed {removed} Writ hook(s) from {settings_path}"
+    return f"OK: removed {removed} Clawness hook(s) from {settings_path}"
 
 
 def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
@@ -204,20 +204,27 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
         pre_events = data["hooks"]["PreToolUse"]
         post_events = data["hooks"]["PostToolUse"]
 
-        if hook_already_present(pre_events, plan_script):
-            results.append("plan-gate: already configured")
-        else:
-            # PreToolUse: gate edits.
+        # Check each side independently: a settings file with the PreToolUse entry
+        # but a missing PostToolUse companion (hand-edited, or a partially-applied
+        # earlier write) must be REPAIRED on re-run, not skipped because the Pre
+        # side matched. Each append is idempotent (guarded by its own presence).
+        added_any = False
+        if not hook_already_present(pre_events, plan_script):
             pre_events.append({
                 "matcher": "Write|Edit|MultiEdit|NotebookEdit",
                 "hooks": [build_hook_entry(plan_script, timeout=10)],
             })
+            added_any = True
+        if not hook_already_present(post_events, plan_script):
             # PostToolUse: record native plan-mode approval (ExitPlanMode).
             post_events.append({
                 "matcher": "ExitPlanMode",
                 "hooks": [build_hook_entry(plan_script, timeout=10)],
             })
-            results.append("plan-gate: added (on by default; `clawness plan off` to disable)")
+            added_any = True
+        results.append(
+            "plan-gate: added (on by default; `clawness plan off` to disable)"
+            if added_any else "plan-gate: already configured")
 
     # --- Access guard (ON by default; PreToolUse classify + PostToolUse confirm) ---
     # Two events, one script: PreToolUse classifies each call (allow/ask/deny);
@@ -234,19 +241,27 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
         pre_events = data["hooks"]["PreToolUse"]
         post_events = data["hooks"]["PostToolUse"]
 
-        if hook_already_present(pre_events, guard_script):
-            results.append("access-guard: already configured")
-        else:
-            guard_matcher = "Bash|Write|Edit|MultiEdit|NotebookEdit|Read"
+        # Pre and Post are checked independently — a settings file with only the
+        # PreToolUse classify hook (missing the PostToolUse confirm companion) would
+        # otherwise never self-heal, and a declined ask would go silent for the rest
+        # of the session (the exact hole the two-phase ledger closes).
+        guard_matcher = "Bash|Write|Edit|MultiEdit|NotebookEdit|Read"
+        added_any = False
+        if not hook_already_present(pre_events, guard_script):
             pre_events.append({
                 "matcher": guard_matcher,
                 "hooks": [build_hook_entry(guard_script, timeout=10)],
             })
+            added_any = True
+        if not hook_already_present(post_events, guard_script):
             post_events.append({
                 "matcher": guard_matcher,
                 "hooks": [build_hook_entry(guard_script, timeout=10)],
             })
-            results.append("access-guard: added (on by default; CLAW_NO_ACCESS_GUARD=1 to disable)")
+            added_any = True
+        results.append(
+            "access-guard: added (on by default; CLAW_NO_ACCESS_GUARD=1 to disable)"
+            if added_any else "access-guard: already configured")
 
     # --- SessionStart: git presence check (asks before any git init) ---
     git_script = hook_script.resolve().parent / "git_check.py"

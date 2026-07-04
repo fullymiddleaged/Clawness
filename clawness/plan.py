@@ -1,7 +1,7 @@
 """
 Plan gate ("process keeper").
 
-Inspired by infinri/Writ's process keeper, this blocks file edits until a plan
+A process keeper: this blocks file edits until a plan
 has been approved — but it rides Claude Code's NATIVE plan mode instead of
 inventing a parallel command flow. The normal path requires zero clawness-specific
 commands: present a plan, the user approves it (ExitPlanMode), and the gate
@@ -52,6 +52,25 @@ def find_project_root(start: Optional[Path] = None) -> Path:
 
 def clawness_dir(root: Path) -> Path:
     return root / ".clawness"
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    """Write *text* to *path* atomically: write a sibling temp file, then
+    os.replace() it into place. A concurrent session (two Claude Codes in one
+    project) can then never read a half-written ledger/cache — it sees either the
+    old file or the new one, never a torn one. Best-effort: on any OSError the
+    temp file is cleaned up and the write is dropped (callers already tolerate a
+    missing/stale file and just re-ask)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
 
 
 def _claude_config_dirs() -> list[Path]:
@@ -136,9 +155,7 @@ def _load_sessions(root: Path) -> dict:
 
 
 def _save_sessions(root: Path, sessions: dict) -> None:
-    d = clawness_dir(root)
-    d.mkdir(parents=True, exist_ok=True)
-    _sessions_path(root).write_text(json.dumps(sessions, indent=2) + "\n", encoding="utf-8")
+    atomic_write_text(_sessions_path(root), json.dumps(sessions, indent=2) + "\n")
 
 
 def record_session_approval(root: Path, session_id: str) -> None:
@@ -181,9 +198,7 @@ def load_state(root: Path) -> dict:
 
 
 def save_state(root: Path, state: dict) -> None:
-    d = clawness_dir(root)
-    d.mkdir(parents=True, exist_ok=True)
-    (d / "plan.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    atomic_write_text(clawness_dir(root) / "plan.json", json.dumps(state, indent=2) + "\n")
 
 
 def approve(root: Path) -> dict:
@@ -205,7 +220,7 @@ def manually_approved(root: Path) -> bool:
 # --- the gate decision ----------------------------------------------------
 
 DENY_REASON = (
-    "Writ plan gate: present an implementation plan and have the user approve it "
+    "Clawness plan gate: present an implementation plan and have the user approve it "
     "before editing files. Use plan mode — the gate clears automatically once the "
     "plan is approved, no commands needed. (Fallback: the user can run "
     "`clawness plan approve`; disable with `clawness plan off`.)"

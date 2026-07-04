@@ -30,6 +30,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     `.pypirc`, `terraform.tfstate`, service-account JSON, more key types) aligned
     across the DENY/ASK/Read tiers; fixed `~/.ssh` requiring a trailing separator
     on both sides, which missed a bare directory reference like `tar czf - ~/.ssh`.
+  - Data piped into a raw network socket (`tar … | nc host`, `nc host < file`) —
+    carries no URL host or `-d` flag, so the provenance tier never saw it.
+  - Cloud-storage uploads (`aws s3 cp/sync/mv`, `gsutil`, `az storage blob upload`)
+    are provenance-tiered: a bucket the repo already references (IaC/config) is the
+    routine deploy path and stays silent; an unrecognized bucket asks once per bucket.
+    Downloads (cloud → local) are never flagged.
 - **Trust ledger**: zero-width/Unicode-tag steganography detection (a leading
   skill-injection hiding channel, previously unscanned), concealment phrasing
   ("don't tell the user", "secretly"), webhook/paste-bin exfil hosts, and
@@ -66,10 +72,30 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Access guard ask-ledger is now two-phase.** PreToolUse marked a target as
   asked *before* the user answered, so a declined ask went silent on retry for
   24h. Now PreToolUse records "pending"; a new PostToolUse companion (same
-  matcher) promotes to "confirmed" only once the call actually completes.
-  Dedup keys are sha256-hashed before touching disk (a key can be a full Bash
-  command that may contain secrets). A legacy plain-timestamp ledger migrates
-  transparently as already-confirmed.
+  matcher) promotes to "confirmed" only once the call actually completes **and the
+  payload carries a `tool_response`** (execution evidence — defense-in-depth so a
+  declined call never settles even if a build fired PostToolUse for it; covered by
+  the new `tests/test_access_guard_hook.py` dispatch tests). Dedup keys are
+  sha256-hashed before touching disk (a key can be a full Bash command that may
+  contain secrets). A legacy plain-timestamp ledger migrates transparently as
+  already-confirmed.
+- **Token-authenticated egress no longer hard-blocks.** The absent-host exfil DENY
+  now fires only on **inline command capture** (`$(…)`, backtick, `<()` embedded in
+  a data upload) — the genuine exfil signature. A bare token env var
+  (`curl -H "Authorization: Bearer $API_TOKEN" -d @x https://internal-host/…`) is
+  routine auth and now only ASKS, so everyday POSTs to an internal host whose name
+  lives in a secret manager (absent from committed source) stay overridable instead
+  of hitting an unoverridable block (`_INLINE_CAPTURE_RE` vs `_VAR_EXPANSION_RE`).
+- **Recursive delete under a system dir is now ASK, not DENY.** `rm -rf /var/cache/x`,
+  `/opt/oldtool`, `/usr/local/lib/x` were unoverridable — a fail-closed false positive
+  on routine devops/container cleanup. The hard DENY now pins the system dir *itself*
+  (`/etc`, `/var`, `/var/*`); deeper paths ask.
+- **Egress asks dedup per destination, not per command.** The ask-ledger key for
+  network egress is now the host/bucket (`_egress_targets`), so iterating upload
+  payloads to the same host asks once — matching the documented "once per target".
+  Other tiers still key on the concrete path/command.
+- Ledger and provenance-cache writes are **atomic** (`atomic_write_text`: temp file +
+  `os.replace`), so two concurrent sessions in one project can never read a torn file.
 - Project rules no longer trigger a wasted index build-then-rebuild — `Clawness`
   gained `build_index=False` plus public `add_rules()`/`build_index()`.
 - Provenance verdicts (`value_in_project`) cache for 15 minutes to smooth retry
@@ -93,6 +119,27 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   manifest (including the access guard's PreToolUse + PostToolUse pair, needed
   for the two-phase ledger), verified by a manifest-parity test so the two
   install paths can't drift again.
+- **Fetching a `.env`-named URL is no longer hard-denied.** `curl -O https://cdn/.env.example`
+  (and any download whose URL path contains `.env`) tripped the credential+network DENY.
+  Committed templates (`.env.example`/`.sample`/`.template`/`.dist`) are now excluded
+  outright; a real credential-named *download* (token in the remote path, no local secret
+  touched, no upload) drops to ASK. Uploading a local `.env` still hard-denies.
+- **Package version drift caught.** `clawness/__init__.__version__` still read `0.1.0`
+  while the three manifests said `0.7.0`. Bumped, and `tests/test_version.py` now asserts
+  all four sources agree and that a CHANGELOG entry exists — a drift fails CI.
+- **Installer self-heals a partial hook wiring.** `setup_settings.py` decided
+  "already configured" from the PreToolUse side alone, so a settings file with the
+  access-guard/plan-gate PreToolUse hook but a missing PostToolUse companion never got
+  repaired on re-run (a silent-decline hole). Pre and Post are now checked independently.
+- **CI now runs on `release/**` branches** (was `main`-only), so release-branch work is
+  exercised across the OS × Python matrix before it merges.
+- **`install.ps1` parity:** added `-DryRun` (forwarded to `setup_settings.py` like
+  `install.sh --dry-run`), gated the agents/skills steps on their setup script existing,
+  and fixed both installers' manual-fallback snippet to print the portable interpreter
+  picker and the real 30s timeout (was a single hardcoded interpreter, timeout 5).
+- Renamed the last user-facing **"Writ"** references (plan-gate deny reason, installer
+  messages, `install.ps1 -WritDir` → `-ClawnessDir` with a back-compat alias). Upstream
+  credit remains in the README.
 
 ## [0.6.1] - 2026-07-02
 

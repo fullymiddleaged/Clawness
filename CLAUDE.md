@@ -50,23 +50,35 @@ dependency**. No ML models, no services, no Docker.
      answer to approval fatigue. **`deny` is a HARD block with no in-Claude override**
      (verified on the VS Code build — the user can't approve it inline; retrying re-fires),
      so reserve it for ~zero-legit-use / exfil-signature cases: cloud-metadata,
-     catastrophic `rm -rf`, cred-read+network, and data-upload to a host absent from the
-     codebase. **`ask`** (which DOES surface an approve dialog) covers the dual-use and
-     scope cases: pipe-to-shell and `git push --force` (dangerous but routinely legit —
-     hard-denying them just trains users to disable the guard), writes outside the project
-     root (temp/plan files exempt via `is_plan_file`), credential-shaped reads, and named
-     installs. The `_deny` reason text must not tell the model to "proceed on
-     confirmation" — it can't; it points to the real escape hatches (run it yourself /
-     `CLAW_NO_ACCESS_GUARD=1`). Data-bearing network egress is
-     **provenance-tiered**: `value_in_project` searches the destination host across the
-     project's own text files — a bounded walk that EXCLUDES `.claude/` so a hijacked
-     skill can't launder a host into "trusted" — absent everywhere → deny (exfil
-     signature), known/unverifiable → ask. Asks once per target/session
-     (`.clawness/guard_sessions.json`, dedup keys sha256-hashed so raw command text
-     never touches disk) — **two-phase**: PreToolUse records a target `pending`;
-     a PostToolUse companion (same matcher) promotes it to `confirmed` only once the
-     call actually completes, so a declined/abandoned ask re-asks on retry instead of
-     going silent for the rest of the session. Pure-logic core, fails open, `CLAW_NO_ACCESS_GUARD`.
+     catastrophic `rm -rf` (a filesystem root / home / a *system dir itself* — a delete
+     DEEPER under a system dir is ASK, not deny), reading a local secret into a network
+     call, uploading a local secret, and **inline-capture** exfil — `$(…)`/backtick
+     output embedded in a data upload to a host absent from the codebase. Crucially a
+     bare token env var (`Bearer $API_TOKEN`) is NOT a deny signal — it's routine auth,
+     so a token-authenticated POST to an internal host absent from committed source only
+     ASKS (see `_INLINE_CAPTURE_RE` vs `_VAR_EXPANSION_RE`). **`ask`** (which DOES surface
+     an approve dialog) covers the dual-use and scope cases: pipe-to-shell and
+     `git push --force` (not `--force-with-lease`, allowed), writes outside the project
+     root (temp/plan files exempt via `is_plan_file`), credential-shaped reads, named
+     installs, deep-system-dir deletes, data piped into a raw socket (`… | nc`), a
+     cloud-storage upload to an unrecognized bucket (`aws s3 cp`/`gsutil`/`az blob`), and a
+     credential-named URL download. The `_deny` reason text must not tell the model to
+     "proceed on confirmation" — it can't; it points to the real escape hatches (run it
+     yourself / `CLAW_NO_ACCESS_GUARD=1`). Data-bearing network egress AND cloud uploads
+     are **provenance-tiered**: `value_in_project` searches the destination host/bucket
+     across the project's own text files — a bounded walk that EXCLUDES `.claude/` so a
+     hijacked skill can't launder a host into "trusted", 15-min verdict cache — endogenous
+     (in the repo) → allow/ask, absent → ask (or deny for the inline-capture shape). Asks
+     once **per destination** per session: for egress the dedup key is the host/bucket
+     (`_egress_targets`), not the exact command, so iterating upload payloads to one host
+     asks once; other tiers key on the path/command. Keys are sha256-hashed so raw command
+     text never touches disk. **Two-phase**: PreToolUse records a target `pending`; a
+     PostToolUse companion (same matcher) promotes it to `confirmed` only once the call
+     actually completes AND the payload carries a `tool_response` (execution evidence —
+     defense-in-depth so a declined call never settles even if a build fired PostToolUse
+     for it), so a declined/abandoned ask re-asks on retry instead of going silent for the
+     session. Ledger/cache writes are atomic (`atomic_write_text`, temp + `os.replace`) so
+     concurrent sessions never read a torn file. Pure-logic core, fails open, `CLAW_NO_ACCESS_GUARD`.
    - `hooks/trust_ledger.py` (SessionStart; logic in `clawness/trust.py`) keeps TOFU
      fingerprints of skills/agents/commands/MCP servers in `.clawness/trust_ledger.json`
      and injects a note when one changed/appeared; `clawness audit-skills` scans those
@@ -107,7 +119,9 @@ dependency**. No ML models, no services, no Docker.
   writes hooks to `settings.json`). The plugin path does NOT install the `clawness`
   CLI — plugin users verify via `/clawness:status`.
 - **Naming:** package `clawness`, env vars `CLAW_*`, project dir `.clawness/`. (The
-  `infinri/Writ` mentions in README are upstream credit — leave them.)
+  `infinri/Writ` mentions in README and CHANGELOG are upstream credit / historical
+  record — leave those. Everywhere else was renamed to Clawness; `install.ps1` keeps a
+  `-WritDir` alias for back-compat only.)
 - **The access guard is a harm-reduction tripwire, not a security boundary.** It is
   regex/heuristics over tool inputs the agent controls, so a determined adversary can
   obfuscate around it (`| base64 -d | sh`, download-then-exec, `python -c`, token
@@ -136,8 +150,10 @@ dependency**. No ML models, no services, no Docker.
   on Windows and mangle them into mojibake (`—` → `â€"`) *at load time*. `clawness
   lint` now flags non-UTF-8 / U+FFFD rule files; keep new reads/writes UTF-8.
 - **Keep the hook ~1ms** — no heavy imports or model loads in `claude_hook.py`/`core.py`.
-- **Version lives in 3 places** — bump `pyproject.toml`, `.claude-plugin/plugin.json`,
-  `.claude-plugin/marketplace.json` together, and add a CHANGELOG entry.
+- **Version lives in 4 places** — bump `pyproject.toml`, `.claude-plugin/plugin.json`,
+  `.claude-plugin/marketplace.json`, and `clawness/__init__.py` (`__version__`) together,
+  and add a CHANGELOG entry. `tests/test_version.py` asserts all four agree + a CHANGELOG
+  entry exists, so a drift fails CI.
 - Rule YAML: `id, domain, severity, tags, triggers, when, rule, violation, correct`
   (concept terms must be single tokens; multi-word phrases never match).
 - **`{{CURRENT_DATE}}`** in any rule field is replaced at render time with the live
@@ -146,7 +162,10 @@ dependency**. No ML models, no services, no Docker.
   date-independent. `ENF-CURRENT-001` uses it.
 - Two things can't be tested from a sandbox: a real `pip install -e .` completing,
   and plugin hooks on a real Windows + python.org box. Smoke-test both before release.
-  Since 0.7.0, also smoke-test the access guard's decline path on a real session
-  (ask → click "no" → retry the same command → must ask again, not go silent) —
-  the PostToolUse confirm only fires when the tool actually runs, so this can't be
-  fully verified by piping payloads through the hook script directly.
+  The access guard's decline path is now covered two ways so it's no longer a
+  load-bearing manual check: `tests/test_access_guard_hook.py` drives the real hook at
+  the dispatch level (PreToolUse records `pending`, PostToolUse confirms only WITH a
+  `tool_response`), and the confirm additionally requires that execution evidence — so
+  even if a build ever fired PostToolUse for a declined call, it wouldn't settle. A
+  real-session decline click-test (ask → "no" → retry → must ask again) is still a nice
+  final sanity check, but defense-in-depth no longer rests on it.

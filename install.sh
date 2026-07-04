@@ -198,15 +198,20 @@ else
     else
         echo "  ✗ $HOOK_RESULT"
         echo ""
-        echo "  To configure manually, add this to ~/.claude/settings.json:"
+        echo "  To configure manually, add this to ~/.claude/settings.json"
+        echo "  (this is only the rule-retrieval hook — re-run the installer to wire"
+        echo "   the full set including the plan gate and access guard):"
         echo ""
+        # Portable interpreter picker + the real 30s timeout, matching what
+        # setup_settings.py / plugin.json write (NOT a single hardcoded interpreter).
+        PICKER="for p in python3 python py; do command -v \\\"\$p\\\" >/dev/null 2>&1 && exec \\\"\$p\\\" \\\"$HOOK_SCRIPT\\\"; done"
         echo '  {'
         echo '    "hooks": {'
         echo '      "UserPromptSubmit": [{'
         echo '        "hooks": [{'
         echo '          "type": "command",'
-        echo "          \"command\": \"$PY_CMD \\\"$HOOK_SCRIPT\\\"\","
-        echo '          "timeout": 5'
+        echo "          \"command\": \"$PICKER\","
+        echo '          "timeout": 30'
         echo '        }]'
         echo '      }]'
         echo '    }'

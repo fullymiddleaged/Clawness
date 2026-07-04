@@ -17,6 +17,11 @@ Two responsibilities, by event (mirrors plan_gate.py's dual-event dispatch):
     promote that target's ledger entry to "confirmed" so a repeat doesn't
     re-ask. Re-classifies to confirm this call was actually the kind that
     would have asked, rather than confirming every tool call unconditionally.
+    Defense-in-depth: we ALSO require the payload to carry a ``tool_response``
+    (present only on a real completion). So even if a future Claude Code build
+    ever fired PostToolUse for a declined/aborted call, the absence of a
+    tool_response keeps the entry "pending" and the guard correctly re-asks —
+    the confirm no longer rests solely on the "decline stops the call" premise.
 
 Wire in .claude-plugin/plugin.json:
   PreToolUse  matcher "Bash|Write|Edit|MultiEdit|NotebookEdit|Read"
@@ -82,7 +87,10 @@ def main() -> None:
             # The call completed, so any ASK prompt for it was approved — settle
             # the ledger. Only for calls that would actually have asked; nothing
             # to do for ALLOW/DENY (DENY never reaches PostToolUse — it's blocked).
-            if decision == ASK:
+            # Require a tool_response as proof the call actually ran, so a declined
+            # call (which shouldn't fire PostToolUse at all, and if it ever did,
+            # would carry no response) never settles as confirmed.
+            if decision == ASK and "tool_response" in payload:
                 confirm_ask(root, session_id, dedup_key(tool_name, tool_input))
             sys.exit(0)
 

@@ -3,7 +3,7 @@
 #
 # Reverses what install.ps1 did OUTSIDE this folder, so deleting the folder
 # afterwards is safe:
-#   1. Removes Writ hooks from settings.json (otherwise they dangle and error
+#   1. Removes Clawness hooks from settings.json (otherwise they dangle and error
 #      on every prompt once the folder is gone).
 #   2. Removes the agent files copied to ~/.claude/agents/.
 #   3. Removes the skill folders copied to ~/.claude/skills/.

@@ -11,9 +11,11 @@
 #>
 
 param(
-    [string]$WritDir = '',
+    [Alias('WritDir')]      # back-compat: the old parameter name
+    [string]$ClawnessDir = '',
     [string]$SettingsPath = '',
     [switch]$SkipHook,
+    [switch]$DryRun,        # show what would be written without changing settings.json
     [switch]$Semantic,      # removed; accepted as a no-op for back-compat
     [switch]$NoSemantic     # removed; accepted as a no-op for back-compat
 )
@@ -24,15 +26,15 @@ param(
 $ErrorActionPreference = 'Continue'
 
 # -- resolve paths --------------------------------------------------
-if (-not $WritDir) {
-    $WritDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+if (-not $ClawnessDir) {
+    $ClawnessDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 }
-$WritDir = (Resolve-Path $WritDir).Path
+$ClawnessDir = (Resolve-Path $ClawnessDir).Path
 
-$RulesDir   = Join-Path $WritDir 'rules'
-$HookScript = Join-Path $WritDir 'hooks\claude_hook.py'
-$SetupPy    = Join-Path $WritDir 'hooks\setup_settings.py'
-$CoreModule = Join-Path $WritDir 'clawness\core.py'
+$RulesDir   = Join-Path $ClawnessDir 'rules'
+$HookScript = Join-Path $ClawnessDir 'hooks\claude_hook.py'
+$SetupPy    = Join-Path $ClawnessDir 'hooks\setup_settings.py'
+$CoreModule = Join-Path $ClawnessDir 'clawness\core.py'
 
 # -- banner ---------------------------------------------------------
 Write-Host ''
@@ -88,13 +90,13 @@ Write-Host '  Downloads from PyPI - this can take a minute.' -ForegroundColor Gr
 $flagSets = @('', '--user', '--user --break-system-packages')
 foreach ($fs in $flagSets) {
     $flags = if ($fs) { $fs -split ' ' } else { @() }
-    & $pyCmd -m pip install -e $WritDir @flags 2>&1 | Out-Null
+    & $pyCmd -m pip install -e $ClawnessDir @flags 2>&1 | Out-Null
     & $pyCmd -c 'import yaml' 2>$null
     if ($LASTEXITCODE -eq 0) { break }
 }
 if ($LASTEXITCODE -ne 0) {
     Write-Host '  ERROR: Failed to install clawness (PyYAML not importable).' -ForegroundColor Red
-    Write-Host ('  Try manually: ' + $pyCmd + ' -m pip install -e "' + $WritDir + '"') -ForegroundColor Red
+    Write-Host ('  Try manually: ' + $pyCmd + ' -m pip install -e "' + $ClawnessDir + '"') -ForegroundColor Red
     exit 1
 }
 Write-Host "  OK: clawness installed - 'clawness' command available (PyYAML ready)" -ForegroundColor Green
@@ -157,17 +159,17 @@ if ($firstLine -match '(\d+) rules.*?(\d+\.\d+)ms') {
 Write-Host ''
 Write-Host '[6/7] Installing agents & skills...' -ForegroundColor Yellow
 
-$AgentsDir = Join-Path $WritDir 'agents'
-$SetupAgents = Join-Path $WritDir 'hooks\setup_agents.py'
-$SkillsDir = Join-Path $WritDir 'skills'
-$SetupSkills = Join-Path $WritDir 'hooks\setup_skills.py'
+$AgentsDir = Join-Path $ClawnessDir 'agents'
+$SetupAgents = Join-Path $ClawnessDir 'hooks\setup_agents.py'
+$SkillsDir = Join-Path $ClawnessDir 'skills'
+$SetupSkills = Join-Path $ClawnessDir 'hooks\setup_skills.py'
 
-if (Test-Path $AgentsDir) {
+if ((Test-Path $AgentsDir) -and (Test-Path $SetupAgents)) {
     & $pyCmd $SetupAgents $AgentsDir 2>&1 | Tee-Object -Variable agentResult | Out-Null
     Write-Host ('  Agents: ' + $agentResult) -ForegroundColor Green
 }
 
-if (Test-Path $SkillsDir) {
+if ((Test-Path $SkillsDir) -and (Test-Path $SetupSkills)) {
     & $pyCmd $SetupSkills $SkillsDir 2>&1 | Tee-Object -Variable skillResult | Out-Null
     Write-Host ('  Skills: ' + $skillResult) -ForegroundColor Green
 }
@@ -184,22 +186,30 @@ if ($SkipHook) {
     if ($SettingsPath) {
         $setupArgs += @('--settings', $SettingsPath)
     }
+    if ($DryRun) {
+        $setupArgs += '--dry-run'
+    }
 
     & $pyCmd @setupArgs 2>&1 | Tee-Object -Variable hookResult | Out-Null
 
     if ($LASTEXITCODE -ne 0) {
         Write-Host ('  ' + $hookResult) -ForegroundColor Red
         Write-Host ''
-        Write-Host '  To configure manually, add this to ~/.claude/settings.json:' -ForegroundColor DarkYellow
+        Write-Host '  To configure manually, add this to ~/.claude/settings.json' -ForegroundColor DarkYellow
+        Write-Host '  (this is only the rule-retrieval hook — re-run the installer to wire' -ForegroundColor DarkYellow
+        Write-Host '   the full set including the plan gate and access guard):' -ForegroundColor DarkYellow
         Write-Host ''
+        # Portable interpreter picker + the real 30s timeout, matching what
+        # setup_settings.py / plugin.json write (NOT a single hardcoded interpreter).
         $hookPath = $HookScript -replace '\\', '/'
+        $picker = 'for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"' + $hookPath + '\"; done'
         Write-Host '  {'                                          -ForegroundColor Gray
         Write-Host '    "hooks": {'                               -ForegroundColor Gray
         Write-Host '      "UserPromptSubmit": [{'                 -ForegroundColor Gray
         Write-Host '        "hooks": [{'                          -ForegroundColor Gray
         Write-Host '          "type": "command",'                 -ForegroundColor Gray
-        Write-Host ('          "command": "' + $pyCmd + ' \"' + $hookPath + '\"",' ) -ForegroundColor Gray
-        Write-Host '          "timeout": 5'                       -ForegroundColor Gray
+        Write-Host ('          "command": "' + $picker + '",')    -ForegroundColor Gray
+        Write-Host '          "timeout": 30'                      -ForegroundColor Gray
         Write-Host '        }]'                                   -ForegroundColor Gray
         Write-Host '      }]'                                     -ForegroundColor Gray
         Write-Host '    }'                                        -ForegroundColor Gray
@@ -225,5 +235,5 @@ Write-Host ('  use ' + $pyCmd + ' -m clawness.cli ... instead (identical, works 
 Write-Host ''
 Write-Host ('  Add rules:  drop .yml files into ' + $RulesDir + '\<domain>\') -ForegroundColor White
 Write-Host '  Retrieval:  BM25 + TF-IDF + RRF + concept expansion (pure Python, ~1ms)' -ForegroundColor White
-Write-Host ('  Uninstall:  run .\uninstall.ps1 in ' + $WritDir + ', then delete the folder') -ForegroundColor White
+Write-Host ('  Uninstall:  run .\uninstall.ps1 in ' + $ClawnessDir + ', then delete the folder') -ForegroundColor White
 Write-Host ''

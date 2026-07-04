@@ -120,6 +120,62 @@ def test_matches_plugin_manifest(tmp_path):
         )
 
 
+def _wiring(hooks: dict) -> set:
+    """Set of (event, script, matcher, timeout) tuples — the full shape of each
+    wired hook, so a drift in a matcher or timeout (not just the script set) is a
+    test failure. Command strings differ by install path (plugin-root vs absolute)
+    so we key on the script basename, not the command."""
+    out = set()
+    for event, groups in hooks.items():
+        for group in groups:
+            matcher = group.get("matcher")
+            for h in group.get("hooks", []):
+                cmd = h.get("command", "")
+                for name in S.CLAW_HOOK_SCRIPTS:
+                    if name in cmd:
+                        out.add((event, name, matcher, h.get("timeout")))
+    return out
+
+
+def test_matchers_and_timeouts_match_plugin(tmp_path):
+    # Beyond the script SET: every wired hook must agree on matcher and timeout
+    # with the plugin manifest. ensure_deps.py is plugin-only (async pip install).
+    data = _install(tmp_path)
+    manifest = json.loads(
+        (Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json")
+        .read_text(encoding="utf-8")
+    )
+    plugin = {t for t in _wiring(manifest["hooks"]) if t[1] != "ensure_deps.py"}
+    installer = _wiring(data["hooks"])
+    assert plugin == installer, (
+        f"wiring drift:\n  plugin-only: {plugin - installer}\n  installer-only: {installer - plugin}"
+    )
+
+
+def test_partial_state_self_heals_missing_post_companion(tmp_path):
+    # A settings file with the access-guard PRE hook but no POST companion (hand
+    # edited, or a partially-applied older write) must be REPAIRED on re-run —
+    # otherwise a declined ask goes silent for the session. Same for the plan gate.
+    settings = tmp_path / "settings.json"
+    S.merge(settings, HOOK_SCRIPT)
+    data = json.loads(settings.read_text(encoding="utf-8"))
+    # Surgically drop the PostToolUse access-guard + plan-gate companions.
+    data["hooks"]["PostToolUse"] = [
+        g for g in data["hooks"]["PostToolUse"]
+        if not any(
+            ("access_guard.py" in h.get("command", "") or "plan_gate.py" in h.get("command", ""))
+            for h in g.get("hooks", [])
+        )
+    ]
+    settings.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    assert "access_guard.py" not in _scripts_on(data, "PostToolUse")
+    # Re-run must add the missing companions back.
+    S.merge(settings, HOOK_SCRIPT)
+    healed = json.loads(settings.read_text(encoding="utf-8"))
+    assert "access_guard.py" in _scripts_on(healed, "PostToolUse")
+    assert "plan_gate.py" in _scripts_on(healed, "PostToolUse")
+
+
 if __name__ == "__main__":
     import tempfile
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
