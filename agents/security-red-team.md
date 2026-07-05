@@ -66,10 +66,13 @@ For each finding, report:
 **Attack Vector:** How an attacker would exploit this
 **Evidence:** The specific code that is vulnerable
 **Impact:** What happens if exploited
+**Confidence:** CONFIRMED (you traced a real exploit path) | PLAUSIBLE (the caller should verify exploitability)
 ```
 
 Be specific. Cite line numbers. Show the attack path. Do not suggest fixes —
-that is the blue team's job.
+that is the blue team's job. Mark **CONFIRMED** only when you actually traced a
+reachable exploit path; a theoretical concern you couldn't confirm is **PLAUSIBLE**
+— that tells the caller (your orchestrator) which findings to verify before acting.
 
 Rank findings by severity. If you find zero issues, say so — but verify
 you actually checked, do not assume the code is safe.

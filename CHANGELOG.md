@@ -59,7 +59,16 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rules: a sub-agent costs several times the tokens of inline work, so spawn only for
   genuinely parallel, context-heavy, or adversarial work; do small tasks inline; don't
   convene a panel where one skeptic suffices; and match the model tier to task difficulty
-  (tier-1 to plan/judge, a cheaper tier for mechanical legwork). Corpus is now 118 rules.
+  (tier-1 to plan/judge, a cheaper tier for mechanical legwork).
+- **`WF-VET-SUBAGENT-001`** (workflows, warning) — keeps the tier-1 orchestrator in
+  advisor mode: a sub-agent's output is a proposal to verify, not a verdict to obey.
+  Verify each finding against the code, then agree or reject with a reason — never
+  rubber-stamp a confident-sounding report from a cheaper-tier worker. This is what makes
+  "reliability comes from the orchestrator's synthesis" actually hold.
+- **Confidence tags on review agents.** `code-critic`, `security-red-team`, and
+  `security-blue-team` now tag each finding **CONFIRMED** (traced/reproduced) vs
+  **PLAUSIBLE** / **UNVERIFIED** (caller should check), so the orchestrator knows exactly
+  which claims to double-check. Corpus is now 119 rules.
 
 ## [0.7.0] - 2026-07-03
 

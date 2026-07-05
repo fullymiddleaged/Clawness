@@ -105,7 +105,7 @@ dependency**. No ML models, no services, no Docker.
   session-aware re-injection (`bump_prompt_count`, `memory_changed`, `should_show_full`).
 - `hooks/` — runtime hooks (`claude_hook`, `compress_output`, `plan_gate`, `access_guard`,
   `trust_ledger`, `git_check`, `memory_init`, `stack_detect`, `ensure_deps`) + setup helpers (`setup_settings/agents/skills` — manual install only).
-- `rules/<domain>/*.yml` — the corpus (118 rules / 18 domains; `_mandatory/` = always-on).
+- `rules/<domain>/*.yml` — the corpus (119 rules / 18 domains; `_mandatory/` = always-on).
 - `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin.
 - `.claude-plugin/{plugin.json,marketplace.json}` — plugin + marketplace manifests.
 - `tests/ground_truth.json` — labeled eval queries (grow it when adding rule areas).

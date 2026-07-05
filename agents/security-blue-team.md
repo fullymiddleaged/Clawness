@@ -41,6 +41,7 @@ For each red team finding:
 
 **Red Team Severity:** HIGH → **Blue Team Assessment:** MEDIUM
 **Reason for adjustment:** [if any]
+**Validity:** CONFIRMED (a real, reachable issue) | FALSE-POSITIVE (with reason) | UNVERIFIED (caller should check)
 
 ### Fix
 [Exact code change with before/after]
