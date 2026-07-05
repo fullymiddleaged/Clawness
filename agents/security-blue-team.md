@@ -4,7 +4,7 @@ description: >
   Use after the red team has reported findings. Proposes concrete fixes,
   hardening measures, and defense-in-depth strategies. Reviews red team
   findings for false positives and prioritizes remediation by risk.
-model: claude-sonnet-4-6
+model: sonnet
 effort: high
 maxTurns: 25
 tools: Read, Grep, Glob, Bash, WebSearch, WebFetch

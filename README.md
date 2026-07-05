@@ -2,7 +2,7 @@
 
 **Install once. Works everywhere. Your AI coding agent gets the right rules for every task — automatically.**
 
-Clawness is a Claude Code plugin that puts the right coding rules in context on every prompt, automatically. It ships 117 coding rules across 18 domains, 7 adversarial review sub-agents, output compression, a default-on plan-approval gate, and session security hardening (access guard + trust ledger) — all in under 1 MB with zero infrastructure. You install it once, and it silently injects the relevant rules into every Claude Code session across every project on your machine.
+Clawness is a Claude Code plugin that puts the right coding rules in context on every prompt, automatically. It ships 118 coding rules across 18 domains, 7 adversarial review sub-agents, output compression, a default-on plan-approval gate, and session security hardening (access guard + trust ledger) — all in under 1 MB with zero infrastructure. You install it once, and it silently injects the relevant rules into every Claude Code session across every project on your machine.
 
 Inspired by [infinri/Writ](https://github.com/infinri/Writ), rebuilt from ~2GB of infrastructure to pure Python.
 
@@ -43,13 +43,13 @@ None of that is built in. Vanilla Claude Code forgets your conventions between t
 
 Take coding rules — *"parameterized SQL only," "async I/O end-to-end," "API responses use the envelope format."* Without Clawness you either dump them all into CLAUDE.md (wastes tokens, dilutes attention every turn) or mention them by hand (you forget, Claude forgets). With Clawness:
 
-- **The right rules, every prompt** — 117 rules in YAML; a hook injects only the ones relevant to your task, plus an always-on mandatory set (security, testing). Nothing to remember, no context bloat.
+- **The right rules, every prompt** — 118 rules in YAML; a hook injects only the ones relevant to your task, plus an always-on mandatory set (security, testing). Nothing to remember, no context bloat.
 - **A plan-first gate** — file edits wait until you approve a plan (it rides native plan mode), so the agent can't quietly rewrite half your repo.
 - **Session security** — an access guard that forces a confirmation on likely-exfiltration or destructive tool calls *even when the tool is allow-listed* (beating approval fatigue), plus a trust ledger that flags a skill/agent/MCP server that changed since last session.
 - **Cleaner context** — long bash output is compressed to the lines that matter, and a per-project memory file recalls hard-won lessons every session.
 - **Adversarial review on tap** — security red/blue team, code critic, architecture challenger, and more, one ask away.
 
-**Make them *your* standards.** The 117 built-in rules are a starting point. Add your own in seconds — run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/` and your whole team shares the same rules. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
+**Make them *your* standards.** The 118 built-in rules are a starting point. Add your own in seconds — run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/` and your whole team shares the same rules. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
 
 > **Tripwire, not a sandbox.** The guard is heuristics over the agent's own tool calls — it catches honest mistakes, copy-pasted `curl … | sh`, out-of-project secret reads, and data sent to hosts absent from your codebase, and breaks approval-fatigue autopilot. A determined adversary can still obfuscate around it; the real boundary is a container + egress allowlist. It stays out of normal work — reading your own `.env`, plain API GETs, and local traffic aren't prompted (a data-bearing or token-authenticated call to an external host asks once per host). Disable with `CLAW_NO_ACCESS_GUARD=1`.
 
@@ -564,7 +564,7 @@ clawness --rules-dir /path/to/rules stats
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Rules** | 117 across 18 domains | Coding standards, injected per-prompt |
+| **Rules** | 118 across 18 domains | Coding standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 6 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status` |
 | **Hooks** | 7 (rule injection, output compression, plan gate, access guard, trust ledger, git check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |

@@ -4,7 +4,7 @@ description: >
   Analyzes code for performance issues. Focuses on N+1 queries,
   unnecessary re-renders, memory leaks, bundle size, and slow
   algorithms. Use before deployment or when something feels slow.
-model: claude-sonnet-4-6
+model: sonnet
 effort: medium
 maxTurns: 15
 tools: Read, Grep, Glob, Bash, WebSearch

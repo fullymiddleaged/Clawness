@@ -5,7 +5,7 @@ description: >
   attacker. Searches for current CVEs and OWASP Top 10 issues relevant
   to the tech stack. Invoke for security audits, pre-deployment reviews,
   or when touching auth, payments, or user data.
-model: claude-sonnet-4-6
+model: sonnet
 effort: high
 maxTurns: 25
 tools: Read, Grep, Glob, Bash, WebSearch, WebFetch

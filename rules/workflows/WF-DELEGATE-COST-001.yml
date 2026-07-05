@@ -1,0 +1,18 @@
+id: WF-DELEGATE-COST-001
+domain: workflows
+severity: warning
+tags: [sub-agent, delegate, spawn, orchestrate, token, cost, budget, model, tier, parallel, efficiency, frugal]
+triggers: [sub-agent, subagent, delegate, spawn, orchestrate, parallel agents, fan out, which model, model tier, too many agents, waste tokens]
+when: About to spawn a sub-agent, fan out parallel agents, or choose a model for delegated work.
+rule: >
+  A sub-agent costs several times the tokens of doing the work inline — it gets a
+  fresh context, re-reads files, and its output is re-summarized back. Spawn one ONLY
+  when the work is genuinely parallel over independent pieces, needs isolated context,
+  or needs an independent adversarial check. For a small, single-file, or quick-lookup
+  task, do it inline. Don't fan out where the pieces aren't independent, and don't
+  convene a panel where one skeptic suffices. Match model tier to task difficulty, not
+  to role: keep planning, orchestration, and final judgment on the session's tier-1
+  model — it vets what workers return — and delegate mechanical, well-scoped work
+  (code and test generation, pattern scans) to a cheaper tier.
+violation: "Spawning five sub-agents to review a ten-line diff, or fanning out work that isn't independent"
+correct: "Do the small task inline; delegate only independent, context-heavy, or adversarial work — a cheaper tier for the legwork, tier-1 to orchestrate and judge"

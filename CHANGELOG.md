@@ -47,6 +47,20 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - **`pwsh -enc`** (PowerShell 7) added to the encoded-command download-cradle check
     (was `powershell`-only).
 
+### Fixed
+- **Sub-agents were pinned to a stale model id** (`claude-sonnet-4-6`), which silently
+  falls back to the session model when it's not in the org allowlist. All 7 agents now
+  use the stable **`sonnet`** alias — future-proof (tracks the current Sonnet) and the
+  form Claude Code recommends for distributed plugins. The tier-1 main session stays the
+  orchestrator/planner and re-vets what the Sonnet workers return.
+
+### Added
+- **`WF-DELEGATE-COST-001`** (workflows, warning) — a counterweight to the delegation
+  rules: a sub-agent costs several times the tokens of inline work, so spawn only for
+  genuinely parallel, context-heavy, or adversarial work; do small tasks inline; don't
+  convene a panel where one skeptic suffices; and match the model tier to task difficulty
+  (tier-1 to plan/judge, a cheaper tier for mechanical legwork). Corpus is now 118 rules.
+
 ## [0.7.0] - 2026-07-03
 
 ### Added
