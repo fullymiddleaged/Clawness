@@ -5,12 +5,16 @@ tags: [dependencies, libraries, packages, maintenance, supply-chain, minimize]
 triggers: [dependency, package, library, install, npm, pip, import, third-party, maintained, choose]
 when: Adding a third-party dependency or choosing between competing libraries.
 rule: >
-  Prefer well-supported libraries and add them sparingly. Judge health by
-  recent commit activity, issue/PR responsiveness, maintainer backing,
-  documentation, test coverage, license, and number of transitive
-  dependencies — GitHub stars are a useful popularity signal but not proof
-  on their own (publicity and age inflate them). Don't pull in a package
-  for something you can write in a few lines, and remove dependencies that
-  are unmaintained or have known vulnerabilities.
-violation: "npm install left-pad   // a one-line utility taken on as a dependency"
-correct: "Check activity, open issues, license, and transitive deps; add a maintained lib only when it earns its weight"
+  Prefer well-supported libraries and add them sparingly. Before installing OR
+  recommending one, actually verify it — don't trust your training-cutoff memory of
+  "the latest version." Look up the current version and its release date (`npm view
+  <pkg> version time`, `pip index versions`, or deps.dev), whether it's deprecated,
+  and its adoption; scan for CVEs (`npm audit` / `pip-audit` / osv.dev). FLAG for the
+  user's approval rather than silently adding anything stale (no release in ~1-2
+  years, or pinning an old major), deprecated, niche/low-adoption, or vulnerable.
+  Judge health by recent commit activity, issue/PR responsiveness, maintainer
+  backing, docs, tests, license, and transitive-dependency count — GitHub stars
+  inflate with publicity and age, so they're a signal, not proof. Don't pull in a
+  package for something you can write in a few lines.
+violation: "pip install somepkg==1.2.0 pinned from memory — the current release is 4.x and 1.2 is unmaintained"
+correct: "Look up current version + release date (pip index versions / deps.dev) and CVEs; flag for approval if stale/niche/deprecated, else pin to a current, maintained version"

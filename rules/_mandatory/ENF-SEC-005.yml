@@ -5,7 +5,10 @@ tags: [dependencies, supply-chain, npm, vulnerabilities, audit, packages]
 triggers: [npm install, npm add, pnpm add, yarn add, package, dependency]
 when: Adding any new dependency to a project.
 rule: >
-  Before adding a dependency, check its maintenance status and known
-  vulnerabilities. Never install a package with a known critical CVE.
-violation: "npm install random-unmaintained-package without checking it"
-correct: "Verify package health on npm, check GitHub issues, then add with pinned version"
+  Before adding a dependency, verify it's actively maintained (a recent release,
+  not deprecated) and free of known vulnerabilities — never install one with a known
+  critical CVE. Don't pin a version from memory: look up the current one, since
+  training data lags real releases. Flag anything stale, niche, or deprecated for
+  the user rather than adding it silently.
+violation: "npm install random-unmaintained-package, or pinning a version recalled from memory"
+correct: "Look up the current version + maintenance (npm/deps.dev), check CVEs, then add pinned to the looked-up version"

@@ -72,6 +72,17 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **PLAUSIBLE** / **UNVERIFIED** (caller should check), so the orchestrator knows exactly
   which claims to double-check. Corpus is now 119 rules.
 
+### Changed
+- **Dependency rules now prescribe a concrete currency check, not just "check maintenance
+  status."** `GEN-DEPS-001` and the always-on `ENF-SEC-005` now tell the model to look up
+  the **current version and release date** (`npm view <pkg> version time`, `pip index
+  versions`, deps.dev) and scan CVEs (`npm audit` / `pip-audit` / osv.dev) instead of
+  pinning a version from its training-cutoff memory — the root cause of "ancient version
+  installed" — and to **flag anything stale (no release in ~1–2 years), deprecated,
+  niche/low-adoption, or vulnerable for the user's approval** rather than adding it
+  silently. (The access guard already `ASK`s on every named install; this makes the
+  health judgment behind that prompt real instead of assumed.)
+
 ## [0.7.0] - 2026-07-03
 
 ### Added
