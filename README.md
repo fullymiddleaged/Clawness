@@ -105,7 +105,7 @@ Pure Python, one dependency (PyYAML) — no ML models, no embeddings, no service
 
 **Measured quality** — run `clawness eval`: on a 57-query labeled set, **MRR@5 = 0.982** and **hit-rate = 1.000** (every query surfaces its expected rule, usually at rank 1). CI enforces floors on these so retrieval can't silently regress as rules are added.
 
-**Cost** — **~1 ms per prompt**; ~450 tokens of always-on mandatory rules plus the few selected ranked rules. Run `clawness stats` for your exact per-turn estimate.
+**Cost** — **~1 ms per prompt**; ~510 tokens of always-on mandatory rules (rendered in full periodically; abbreviated to a one-line id list on most turns via session-aware re-injection) plus the few selected ranked rules. Run `clawness stats` for your exact per-turn estimate.
 
 ---
 
