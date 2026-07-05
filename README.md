@@ -47,7 +47,7 @@ Take coding rules — *"parameterized SQL only," "async I/O end-to-end," "API re
 - **A plan-first gate** — file edits wait until you approve a plan (it rides native plan mode), so the agent can't quietly rewrite half your repo.
 - **Session security** — an access guard that forces a confirmation on likely-exfiltration or destructive tool calls *even when the tool is allow-listed* (beating approval fatigue), plus a trust ledger that flags a skill/agent/MCP server that changed since last session.
 - **Cleaner context** — long bash output is compressed to the lines that matter, and a per-project memory file recalls hard-won lessons every session.
-- **Adversarial review on tap** — security red/blue team, code critic, architecture challenger, and more, one ask away. They run on a cheaper model tier and return findings tagged CONFIRMED/PLAUSIBLE; your main session verifies each against the code before acting, so a review is vetted, not rubber-stamped.
+- **Adversarial review on tap** — security red/blue team, code critic, architecture challenger, and more, one ask away. They run on a cheaper model tier and return findings tagged CONFIRMED/PLAUSIBLE; your main session spot-checks the high-stakes ones against the cited lines (or a quick repro) before acting — vetted, not rubber-stamped, and without re-reading everything the agent read.
 
 **Make them *your* standards.** The 119 built-in rules are a starting point. Add your own in seconds — run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/` and your whole team shares the same rules. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
 

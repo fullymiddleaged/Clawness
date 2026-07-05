@@ -62,9 +62,11 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (tier-1 to plan/judge, a cheaper tier for mechanical legwork).
 - **`WF-VET-SUBAGENT-001`** (workflows, warning) — keeps the tier-1 orchestrator in
   advisor mode: a sub-agent's output is a proposal to verify, not a verdict to obey.
-  Verify each finding against the code, then agree or reject with a reason — never
+  Verify each finding **cheaply** — the cited `file:line` slice or a quick repro, not a
+  re-read of what the worker already read (which would double the token cost and defeat
+  the delegation) — scaled to stakes, then agree or reject with a reason. Never
   rubber-stamp a confident-sounding report from a cheaper-tier worker. This is what makes
-  "reliability comes from the orchestrator's synthesis" actually hold.
+  "reliability comes from the orchestrator's synthesis" hold without paying for it twice.
 - **Confidence tags on review agents.** `code-critic`, `security-red-team`, and
   `security-blue-team` now tag each finding **CONFIRMED** (traced/reproduced) vs
   **PLAUSIBLE** / **UNVERIFIED** (caller should check), so the orchestrator knows exactly

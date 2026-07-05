@@ -5,13 +5,15 @@ tags: [sub-agent, vet, verify, findings, review, proposal, trust, rubber-stamp, 
 triggers: [findings, the critic said, review results, subagent reported, agent output, should i trust, verify the finding, applies the findings, sub-agent recommends]
 when: A sub-agent has returned findings, a review, or recommendations you are about to act on.
 rule: >
-  A sub-agent's output is a proposal to verify, not a verdict to obey. Before you
-  act on a finding, confirm its specific claim against the actual code or behavior —
-  open the file, trace the path, or reproduce it — then explicitly agree, or reject
-  it with a reason. Never rubber-stamp a confident-sounding report, and never act on
-  a finding you could not verify. A cheaper-tier worker can be confidently wrong, so
-  the value of delegating comes from YOUR scrutiny of what it returns, not from the
-  report's polish. Prefer findings that carry checkable evidence (file:line, a repro,
-  a stated confidence); treat unverifiable ones as leads, not conclusions.
-violation: "Applying a critic's or security agent's findings wholesale because they look authoritative"
-correct: "Verify each finding against the code, keep the confirmed ones, reject the rest with reasoning"
+  A sub-agent's output is a proposal to verify, not a verdict to obey — but verify
+  CHEAPLY, don't re-read what it read (that doubles the token cost and defeats the
+  point of delegating). Use the finding's file:line to check only the cited slice,
+  or better, confirm by EXECUTION — run the test or a small repro, which is ground
+  truth at near-zero context cost. Scale scrutiny to stakes: really check the
+  PLAUSIBLE and high-severity or irreversible findings; take CONFIRMED low-risk ones
+  on light inspection. For a large batch, delegate the verification to a cheap
+  verifier that returns verdicts, not file contents. Then agree or reject each with a
+  reason — never rubber-stamp a confident report, never act on a finding you could
+  not confirm, and never re-ingest the worker's whole context to do it.
+violation: "Re-reading the entire file or subsystem the sub-agent already read, just to check its findings"
+correct: "Read only the cited lines or run a quick repro; scrutinize the high-stakes/PLAUSIBLE findings, accept low-risk CONFIRMED ones"
