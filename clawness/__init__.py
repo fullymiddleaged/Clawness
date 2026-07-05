@@ -3,4 +3,4 @@
 from .core import Clawness, Rule, load_rules
 
 __all__ = ["Clawness", "Rule", "load_rules"]
-__version__ = "0.7.1"
+__version__ = "1.0.0"

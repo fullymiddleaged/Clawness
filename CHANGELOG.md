@@ -5,7 +5,13 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.1] - 2026-07-04
+## [1.0.0] - 2026-07-05
+
+First stable release. Everything below is the work since 0.7.0 (the guard/exfil
+hardening, agent model tiering, delegation-discipline rules, and dependency-currency
+checks), verified against the shipped plugin: 119 rules / 18 domains, retrieval
+MRR@5 0.982 / hit-rate 1.000 (57-query set), 221 tests, and 20/20 access-guard
+behaviors confirmed through the live hook.
 
 ### Security
 - **Cloud-storage uploads no longer trust a bucket named in your source.** 0.7.0
@@ -113,7 +119,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Cloud-storage uploads (`aws s3 cp/sync/mv`, `gsutil`, `az storage blob upload`)
     are provenance-tiered: a bucket the repo already references (IaC/config) is the
     routine deploy path and stays silent; an unrecognized bucket asks once per bucket.
-    Downloads (cloud → local) are never flagged. *(Hardened in 0.7.1 — see below.)*
+    Downloads (cloud → local) are never flagged. *(Hardened in 1.0.0 — see above.)*
 - **Trust ledger**: zero-width/Unicode-tag steganography detection (a leading
   skill-injection hiding channel, previously unscanned), concealment phrasing
   ("don't tell the user", "secretly"), webhook/paste-bin exfil hosts, and
