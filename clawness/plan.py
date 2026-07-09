@@ -1,21 +1,34 @@
 """
 Plan gate ("process keeper").
 
-A process keeper: this blocks file edits until a plan
-has been approved — but it rides Claude Code's NATIVE plan mode instead of
-inventing a parallel command flow. The normal path requires zero clawness-specific
-commands: present a plan, the user approves it (ExitPlanMode), and the gate
-clears itself for the rest of that session.
+A gentle process keeper: before the first file edit of a session it PROMPTS
+("proceed without a plan?") instead of hard-blocking — it rides Claude Code's
+NATIVE plan mode and never invents a parallel command flow. The normal path
+requires zero clawness-specific commands:
+
+  - Plan-mode users: present a plan, the user approves it (ExitPlanMode), and the
+    gate clears itself for the rest of the session — no prompt is ever shown.
+  - Everyone else: the first edit surfaces a native approve dialog. Approving it
+    (one click, a working Yes button — never a dead-end command) both lets the
+    edit through AND clears the gate for the rest of the session, so the prompt
+    appears at most once per session, not per edit.
 
   - ON by default. Disable per-project with `clawness plan off`, or globally
     with the CLAW_NO_PLAN_GATE environment variable.
-  - Approval is recorded automatically when the user approves a plan in plan
-    mode. `clawness plan approve` is only a fallback for non-plan-mode or
-    headless use.
+  - Approval is recorded automatically on native plan approval (ExitPlanMode) OR
+    on the first edit the user approves. `clawness plan approve` remains a
+    headless/CLI fallback; it is never the required path.
   - Approval is per-session (each new session re-plans), keyed by Claude Code's
     session_id.
   - Fails OPEN: any unexpected error defers to the normal permission flow rather
     than blocking work.
+
+Design note: this used to emit a hard ``deny``, which on the VS Code build has no
+in-Claude override — a session with no recorded ExitPlanMode approval (e.g. the
+user rejected it) got stranded, and the deny text pointed at ``clawness plan
+approve``, a CLI the plugin install path does not put on PATH. An ``ask`` has a
+working approve button, so the gate can never trap the user; that is why the
+decision is ``ask``, not ``deny``.
 
 State lives in <project>/.clawness/:
   - config.json   : { plan_gate: { enabled } }
@@ -219,12 +232,15 @@ def manually_approved(root: Path) -> bool:
 
 # --- the gate decision ----------------------------------------------------
 
-DENY_REASON = (
-    "Clawness plan gate: present an implementation plan and have the user approve it "
-    "before editing files. Use plan mode — the gate clears automatically once the "
-    "plan is approved, no commands needed. (Fallback: the user can run "
-    "`clawness plan approve`; disable with `clawness plan off`.)"
+ASK_REASON = (
+    "Clawness plan gate: no plan has been approved for this session yet. Approve "
+    "this edit to proceed without a plan, or switch to plan mode (Shift+Tab) to plan "
+    "first — either one clears the gate for the rest of the session, so you won't be "
+    "asked again. (Opt out: `clawness plan off`, or CLAW_NO_PLAN_GATE=1.)"
 )
+
+# Back-compat alias: earlier versions exported DENY_REASON.
+DENY_REASON = ASK_REASON
 
 
 def gate_decision(
@@ -233,8 +249,10 @@ def gate_decision(
     session_id: str = "",
     target_path: "str | Path | None" = None,
 ) -> tuple[bool, str]:
-    """Return (block, reason). block=True means deny the tool call.
-    Fails open: any unexpected condition returns (False, "")."""
+    """Return (prompt, reason). prompt=True means the tool call should surface an
+    approve dialog (permissionDecision="ask"), NOT a hard block — an unapproved
+    session is nudged, never trapped. Fails open: any unexpected condition
+    returns (False, "")."""
     try:
         if not gate_enabled(root):
             return (False, "")
@@ -246,6 +264,6 @@ def gate_decision(
             return (False, "")
         if session_approved(root, session_id) or manually_approved(root):
             return (False, "")
-        return (True, DENY_REASON)
+        return (True, ASK_REASON)
     except Exception:
         return (False, "")

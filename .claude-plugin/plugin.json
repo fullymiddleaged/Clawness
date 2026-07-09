@@ -1,7 +1,7 @@
 {
   "name": "clawness",
-  "version": "1.0.0",
-  "description": "A Claude Code plugin that puts the right coding rules in context on every prompt, automatically. 119 rules across 18 domains, per-prompt rule injection (BM25 + TF-IDF + RRF + concept expansion, pure Python), a per-codebase lessons-learned memory injected every turn, Bash-output compression, adversarial review sub-agents, slash commands, a default-on (opt-out) plan-approval gate, and session security hardening (an access guard that forces a prompt on likely exfiltration/destructive tool calls, and a trust ledger that flags changed skills/agents). No Docker, no services, no ML models. Requires Python 3.10+ on PATH; on first session a background hook installs PyYAML (the only dependency) into your environment.",
+  "version": "1.1.0",
+  "description": "A Claude Code plugin that puts the right coding rules in context on every prompt, automatically. 120 rules across 18 domains, per-prompt rule injection (BM25 + TF-IDF + RRF + concept expansion, pure Python), a per-codebase lessons-learned memory injected every turn, Bash-output compression, adversarial review sub-agents, slash commands, a default-on (opt-out) plan-approval gate, and session security hardening (an access guard that forces a prompt on likely exfiltration/destructive tool calls, and a trust ledger that flags changed skills/agents). No Docker, no services, no ML models. Requires Python 3.10+ on PATH; on first session a background hook installs PyYAML (the only dependency) into your environment.",
   "author": {
     "name": "fullymiddleaged"
   },
@@ -91,7 +91,7 @@
         ]
       },
       {
-        "matcher": "ExitPlanMode",
+        "matcher": "ExitPlanMode|Write|Edit|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",

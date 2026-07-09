@@ -135,6 +135,68 @@ def test_hook_fails_open_on_malformed_payloads():
         assert "Traceback" not in r.stderr, payload
 
 
+def _run_hook(payload):
+    """Drive the real plan_gate hook process; return (returncode, parsed stdout|None)."""
+    import json as _json
+    import subprocess
+    hook = Path(__file__).resolve().parent.parent / "hooks" / "plan_gate.py"
+    r = subprocess.run([sys.executable, str(hook)], input=_json.dumps(payload),
+                       capture_output=True, text=True)
+    out = None
+    if r.stdout.strip():
+        out = _json.loads(r.stdout)
+    return r.returncode, out
+
+
+def test_hook_prompts_with_ask_not_deny():
+    # An unapproved session must PROMPT (permissionDecision="ask"), never hard-deny
+    # — a deny has no in-Claude override on the VS Code build and would strand the
+    # user behind a CLI the plugin doesn't install.
+    root = _fresh_project()
+    rc, out = _run_hook({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "session_id": "sess-ask",
+        "cwd": str(root),
+        "tool_input": {"file_path": str(root / "src" / "app.py")},
+    })
+    assert rc == 0
+    decision = out["hookSpecificOutput"]["permissionDecision"]
+    assert decision == "ask", out
+    assert "plan" in out["hookSpecificOutput"]["permissionDecisionReason"].lower()
+
+
+def test_completed_edit_clears_gate_for_session():
+    # Approving the first edit (a completed write carrying a tool_response) records
+    # session approval, so the gate prompts at most once per session.
+    root = _fresh_project()
+    assert P.gate_decision(root, "Write", "sess-once")[0] is True
+    rc, out = _run_hook({
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Write",
+        "session_id": "sess-once",
+        "cwd": str(root),
+        "tool_input": {"file_path": str(root / "src" / "app.py")},
+        "tool_response": {"filePath": str(root / "src" / "app.py")},
+    })
+    assert rc == 0 and out is None  # PostToolUse emits nothing
+    assert P.gate_decision(root, "Write", "sess-once")[0] is False  # now cleared
+
+
+def test_declined_edit_does_not_clear_gate():
+    # A PostToolUse WITHOUT a tool_response is not execution evidence (a declined
+    # ask), so it must NOT settle the session as approved.
+    root = _fresh_project()
+    _run_hook({
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Write",
+        "session_id": "sess-declined",
+        "cwd": str(root),
+        "tool_input": {"file_path": str(root / "src" / "app.py")},
+    })
+    assert P.gate_decision(root, "Write", "sess-declined")[0] is True  # still gated
+
+
 def test_plan_file_writes_are_never_gated():
     # The plan-mode plan file is written BEFORE approval; gating it is a
     # catch-22. It must always be exempt, even on a fresh (gate-on) project.

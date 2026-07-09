@@ -5,6 +5,33 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-09
+
+Plan-gate friction fix and an always-on lessons-memory reflex — both aimed at the
+same goal: the plugin should stay out of your way. 120 rules / 18 domains; retrieval
+MRR@5 0.982 / hit-rate 1.000 (57-query set); 224 tests.
+
+### Changed
+- **Plan gate now PROMPTS instead of hard-blocking.** `PreToolUse` emits `ask` (a
+  native approve dialog) rather than `deny` when a session has no approved plan. The
+  old `deny` had no in-Claude override on the VS Code build and pointed users at
+  `clawness plan approve` — a CLI the plugin install path doesn't put on PATH — so a
+  session where ExitPlanMode was rejected got **stranded**, with the only escape a
+  hand-rolled `PYTHONPATH=… python -c` invocation. The `ask` has a working Yes button:
+  approve once to proceed, or plan in native plan mode — either clears the gate for the
+  session. It can no longer trap you behind a command.
+- **The gate asks at most once per session.** Approval is now recorded on the first
+  *completed* edit (gated on a `tool_response` as execution evidence, so a declined ask
+  never settles), not only on `ExitPlanMode`. A trivial one-line request no longer
+  triggers a forced plan ceremony — one click and the rest of the session flows.
+
+### Added
+- **`ENF-MEM-001` — always-on lessons-memory reflex.** A new mandatory (every-turn)
+  rule tells Claude to maintain `.clawness/memory.md` itself — recording a terse,
+  deduplicated bullet on the second occurrence of a correction/gotcha or when asked —
+  instead of relying on the retrieved `WF-LESSONS-001`, which only surfaces when the
+  prompt already contains trigger words. Short, specific entries; it injects every turn.
+
 ## [1.0.0] - 2026-07-05
 
 First stable release. Everything below is the work since 0.7.0 (the guard/exfil

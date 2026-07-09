@@ -105,7 +105,7 @@ dependency**. No ML models, no services, no Docker.
   session-aware re-injection (`bump_prompt_count`, `memory_changed`, `should_show_full`).
 - `hooks/` — runtime hooks (`claude_hook`, `compress_output`, `plan_gate`, `access_guard`,
   `trust_ledger`, `git_check`, `memory_init`, `stack_detect`, `ensure_deps`) + setup helpers (`setup_settings/agents/skills` — manual install only).
-- `rules/<domain>/*.yml` — the corpus (119 rules / 18 domains; `_mandatory/` = always-on).
+- `rules/<domain>/*.yml` — the corpus (120 rules / 18 domains; `_mandatory/` = always-on).
 - `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin.
 - `.claude-plugin/{plugin.json,marketplace.json}` — plugin + marketplace manifests.
 - `tests/ground_truth.json` — labeled eval queries (grow it when adding rule areas).
@@ -119,8 +119,15 @@ dependency**. No ML models, no services, no Docker.
 - **Hook commands use a portable interpreter picker** `for p in python3 python py; …`
   (Windows has no `python3`; Claude runs hooks via a POSIX shell). Same picker in
   `plugin.json` and what `setup_settings.py` writes.
-- **Plan gate rides native plan mode.** `PreToolUse` denies edits until ExitPlanMode
-  is recorded for the session. **Plan-file writes (`<config>/plans/`) are exempt**
+- **Plan gate rides native plan mode, and PROMPTS — never hard-blocks.** `PreToolUse`
+  emits `ask` (not `deny`) for edits until approval is recorded for the session, so an
+  unapproved session is nudged with a native approve dialog, never trapped. Approval is
+  recorded on `PostToolUse` for ExitPlanMode (native plan approval) OR for the first
+  completed write (the user approved the ask — gated on a `tool_response` so a declined
+  ask never settles), so the prompt fires at most once per session. It used to `deny`,
+  which on the VS Code build has no in-Claude override and pointed users at `clawness plan
+  approve` — a CLI the plugin path doesn't install, stranding them; `ask` has a working
+  Yes button, so that trap is gone. **Plan-file writes (`<config>/plans/`) are exempt**
   (`is_plan_file`) — gating them is a catch-22. Fails open on any error.
 - **Token efficiency:** mandatory rules render compact (id+RULE only); `CLAW_VERBOSE`
   / `CLAW_COMPACT` toggle. Keep the per-turn block lean.

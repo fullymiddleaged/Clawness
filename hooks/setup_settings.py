@@ -216,9 +216,11 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
             })
             added_any = True
         if not hook_already_present(post_events, plan_script):
-            # PostToolUse: record native plan-mode approval (ExitPlanMode).
+            # PostToolUse: record approval on native plan approval (ExitPlanMode)
+            # OR on the first edit the user approves, so the gate prompts at most
+            # once per session instead of on every edit.
             post_events.append({
-                "matcher": "ExitPlanMode",
+                "matcher": "ExitPlanMode|Write|Edit|MultiEdit|NotebookEdit",
                 "hooks": [build_hook_entry(plan_script, timeout=10)],
             })
             added_any = True

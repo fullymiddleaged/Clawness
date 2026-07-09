@@ -1,0 +1,15 @@
+id: ENF-MEM-001
+domain: workflows
+severity: info
+tags: [memory, lessons, gotcha, correction, retrospective, journal]
+triggers: [remember, lesson, again, every time, same mistake, gotcha, note for next time]
+when: Any session — a correction repeats, a gotcha costs real time, or the user says to remember something.
+rule: >
+  Maintain .clawness/memory.md yourself; don't wait to be asked. Append one terse
+  bullet (newest last) the moment a correction repeats, a non-obvious fix costs
+  real time to rediscover, or the user says "remember this" — naming the trap and
+  the fix in a single line, no preamble. Read the existing bullets before redoing
+  work in that area and prune any that no longer hold. This file injects every
+  turn, so keep it short, specific, and deduplicated.
+violation: "Re-explaining the same build flag each session because you waited for the user to say 'save it'"
+correct: "After it bites once, appending '- eval fails unless CLAW_NO_PLAN_GATE is unset — the gate tests assert it is on'"
