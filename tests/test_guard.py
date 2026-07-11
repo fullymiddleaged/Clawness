@@ -529,6 +529,25 @@ def test_egress_dedup_key_is_per_host_not_per_payload():
     assert G.dedup_key("Bash", {"command": "npm install left-pad"}) == "npm install left-pad"
 
 
+def test_write_dedup_key_is_per_directory_not_per_file():
+    # An out-of-project write asks once per DIRECTORY: two files in the same dir
+    # share a key (approve once), a different dir is a fresh key, and a security
+    # control file stays keyed per-file so blessing a dir can't cover a sibling.
+    d = Path.home() / "clawness_memkeytest"
+    ka = G.dedup_key("Write", {"file_path": str(d / "a.md")})
+    kb = G.dedup_key("Write", {"file_path": str(d / "b.md")})
+    kc = G.dedup_key("Write", {"file_path": str(d / "sub" / "c.md")})
+    assert ka == kb and ka.startswith("dir:")
+    assert ka != kc
+    # NotebookEdit uses notebook_path, same directory-level keying.
+    kn = G.dedup_key("NotebookEdit", {"notebook_path": str(d / "n.ipynb")})
+    assert kn == ka
+    # A security-control file keys on the full path, not its directory.
+    ctrl = Path.home() / ".claude" / "settings.json"
+    kctrl = G.dedup_key("Write", {"file_path": str(ctrl)})
+    assert not kctrl.startswith("dir:") and "settings.json" in kctrl
+
+
 def test_get_exfil_with_substitution():
     # GET that pipes shell substitution to an unknown host → ask (suspicious shape).
     root = _project()

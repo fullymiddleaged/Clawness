@@ -5,6 +5,22 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-07-11
+
+Access-guard friction fix — same goal as 1.1.0: the plugin should stay out of your
+way. 120 rules / 18 domains; 225 tests.
+
+### Changed
+- **An out-of-project write now asks once per DIRECTORY, not once per file.** The
+  access guard deduped its scope-boundary ask (`writing OUTSIDE the project`) on the
+  full file path, so writing several files into one blessed location — e.g. the
+  `~/.claude` lessons-memory dir — prompted once *per file*. Approving a directory
+  once now covers sibling writes there for the session, which is the "allow this
+  session" users reasonably expect. Egress asks stay keyed per host/bucket and
+  security-**control** files (settings, hook scripts, ledgers) stay keyed per-file,
+  so blessing a directory can never silently cover a kill switch or a data-exfil
+  destination.
+
 ## [1.1.0] - 2026-07-09
 
 Plan-gate friction fix and an always-on lessons-memory reflex — both aimed at the
