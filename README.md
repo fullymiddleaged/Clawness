@@ -2,7 +2,16 @@
 
 **Install once. Works everywhere. Your AI coding agent gets the right rules for every task — automatically.**
 
-Clawness is a Claude Code plugin that puts the right coding rules in context on every prompt, automatically. It ships 120 coding rules across 18 domains, 7 adversarial review sub-agents, output compression, a default-on plan-approval gate, session security hardening (access guard + trust ledger), and session continuity — a per-project lessons memory, a warning when your context window is filling up, and a handoff the next session picks up on its own — all in under 1 MB with zero infrastructure. You install it once, and it silently injects the relevant rules into every Claude Code session across every project on your machine.
+Clawness is a Claude Code plugin that puts the right coding rules in context on every prompt, automatically. What's in the box:
+
+- **120 coding rules** across 18 domains — only the ones matching your task are injected
+- **7 adversarial review sub-agents** — security red/blue team, code critic, architecture challenger
+- **A plan-approval gate** before the first edit of a session, on by default
+- **Session security** — an access guard on dangerous tool calls, plus a trust ledger for skills, agents and MCP servers
+- **Session continuity** — a per-project lessons memory, a warning when your context window is filling up, and a handoff the next session picks up on its own
+- **Token-frugal by design** — the whole corpus in CLAUDE.md would cost ~16,600 tokens *every turn*; Clawness injects ~630 fixed plus only what matches, re-states the always-on block in full on just 1 prompt in 5, and compresses long command output
+
+Install it once and it works across every project on your machine. Under 1 MB, no services, no models, ~1 ms per prompt.
 
 Inspired by [infinri/Writ](https://github.com/infinri/Writ), rebuilt from ~2GB of infrastructure to pure Python.
 

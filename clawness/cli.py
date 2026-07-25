@@ -20,7 +20,7 @@ import sys
 import time
 from pathlib import Path
 
-from .core import Clawness, load_rules
+from .core import Clawness, _estimate_tokens, load_rules
 
 
 def _default_rules_dir() -> Path:
@@ -70,8 +70,26 @@ def cmd_stats(args: argparse.Namespace) -> None:
     print(f"Total           : {s['total_rules']}")
     print(f"Retrieval       : BM25 + TF-IDF + RRF + concept expansion (lexical, ~1ms)")
     ranked_room = max(0, s["context_budget"] - s["mandatory_tokens"])
+    # What the mandatory block costs on the turns it's abbreviated to an id list
+    # (see session_state / CLAW_FULL_EVERY) — computed, not assumed, so it stays
+    # honest as rules are added.
+    abbreviated = _estimate_tokens(
+        "MANDATORY (in context above, still binding): "
+        + ", ".join(r.id for r in wl._mandatory_rules)
+    )
+    try:
+        full_every = int(os.environ.get("CLAW_FULL_EVERY", "5"))
+    except ValueError:
+        full_every = 5
+    # CLAW_FULL_EVERY<=1 disables abbreviation entirely (see session_state), so
+    # "1 prompt in 1" would be a confusing way to say "every turn".
+    if full_every <= 1:
+        cadence = "every turn"
+    else:
+        cadence = (f"full on 1 prompt in {full_every}, "
+                   f"~{abbreviated} as an id list in between")
     print(
-        f"Tokens / turn   : ~{s['mandatory_tokens']} fixed (mandatory, every turn) "
+        f"Tokens / turn   : ~{s['mandatory_tokens']} mandatory ({cadence}) "
         f"+ up to ~{ranked_room} ranked (top-{s['top_k']}, budget {s['context_budget']})"
     )
 
