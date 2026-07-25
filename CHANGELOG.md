@@ -5,6 +5,112 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-07-26
+
+Session continuity. A session now knows how full it is, says so before quality
+degrades, and can hand off to the next one — which picks the note up on its own.
+120 rules / 18 domains; 314 tests.
+
+The theme is the same in all three parts: the plugin should spend context on what's
+relevant to *this* prompt, and it should tell you when the session itself has become
+the problem.
+
+### Added
+
+- **Retrieval-ranked project memory** (`clawness/memory.py`). `.clawness/memory.md`
+  now splits into an `## Always` section (pinned, always injected) and `## Lessons`
+  (ranked against your prompt, top 3 injected). A 200-entry log costs the same flat
+  handful of lines as a 5-entry one. Uses the same BM25 + TF-IDF + RRF primitives as
+  the rules, in a separate pass — lessons never displace rules from `top_k`, and
+  `rank_ids` stays rule-only so the CI eval floors are immune to what users write in
+  their memory files.
+- **Context-pressure watch** (`clawness/context_watch.py`). Reads the session's own
+  transcript each prompt and surfaces a note when the window is filling:
+  - **~70%** — brief mention that a fresh session may be worth it soon, then carries
+    on with the request.
+  - **~85%** — recommends starting fresh, and offers to write a handoff first.
+  - **Surge** — a single turn adding ≥12% of the window with ≤5 turns of headroom
+    left, so a fast-filling session is flagged while there's still room to act.
+
+  Each level fires at most once per session; escalation (warn → urgent) still gets
+  through. Rides the existing UserPromptSubmit hook rather than adding one (~0.5 ms:
+  a bounded file tail plus arithmetic), and fails silent on every path.
+- **Session handoff** (`clawness/handoff.py` + `hooks/handoff_check.py`, SessionStart).
+  A handoff written to `.clawness/handoff.md` is injected when the next session in
+  that project starts, so Claude opens by saying where the last one left off and what
+  comes next — no path to remember, nothing to ask for. Found from the git root, so it
+  works from any subdirectory.
+- **Rule `WF-HANDOFF-001`** — where and how to write a handoff (exact path, archive
+  the previous one first, three sections, under 30 lines, name files and branches
+  explicitly).
+- New settings: `CLAW_MEMORY_TOP_K` (`3`), `CLAW_MEMORY_MIN_RELEVANCE` (`0.20`),
+  `CLAW_MEMORY_PIN_BUDGET` (`400`), `CLAW_MEMORY_MAX_ENTRIES` (`200`),
+  `CLAW_NO_CONTEXT_WATCH`, `CLAW_CONTEXT_LIMIT`, `CLAW_CONTEXT_WARN` (`0.70`),
+  `CLAW_CONTEXT_URGENT` (`0.85`), `CLAW_CONTEXT_SURGE` (`0.12`), `CLAW_NO_HANDOFF`,
+  `CLAW_HANDOFF_BUDGET` (`2000`).
+
+### Changed
+
+- **HTML comments and markdown headings are stripped from memory before injection.**
+  They're written for whoever edits the file; the model can't act on them. Measured, a
+  freshly bootstrapped memory file cost ~107 tokens a turn while containing no
+  lessons at all — it now costs **0**.
+- **Memory no longer rides the mandatory block's cadence.** The block is already
+  prompt-specific and a few lines long, so abbreviating it would lose the match and
+  save nothing; it ships every turn. `memory_changed` now drives `force_recent`
+  instead: the newest entries appear on a session's first prompt and on any turn
+  after the file changed, so a lesson written mid-session is never invisible.
+- `CLAW_MEMORY_BUDGET` default `2000` → `1200` (now just a backstop).
+- **`ENF-MEM-001` absorbed `WF-LESSONS-001`**, which is removed. The two said nearly
+  the same thing and disagreed on when to record ("the moment a correction repeats"
+  vs "on the second occurrence"). The survivor carries a **numeric** contract where
+  both previously said only "terse" and "short": one line, 120 characters max, no
+  paragraphs or code blocks, max 3 pinned entries, merge the weakest past 40 — vague
+  guidance is why entries grew into chunks.
+- `TfIdfIndex.build` accepts a pre-tokenized corpus, so the memory ranker doesn't
+  tokenize the same entries twice (tokenizing dominates its cost). Rules retrieval is
+  unchanged — measured at 0.71 ms/query before and after.
+
+### Fixed
+
+- A malformed `CLAW_MEMORY_BUDGET` killed the prompt hook outright, so the **rules**
+  block never printed either — the one unguarded `int()` in the hook.
+- `memory_changed` was short-circuited away on full-render turns and so never
+  refreshed its stored mtime, causing a spurious extra full render.
+
+### Notes
+
+- **Memory ranking uses its own stopword list.** Across 113 rules IDF flattens
+  "this"/"the"/"needs" by itself; across a 4-40 entry log those words look
+  discriminating enough that "rename **this** variable" matched "BUILDKIT=1 on
+  **this** machine". `CLAW_MEMORY_MIN_RELEVANCE` is correspondingly higher than the
+  rules' floor: measured, genuine hits score 0.44-0.70 against a 0.07-0.09 noise
+  tail, so `0.20` sits in the gap.
+- **The context token count is exact, not estimated**: the transcript's last assistant
+  entry records `input + cache_creation + cache_read`, which is the prompt that was
+  just sent. Only the final 256 KB of the file is read — a 6 MB transcript costs
+  ~0.7 ms.
+- **The context window size is the part that has to be inferred.** A 1M-context
+  session records the same `claude-opus-5` model id as a 200k one, so there is nothing
+  in the transcript to read it off. Order of confidence: `CLAW_CONTEXT_LIMIT` → the
+  `[1m]` marker on `model` in `settings(.local).json` → step up a tier when observed
+  usage exceeds the assumed window. The settings check is load-bearing: without it a
+  1M session false-alarms all the way through 140k–200k, which is how a useful warning
+  becomes noise users learn to ignore.
+- **A handoff's existence is its state.** A file at `.clawness/handoff.md` hasn't been
+  picked up — there's no age cutoff or done-flag deciding whether it's still live,
+  because an old handoff nobody archived is still an outstanding handoff. Writing a new
+  one moves the old to `.clawness/handoffs/done/<timestamp>.md`; so does the user
+  saying the work is finished. Nothing is deleted, so an over-eager archive costs
+  nothing. The note reports the handoff's age, but only as information — it never
+  changes the instruction.
+- **The handoff note injects the file's content, not a pointer to it.** A pointer costs
+  the next session a tool call and relies on Claude choosing to follow it; the point of
+  writing a handoff is that the user stops having to shepherd the pickup.
+- **handoff.md and memory.md stay separate on purpose.** memory.md accumulates durable
+  lessons and is meant to be committed and shared; handoff.md is one transient note,
+  superseded each time, and should be gitignored.
+
 ## [1.1.1] - 2026-07-11
 
 Access-guard friction fix — same goal as 1.1.0: the plugin should stay out of your

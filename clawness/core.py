@@ -176,64 +176,51 @@ def load_rules(rules_dir: str | Path) -> tuple[list[Rule], list[Rule]]:
 # Project memory (per-codebase lessons-learned log)
 # ---------------------------------------------------------------------------
 
-# Seed contents for a fresh .clawness/memory.md. Kept lean because the whole
-# file is injected into every prompt — the comment is the "it's working + how to
-# use it" default line the user sees, and `render_memory_block` adds the upkeep
-# footer at injection time, so the file itself stays minimal.
+# Seed contents for a fresh .clawness/memory.md. The `## Always` section is
+# seeded (empty) so the pinned-vs-ranked distinction is discoverable without
+# reading the docs. HTML comments here are for the human editing the file —
+# they're stripped before injection, so they cost nothing per turn.
 MEMORY_TEMPLATE = """\
 # Project lessons (Clawness memory)
-<!-- Clawness injects this file into every prompt. Tell Claude "remember this: ..."
-     to add a lesson, or append one terse bullet yourself (newest at the bottom).
-     Keep it lean and deduplicated — it costs tokens every turn. See WF-LESSONS-001. -->
+<!-- Clawness retrieves from this file each prompt: `## Always` entries are
+     injected every turn (keep to 3), `## Lessons` entries only when they match
+     the prompt. Tell Claude "remember this: ..." or append a bullet yourself
+     (one line, <=120 chars, newest at the bottom). See ENF-MEM-001. -->
+
+## Always
 
 ## Lessons
 """
 
 
-def render_memory_block(memory_path: str | Path, char_budget: int = 2000) -> str:
+def render_memory_block(
+    memory_path: str | Path,
+    char_budget: int = 1200,
+    query: str | None = None,
+    top_k: int | None = None,
+    min_relevance: float | None = None,
+    pin_budget: int | None = None,
+    force_recent: bool = False,
+) -> str:
     """
-    Load a per-project lessons-learned file and render it as an injectable block.
+    Render a per-project lessons-learned file as an injectable block.
 
-    The memory file is plain markdown the agent maintains itself (one terse
-    bullet per hard-won lesson / recurring frustration). It is injected verbatim
-    every turn so past lessons become live context — the auto-recalled "memories"
-    pattern, but project-local and version-controllable.
-
-    Bounded by *char_budget*: if the file outgrows it we keep the TAIL (most
-    recent lessons, appended at the bottom) so the block never blows the hook's
-    token budget. Returns "" when the file is missing, empty, or unreadable —
-    callers degrade silently.
+    Thin re-export of `clawness.memory.render_memory_block`, kept here because
+    this is the import path the hook and callers already use. The import is
+    deferred to the call: `clawness.memory` imports the ranking primitives from
+    this module, so a module-level import would be circular.
     """
-    path = Path(memory_path)
-    try:
-        text = path.read_text(encoding="utf-8").strip()
-    except (OSError, UnicodeError):
-        return ""
-    if not text:
-        return ""
+    from .memory import render_memory_block as _render
 
-    truncated = False
-    if len(text) > char_budget:
-        text = text[-char_budget:]
-        # Drop the partial first line so we start on a clean bullet.
-        nl = text.find("\n")
-        if nl != -1:
-            text = text[nl + 1:]
-        truncated = True
-
-    header = "--- CLAWNESS MEMORY (project lessons) ---"
-    # One line only — this ships every turn; WF-LESSONS-001 carries the full
-    # upkeep instructions when a prompt is actually about recording lessons.
-    footer = "(Lesson recurs? Append one line to .clawness/memory.md.)"
-    parts = [header]
-    if truncated:
-        parts.append("(older lessons trimmed)")
-    parts.append(text)
-    # Blank line so the upkeep footer never reads as the first lesson entry.
-    parts.append("")
-    parts.append(footer)
-    parts.append("--- END CLAWNESS MEMORY ---")
-    return "\n".join(parts)
+    return _render(
+        memory_path,
+        char_budget=char_budget,
+        query=query,
+        top_k=top_k,
+        min_relevance=min_relevance,
+        pin_budget=pin_budget,
+        force_recent=force_recent,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -510,9 +497,17 @@ class TfIdfIndex:
         df = self._doc_freqs.get(term, 0)
         return math.log(self._n_docs / (1 + df)) + 1.0
 
-    def build(self, documents: list[str]) -> None:
+    def build(
+        self, documents: list[str], tokenized: Optional[list[list[str]]] = None
+    ) -> None:
+        """Build the index. *tokenized* lets a caller that has already run
+        `_tokenize` over the same documents (the memory ranker builds a BM25 index
+        first) hand the result in, skipping a full duplicate tokenize pass — the
+        single most expensive step here. Omit it and the documents are tokenized
+        as before."""
         self._n_docs = len(documents)
-        tokenized = [_tokenize(doc) for doc in documents]
+        if tokenized is None:
+            tokenized = [_tokenize(doc) for doc in documents]
 
         self._doc_freqs = Counter()
         for tokens in tokenized:

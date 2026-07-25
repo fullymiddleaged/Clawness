@@ -29,21 +29,88 @@ dependency**. No ML models, no services, no Docker.
    (identical every turn) renders in full only on prompt 1 and every `CLAW_FULL_EVERY`-th
    prompt after (default 5); other turns get a one-line id list — the rules stay just as
    binding, only their re-statement shrinks. State is a per-session JSON file in the OS
-   temp dir (never the project), fails toward a full render on any error. Project memory
-   follows the same cadence but reprints immediately on a changed mtime regardless of
-   cadence, so a lesson just written is never abbreviated away.
-3. **Project memory** (`<project>/.clawness/memory.md`): if present, the hook appends
-   it verbatim after the rules block (`render_memory_block` in `core.py`) — a
-   per-codebase lessons log, not a ranked rule, so it never touches the engine.
-   Char-bounded by `CLAW_MEMORY_BUDGET` (default 2000), keeping the tail on overflow.
+   temp dir (never the project), fails toward a full render on any error. Project
+   memory does NOT ride this cadence — see below.
+3. **Project memory** (`<project>/.clawness/memory.md`, logic in `clawness/memory.py`):
+   a per-codebase lessons log, appended after the rules block. **Retrieved, not
+   dumped** (since 1.2.0): `parse_memory` splits the file into `## Always` entries
+   (pinned, always injected, capped by `CLAW_MEMORY_PIN_BUDGET`) and `## Lessons`
+   entries, which `rank_lessons` ranks against the prompt — same BM25 + TF-IDF + RRF
+   primitives as the rules, so a 200-entry log still costs a flat handful of lines.
+   HTML comments and headings are stripped: they're for the human editing the file and
+   cost ~107 tokens/turn on an otherwise *empty* log, which is what prompted the rework.
+   Three deliberate choices:
+   - **Memory ranks in its OWN pass, never merged into `Clawness._ranked_rules`.**
+     Lessons can't displace rules from `top_k`, rules can't displace lessons, and
+     `rank_ids` stays rule-only so `tests/ground_truth.json` and the CI eval floors are
+     immune to whatever a user writes in their memory file.
+   - **`memory.py` has its own stopword list.** Across 113 rules, IDF flattens
+     "this"/"the"/"needs" on its own; across a 4-40 entry log those words look
+     discriminating, and without the filter "rename THIS variable" matched "BUILDKIT=1
+     on THIS machine" above the floor. Don't remove it thinking IDF covers it.
+   - **`CLAW_MEMORY_MIN_RELEVANCE` defaults to 0.20, not the rules' 0.06.** Small-corpus
+     cosines run hot; measured, genuine hits score 0.44-0.70 and incidental overlap
+     0.07-0.09, so 0.20 sits in the gap.
+   Because the block is already prompt-specific and ~3 lines, it ships every turn rather
+   than being abbreviated. `memory_changed` (session_state) now drives `force_recent`
+   instead of a cadence: the newest entries show on the session's first prompt and on
+   any turn after the file changed, so a lesson written mid-session is never invisible.
    Memory (and the few fixed suggested-action lines) sit *outside* `CLAW_BUDGET` by
    design — counting them in would make rule selection vary with memory length; total
    injection ≈ `CLAW_BUDGET` + `CLAW_MEMORY_BUDGET` + a few fixed lines.
-   `WF-LESSONS-001` is the rule that tells Claude to maintain it. The file is
+   `ENF-MEM-001` (mandatory) is the single rule telling Claude to maintain the file and
+   carries the numeric contract (one line, <=120 chars, max 3 pinned, prune past 40); it
+   absorbed the near-duplicate ranked `WF-LESSONS-001`, which is gone. The file is
    auto-created on first session by `hooks/memory_init.py` (SessionStart) — gated to
    git work trees, opt-out `CLAW_NO_MEMORY`; it injects a note (like `git_check`) so
    Claude announces the file to the user, since hooks can't prompt directly.
-4. **Session security** (defense, not retrieval — independent of the engine):
+4. **Context-pressure watch** (`clawness/context_watch.py`, called from `claude_hook`):
+   reads the session's own transcript (`transcript_path` in the hook payload; falls
+   back to reconstructing `<config>/projects/<slugified-cwd>/<session_id>.jsonl`) and
+   warns the user *before* the window fills and quality degrades. Rides the existing
+   UserPromptSubmit hook rather than adding one — it's a file tail plus arithmetic
+   (~0.5ms), not worth another process spawn per prompt.
+   - **Context size is read, not estimated.** The last assistant entry's
+     `input_tokens + cache_creation_input_tokens + cache_read_input_tokens` IS the
+     prompt that was just sent. Only the last 256KB of the file is read (a transcript
+     reaches several MB; a 6MB tail costs ~0.7ms), walking backwards to the newest
+     usage record.
+   - **The window can't be read from the transcript** — a 1M session records the same
+     `claude-opus-5` model id as a 200k one. `infer_limit` therefore goes
+     `CLAW_CONTEXT_LIMIT` → the `[1m]` marker on `model` in settings(.local).json →
+     observed-usage tier bump. **Don't drop the settings check**: without it a 1M
+     session false-alarms all through 140k-200k, which is exactly how users learn to
+     ignore the warning.
+   - Levels: `warn` (70%, brief mention), `urgent` (85%, recommend a fresh session and
+     offer a handoff + memory write), and `surge` — a single turn adding >=12% of the
+     window with <=5 turns of headroom left, so a session filling fast is flagged while
+     there's still room to act. Below `MIN_TOKENS_TO_REPORT` (20k) it never speaks.
+   - **Each level alerts at most once per session** (`should_alert_context`);
+     escalation warn→urgent passes, repeats don't. The condition stays true once
+     reached, so without dedup it would fire every prompt for the rest of the session.
+   - Fails silent on every path, opt-out `CLAW_NO_CONTEXT_WATCH`.
+5. **Session handoff** (`clawness/handoff.py` + `hooks/handoff_check.py`, SessionStart):
+   the other half of the context watch. At ~85% full it offers to write
+   `<project>/.clawness/handoff.md`; the SessionStart hook injects that file when the
+   *next* session in the project starts, so the user never has to remember it exists
+   or know its path. `WF-HANDOFF-001` (ranked) tells Claude where and how to write one.
+   - **handoff.md and memory.md are different things and must not be merged.**
+     memory.md accumulates durable lessons and is committed/shared; handoff.md is one
+     transient "here's where I was", overwritten each time and personal (gitignore it).
+   - **The note injects the handoff's CONTENT, not a pointer.** A pointer costs the
+     next session a tool call and depends on Claude choosing to follow it — the whole
+     point is that the user shouldn't have to shepherd the pickup.
+   - **The file's existence IS the state** — a handoff at that path hasn't been picked
+     up. There is deliberately no age cutoff or done-flag: an old handoff nobody
+     archived is still outstanding. `archive_handoff` moves it to
+     `.clawness/handoffs/done/<timestamp>.md` when superseded (a new one is written, or
+     the user says it's finished), which clears the live slot and keeps history.
+     Nothing is ever deleted; an over-eager archive then costs nothing. Age IS shown in
+     the note, but only as information — it never branches the instruction.
+   - Truncation keeps the **head** (budget `CLAW_HANDOFF_BUDGET`, default 2000) —
+     opposite of the lessons log, because a handoff's summary and state are written at
+     the top. Opt-out `CLAW_NO_HANDOFF`.
+6. **Session security** (defense, not retrieval — independent of the engine):
    - `hooks/access_guard.py` (PreToolUse; logic in `clawness/guard.py`) classifies each
      Bash/Write/Edit/Read call → `allow`/`ask`/`deny`. A hook decision overrides the
      user's permission allowlist, so `ask` fires *even on "always-allowed" tools* — the
@@ -99,15 +166,23 @@ dependency**. No ML models, no services, no Docker.
 
 ## Key files
 - `clawness/core.py` — engine (rules loader, tokenizer + `_CONCEPT_GROUPS`, BM25,
-  TF-IDF, RRF, `Clawness` class, `rank_ids`, rendering, `render_memory_block`).
+  TF-IDF, RRF, `Clawness` class, `rank_ids`, rendering).
+- `clawness/memory.py` — project-memory parsing + ranking (`parse_memory`,
+  `rank_lessons`, `render_memory_block`). Imports the primitives from `core`, so
+  `core.render_memory_block` delegates via a *deferred* import to avoid a cycle.
 - `clawness/cli.py` — `clawness` CLI: query, stats, lint, bench, eval, init, plan, agents-md, audit-skills.
 - `clawness/plan.py` — plan-gate logic (`gate_decision`, `is_plan_file`, session approval).
 - `clawness/guard.py` — access-guard logic (`classify_tool_call`, `value_in_project`, ask-ledger).
 - `clawness/trust.py` — trust-ledger logic (`scan_artifacts`, `diff_ledger`, `scan_injection_tells`).
 - `clawness/session_state.py` — per-session prompt-count/memory-mtime tracking for
-  session-aware re-injection (`bump_prompt_count`, `memory_changed`, `should_show_full`).
+  session-aware re-injection (`bump_prompt_count`, `memory_changed`, `should_show_full`),
+  plus context-watch state (`context_snapshot`, `should_alert_context`).
+- `clawness/context_watch.py` — context-pressure watch (`read_context_tokens`,
+  `infer_limit`, `assess`, `render_alert`, `find_transcript`).
+- `clawness/handoff.py` — session handoff (`find_handoff`, `render_handoff_note`,
+  `describe_age`, `HANDOFF_TEMPLATE`).
 - `hooks/` — runtime hooks (`claude_hook`, `compress_output`, `plan_gate`, `access_guard`,
-  `trust_ledger`, `git_check`, `memory_init`, `stack_detect`, `ensure_deps`) + setup helpers (`setup_settings/agents/skills` — manual install only).
+  `trust_ledger`, `git_check`, `memory_init`, `handoff_check`, `stack_detect`, `ensure_deps`) + setup helpers (`setup_settings/agents/skills` — manual install only).
 - `rules/<domain>/*.yml` — the corpus (120 rules / 18 domains; `_mandatory/` = always-on).
 - `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin.
 - `.claude-plugin/{plugin.json,marketplace.json}` — plugin + marketplace manifests.

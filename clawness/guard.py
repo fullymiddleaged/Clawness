@@ -658,6 +658,7 @@ _CLAWNESS_CONTROL_JSON = {
 _GUARD_HOOK_FILES = {
     "access_guard.py", "plan_gate.py", "trust_ledger.py", "claude_hook.py", "git_check.py",
     "memory_init.py", "stack_detect.py", "compress_output.py", "ensure_deps.py",
+    "handoff_check.py",
 }
 
 

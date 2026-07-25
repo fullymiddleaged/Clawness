@@ -2,7 +2,7 @@
 
 **Install once. Works everywhere. Your AI coding agent gets the right rules for every task — automatically.**
 
-Clawness is a Claude Code plugin that puts the right coding rules in context on every prompt, automatically. It ships 120 coding rules across 18 domains, 7 adversarial review sub-agents, output compression, a default-on plan-approval gate, and session security hardening (access guard + trust ledger) — all in under 1 MB with zero infrastructure. You install it once, and it silently injects the relevant rules into every Claude Code session across every project on your machine.
+Clawness is a Claude Code plugin that puts the right coding rules in context on every prompt, automatically. It ships 120 coding rules across 18 domains, 7 adversarial review sub-agents, output compression, a default-on plan-approval gate, session security hardening (access guard + trust ledger), and session continuity — a per-project lessons memory, a warning when your context window is filling up, and a handoff the next session picks up on its own — all in under 1 MB with zero infrastructure. You install it once, and it silently injects the relevant rules into every Claude Code session across every project on your machine.
 
 Inspired by [infinri/Writ](https://github.com/infinri/Writ), rebuilt from ~2GB of infrastructure to pure Python.
 
@@ -46,7 +46,8 @@ Take coding rules — *"parameterized SQL only," "async I/O end-to-end," "API re
 - **The right rules, every prompt** — 120 rules in YAML; a hook injects only the ones relevant to your task, plus an always-on mandatory set (security, testing, lessons-memory). Nothing to remember, no context bloat.
 - **A plan-first gate** — the first edit of a session prompts before it happens (it rides native plan mode), so the agent can't quietly rewrite half your repo. One click, at most once per session — never a hard block.
 - **Session security** — an access guard that forces a confirmation on likely-exfiltration or destructive tool calls *even when the tool is allow-listed* (beating approval fatigue), plus a trust ledger that flags a skill/agent/MCP server that changed since last session.
-- **Cleaner context** — long bash output is compressed to the lines that matter, and a per-project memory file recalls hard-won lessons every session.
+- **Cleaner context** — long bash output is compressed to the lines that matter, and a per-project memory file recalls hard-won lessons, retrieving only the ones relevant to your prompt.
+- **Sessions that survive their own length** — Clawness reads your transcript and tells you when the context window is filling up, rather than letting quality quietly degrade. At that point it offers to write a handoff, which the *next* session in that project picks up automatically — no path to remember, nothing to ask for.
 - **Adversarial review on tap** — security red/blue team, code critic, architecture challenger, and more, one ask away. They run on a cheaper model tier and return findings tagged CONFIRMED/PLAUSIBLE; your main session spot-checks the high-stakes ones against the cited lines (or a quick repro) before acting — vetted, not rubber-stamped, and without re-reading everything the agent read.
 
 **Make them *your* standards.** The 120 built-in rules are a starting point. Add your own in seconds — run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/` and your whole team shares the same rules. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
@@ -275,6 +276,70 @@ which would defeat prompt caching for no benefit to the model. Set
 
 When Claude runs a bash command that produces 80+ lines of output (test suites, builds, long logs), the PostToolUse compression hook fires automatically. It extracts only the error/failure lines with context and provides a summary, keeping Claude's context clean for the next prompt.
 
+### Context Watch (on by default)
+
+Long sessions get worse before they break. The window fills, older turns get squeezed
+or auto-compacted, answers start drifting — and you're usually the last to know,
+because nothing surfaces the number until compaction happens *to* you.
+
+Clawness reads your session's own transcript each prompt and tells you when it's time
+to move on:
+
+- **~70% full** — a brief mention that a fresh session may be worth it soon,
+  especially before starting anything big. Then it gets on with your request.
+- **~85% full** — a plain recommendation to start fresh, plus an offer to write a
+  handoff first (what you were doing, current state, next steps) and append any
+  durable lesson to `.clawness/memory.md`, so the next session starts warm.
+- **Filling fast** — a single turn that adds a big chunk of the window (a few large
+  file reads will do it) is flagged while you still have room to act, with a rough
+  count of turns left at that rate.
+
+Each level fires **at most once per session** — the condition stays true once reached,
+and a warning that repeats every turn is one you'd learn to ignore.
+
+The token count is exact, read from the transcript's usage records rather than
+estimated. The *window size* is the guess: a 1M-context session records the same model
+id as a 200k one, so Clawness reads the `[1m]` marker on your configured model in
+`settings.json`, and corrects upward if it ever sees usage exceed the assumed window.
+If it guesses wrong, set `CLAW_CONTEXT_LIMIT` explicitly. Turn the whole thing off with
+`CLAW_NO_CONTEXT_WATCH=1`.
+
+### Session Handoff (on by default)
+
+The other half of the context watch. When it recommends a fresh session, it offers to
+write a handoff first — and the next session in that project **picks it up on its own**:
+
+```
+Session 1, 87% full
+  → "Context is nearly full. Want me to write a handoff before you start fresh?"
+  → writes .clawness/handoff.md
+
+Session 2, first message
+  → "Last session left off mid-refactor of core.py — render_memory_block moved to
+     memory.py, tests failing on budget truncation, nothing committed. Next step was
+     fixing the tail truncation. Want to pick that up?"
+```
+
+You don't have to remember the file exists, know its path, or ask for it. A
+SessionStart hook finds it at the project root (from any subdirectory) and injects the
+content, so Claude opens with where you left off instead of a blank stare.
+
+- **The file being there is what marks it outstanding.** No age cutoff, no "done"
+  flag, no guessing. It stays until something supersedes it.
+- **One handoff at a time, and nothing is deleted.** Writing a new one moves the old
+  to `.clawness/handoffs/done/<timestamp>.md` first, so the live slot always holds
+  exactly the note that matters and you keep the history. Same when you say the work
+  is finished — it gets archived, not removed.
+- **Ask for one any time** — "write a handoff", "wrap up for now". Rule
+  `WF-HANDOFF-001` tells Claude the format, the exact path, and to archive first.
+- **Durable lessons go in `.clawness/memory.md` instead**, which accumulates. A
+  handoff is transient by design.
+- **Gitignore it.** If you commit `.clawness/` to share rules and memory with your
+  team, add `.clawness/handoff.md` to `.gitignore` — it's your personal in-flight
+  state, not shared knowledge.
+
+Off with `CLAW_NO_HANDOFF=1`.
+
 ### Plan Gate (on by default)
 
 Clawness nudges a plan-first workflow: before the first file edit (`Write`/`Edit`/`MultiEdit`/`NotebookEdit`) of a session, it **prompts** you rather than editing blind. It rides Claude Code's **native plan mode** — present a plan, approve it, and the gate clears itself for the rest of the session with no prompt at all. No special commands are needed in the normal flow.
@@ -367,7 +432,9 @@ This creates `.clawness/rules/` and a starter `.clawness/memory.md` in your proj
 ```
 my-app/
 ├── .clawness/
-│   ├── memory.md                 # Per-codebase lessons, injected every turn
+│   ├── memory.md                 # Per-codebase lessons, retrieved per prompt
+│   ├── handoff.md                # Outstanding note for the next session (gitignore)
+│   ├── handoffs/done/            # Superseded handoffs, timestamped
 │   └── rules/
 │       ├── _mandatory/           # Project-specific mandatory rules
 │       │   └── MYAPP-DEPLOY-001.yml
@@ -384,9 +451,9 @@ Rules in `.clawness/rules/_mandatory/` are always injected when working in this 
 ### Project Memory (lessons learned)
 
 `.clawness/memory.md` is a plain-markdown log of per-codebase gotchas — build
-quirks, recurring mistakes, hard-won fixes. The hook injects it into **every
-prompt** (right after the rules block), so a lesson recorded once is recalled
-every session instead of re-discovered.
+quirks, recurring mistakes, hard-won fixes. Clawness retrieves from it on every
+prompt (right after the rules block), so a lesson recorded once is recalled when
+it's relevant instead of re-discovered.
 
 **It creates itself.** The first time you open a project (in a git repo),
 Clawness's SessionStart hook writes a starter `.clawness/memory.md` and tells
@@ -395,12 +462,32 @@ to it, just say **"remember this: …"** and Claude appends a lesson; or edit th
 file directly. (Opt out of auto-create with `CLAW_NO_MEMORY=1`; it never touches
 the home directory or non-git folders, and goes silent once the file exists.)
 
-Claude also maintains it on its own: rule `WF-LESSONS-001` tells it to record a
-lesson immediately when you ask, or the *second* time a mistake recurs — keeping
-entries short, deduplicated, and pruned. Keep it lean; it's injected every turn.
-The block is bounded by `CLAW_MEMORY_BUDGET` (characters, default `2000`); when
-the file overflows, the most recent lessons (the tail) are kept. **Commit it** so
-the whole team shares the same hard-won knowledge.
+Claude also maintains it on its own: mandatory rule `ENF-MEM-001` tells it to
+record a lesson when you ask or when a correction repeats, one line of 120
+characters or less, deduplicated and pruned.
+
+**The log is retrieved, not dumped.** Only the lessons matching your current
+prompt are injected, so the file can grow to hundreds of entries while the cost
+stays a flat handful of lines per turn:
+
+```markdown
+## Always
+- entries here are injected every turn (keep to 3)
+
+## Lessons
+- everything here is ranked against your prompt; the top few are injected
+```
+
+Tuning: `CLAW_MEMORY_TOP_K` (default `3`) is how many lessons can match per turn,
+`CLAW_MEMORY_MIN_RELEVANCE` (default `0.20`) is how strong a match has to be,
+`CLAW_MEMORY_PIN_BUDGET` (default `400`) caps the always-on section, and
+`CLAW_MEMORY_BUDGET` (default `1200`) is the overall character backstop. Set
+`CLAW_MEMORY_TOP_K` high to go back to injecting effectively everything.
+
+Two cases show entries regardless of match: the first prompt of a session, and
+any turn right after the file changed — so a lesson written mid-session is never
+invisible on the next turn. **Commit the file** so the whole team shares the same
+hard-won knowledge.
 
 ---
 
@@ -567,7 +654,7 @@ clawness --rules-dir /path/to/rules stats
 | **Rules** | 120 across 18 domains | Coding standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 6 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status` |
-| **Hooks** | 7 (rule injection, output compression, plan gate, access guard, trust ledger, git check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
+| **Hooks** | 10 (rule injection & context watch, output compression, plan gate, access guard, trust ledger, git check, memory bootstrap, handoff pickup, stack detection, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
 | **CLI** | 9 commands | query, init, stats, lint, bench, eval, plan, agents-md, audit-skills |
 | **Installers** | bash + PowerShell (with matching uninstallers) | 7-step setup for Windows, macOS, Linux |
 | **Plugin manifest** | marketplace + plugin | For `claude plugin install` |
@@ -581,7 +668,7 @@ clawness --rules-dir /path/to/rules stats
 | `fastapi` | 8 | Pydantic v2, dependency injection, async, error handling, CORS, DB sessions |
 | `meta` | 8 | Rationalization counters — rebuttals to common AI shortcuts ("too simple to test", hardcode "temporarily", "I'll refactor later", trusting input) |
 | `python` | 7 | Async I/O, imports, error handling, type hints, mutable defaults, context managers, pathlib |
-| `workflows` | 7 | Multi-agent orchestration (security audit, code review, testing, perf, refactoring, architecture, parallel research) |
+| `workflows` | 11 | Multi-agent orchestration (security audit, code review, testing, perf, refactoring, architecture, parallel research), session handoff, sub-agent cost/vetting, and lessons-memory upkeep *(1 mandatory)* |
 | `capacitor` | 6 | Platform detection, permissions, lifecycle, WebView, sync, App Store |
 | `css` | 6 | `!important`, relative units, flex/grid layout, custom properties, responsive, focus states |
 | `docker` | 6 | Layer caching, multi-stage builds, non-root, secrets, tag pinning, slim images |
@@ -612,8 +699,19 @@ The 6 **mandatory** rules (always injected) are 4 `security` rules, the 1 `testi
 | `CLAW_OFFSTACK_MIN_RELEVANCE` | `0.15` | Higher floor for language/framework rules from a stack the project doesn't use (e.g. SQL/React rules in a Python repo). Keeps vague prompts on-stack while letting strong cross-domain matches through. Never drops below `CLAW_MIN_RELEVANCE` |
 | `CLAW_NO_STACK_FILTER` | (unset) | Disable codebase-aware filtering — rank all domains equally regardless of detected stack |
 | `CLAW_NO_MEMORY` | (unset) | Don't auto-create `.clawness/memory.md` on first session |
-| `CLAW_MEMORY_BUDGET` | `2000` | Max characters of project memory injected per turn (keeps the tail on overflow) |
+| `CLAW_MEMORY_BUDGET` | `1200` | Character backstop for the whole project-memory block |
+| `CLAW_MEMORY_TOP_K` | `3` | Max ranked lessons injected per prompt. Set high to inject the whole log every turn (the pre-1.2 behavior) |
+| `CLAW_MEMORY_MIN_RELEVANCE` | `0.20` | TF-IDF cosine floor for a lesson. Higher than the rules' floor because a memory log is small (cosines run hot) and an unasked-for lesson should clear a higher bar. `0` disables it |
+| `CLAW_MEMORY_PIN_BUDGET` | `400` | Max characters of the always-injected `## Always` section |
+| `CLAW_MEMORY_MAX_ENTRIES` | `200` | Only the newest N lessons are ranked, bounding hook latency on a runaway log (~1.6 ms at 40 entries, ~7 ms at 200) |
 | `CLAW_NO_STACK_NOTE` | (unset) | Don't inject the detected-stack note at session start |
+| `CLAW_NO_CONTEXT_WATCH` | (unset) | Disable the context-pressure warnings |
+| `CLAW_CONTEXT_LIMIT` | (auto) | Your context window in tokens. Auto-detected from the `[1m]` marker on your configured model, then corrected upward if usage exceeds the assumption — set it explicitly if that guess is wrong |
+| `CLAW_CONTEXT_WARN` | `0.70` | Fraction of the window at which to mention context is filling |
+| `CLAW_CONTEXT_URGENT` | `0.85` | Fraction at which to recommend a fresh session and offer a handoff |
+| `CLAW_CONTEXT_SURGE` | `0.12` | A single turn adding this fraction of the window is flagged (only when ≤5 turns of headroom remain) |
+| `CLAW_NO_HANDOFF` | (unset) | Don't pick up `.clawness/handoff.md` at session start |
+| `CLAW_HANDOFF_BUDGET` | `2000` | Max characters of the handoff injected at session start (keeps the head) |
 | `CLAW_VERBOSE` | (unset) | Render mandatory rules in full (`WHEN`/`BAD`/`GOOD`) instead of compact, and show retrieval metadata (relevance scores, timing) — more tokens per turn |
 | `CLAW_COMPACT` | (unset) | Also render ranked rules compactly (directive only) — fewer tokens per turn |
 | `CLAW_FULL_EVERY` | `5` | Show the full mandatory block on prompt 1 and every Nth prompt after (abbreviated to an id list in between) — same rules stay binding either way. `1` restores the old every-turn-full behavior |

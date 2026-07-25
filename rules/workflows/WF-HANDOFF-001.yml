@@ -1,0 +1,18 @@
+id: WF-HANDOFF-001
+domain: workflows
+severity: info
+tags: [handoff, handover, session, context, wrap, resume, continuity]
+triggers: [handoff, handover, wrap up, new session, fresh session, pick up where, out of context, running out of context, start over]
+when: The user asks for a handoff, or is about to end a session with work still in flight.
+rule: >
+  Write the handoff to .clawness/handoff.md at the project root — that exact path,
+  because Clawness injects that file at the start of the next session in this
+  codebase. If one is already there, move it to .clawness/handoffs/done/ named by
+  timestamp (e.g. 2026-07-26-143000.md) before writing the new one; that file's
+  presence is what marks a handoff as outstanding, so archive it rather than delete
+  it. Three short sections: where we left off, current state (including anything
+  uncommitted or half-finished), and the single next step. Name files and branches
+  explicitly; the next session has none of this context. Keep it under 30 lines. Put
+  durable lessons in .clawness/memory.md instead — a handoff is transient.
+violation: "Summarizing the session into the chat, or into a NOTES.md the next session never looks at"
+correct: "Archiving the old handoff to .clawness/handoffs/done/2026-07-26-143000.md, then writing 'Mid-refactor of clawness/core.py; render_memory_block moved, tests failing on budget; next: fix tail truncation'"

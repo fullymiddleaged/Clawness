@@ -1,0 +1,173 @@
+"""
+Session handoff: leaving a note for the next session in this codebase.
+
+The context watch tells a user when their session is too full to continue well and
+offers to write a handoff. This module is the other half — where that handoff lives,
+and how the *next* session finds it without the user having to remember it exists or
+say anything at all.
+
+It lives at `<project>/.clawness/handoff.md`, next to the lessons log, and the
+SessionStart hook surfaces it automatically. The two files are deliberately
+different things and shouldn't be merged:
+
+  memory.md  — durable lessons about the codebase. Accumulates. Committed, shared.
+  handoff.md — transient "here's where I was". One at a time, superseded, personal.
+
+**The file's existence is the state.** A handoff sitting at that path is one nobody
+has picked up yet — there's no "done" flag, no age cutoff, no heuristic guessing
+whether it's still live. When it IS superseded (a new handoff gets written, or the
+user says the work is finished) it moves to `.clawness/handoffs/done/`, which clears
+the live slot and leaves a history. Nothing is ever deleted.
+
+The note injects the handoff's CONTENT, not just a pointer to it. A pointer costs
+the next session a tool call and, worse, relies on Claude choosing to follow it; the
+whole point is that the user shouldn't have to shepherd this.
+"""
+
+from __future__ import annotations
+
+import os
+import time
+from pathlib import Path
+
+# Named for what it is, alongside memory.md in the same per-project directory.
+HANDOFF_NAME = "handoff.md"
+# Superseded handoffs land here. Kept rather than deleted: it costs nothing, and a
+# handoff archived by mistake is otherwise unrecoverable work-in-progress notes.
+DONE_DIR = ("handoffs", "done")
+DEFAULT_BUDGET = 2000
+
+# Skeleton for whoever writes one (WF-HANDOFF-001 points here). Deliberately short:
+# a handoff is a running start, not a status report, and a long one won't be read.
+HANDOFF_TEMPLATE = """\
+# Handoff — {date}
+
+## Where we left off
+<one or two sentences: the task, and how far it got>
+
+## State
+<what's done, what's in progress, anything half-finished or uncommitted>
+
+## Next steps
+<the first thing the next session should do>
+"""
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, str(default)))
+    except ValueError:
+        return default
+
+
+def find_handoff(project_root: str | Path) -> Path | None:
+    """The project's handoff file, if it exists."""
+    try:
+        path = Path(project_root) / ".clawness" / HANDOFF_NAME
+        return path if path.is_file() else None
+    except OSError:
+        return None
+
+
+def describe_age(seconds: float) -> str:
+    """Human-readable age. The next session's first question about a handoff is
+    always 'how old is this?' — a note from an hour ago is a resume, one from last
+    month is archaeology, and the two deserve different reactions."""
+    minutes = int(seconds // 60)
+    if minutes < 60:
+        return "just now" if minutes < 2 else f"{minutes} minutes ago"
+    hours = minutes // 60
+    if hours < 24:
+        return "an hour ago" if hours == 1 else f"{hours} hours ago"
+    days = hours // 24
+    if days == 1:
+        return "yesterday"
+    if days < 30:
+        return f"{days} days ago"
+    months = days // 30
+    return "a month ago" if months == 1 else f"{months} months ago"
+
+
+def archive_handoff(project_root: str | Path, now: float | None = None) -> Path | None:
+    """
+    Move the live handoff into `.clawness/handoffs/done/`, timestamped.
+
+    Called when a handoff is superseded — a new one is being written, or the user
+    says the work is done. Returns the archived path, or None if there was nothing
+    to archive. Never deletes: the archive IS the delete, so an over-eager archive
+    costs the user nothing.
+    """
+    path = find_handoff(project_root)
+    if path is None:
+        return None
+    stamp = time.strftime("%Y-%m-%d-%H%M%S", time.localtime(now or time.time()))
+    try:
+        done = Path(project_root) / ".clawness" / Path(*DONE_DIR)
+        done.mkdir(parents=True, exist_ok=True)
+        target = done / f"{stamp}.md"
+        # Two handoffs archived in the same second (tests, scripts) must not clobber
+        # each other — the whole promise here is that nothing is lost.
+        n = 2
+        while target.exists():
+            target = done / f"{stamp}-{n}.md"
+            n += 1
+        path.replace(target)
+        return target
+    except OSError:
+        return None
+
+
+def render_handoff_note(
+    handoff_path: str | Path,
+    budget: int | None = None,
+    now: float | None = None,
+) -> str:
+    """
+    Build the SessionStart note for an existing handoff, or "" if unusable.
+
+    Written as an instruction to Claude, since a hook can't address the user
+    directly — the same pattern `git_check` and `memory_init` use.
+    """
+    path = Path(handoff_path)
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+        mtime = path.stat().st_mtime
+    except (OSError, UnicodeError):
+        return ""
+    if not text:
+        return ""
+
+    budget = budget if budget is not None else _env_int("CLAW_HANDOFF_BUDGET",
+                                                        DEFAULT_BUDGET)
+
+    truncated = False
+    if len(text) > budget:
+        # Keep the HEAD, unlike the lessons log: a handoff's summary and state are
+        # written at the top, so the opening is the part worth having.
+        text = text[:budget].rsplit("\n", 1)[0]
+        truncated = True
+
+    # Age is reported, never acted on. Whether the note is still live is answered by
+    # the file being there at all; the age just tells the user whether they're
+    # resuming this morning's work or something from months back.
+    age = describe_age(max(0.0, (now if now is not None else time.time()) - mtime))
+
+    instruction = (
+        "It hasn't been picked up yet. Open this session by telling the user, in two "
+        "or three lines, where the last one left off and what comes next — then wait "
+        "for them. Don't start the work unless they ask. When they say it's done (or "
+        "you write a new handoff), move this file to .clawness/handoffs/done/ with a "
+        "timestamped name instead of deleting it."
+    )
+
+    parts = [
+        f"[Clawness] A handoff from the previous session in this project was written {age} "
+        f"(.clawness/{HANDOFF_NAME}). {instruction}",
+        "",
+        "--- HANDOFF ---",
+        text,
+    ]
+    if truncated:
+        parts.append("(...truncated — full note in .clawness/handoff.md)")
+    parts.append("--- END HANDOFF ---")
+    return "\n".join(parts)

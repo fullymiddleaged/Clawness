@@ -83,6 +83,7 @@ CLAW_HOOK_SCRIPTS = (
     "git_check.py",
     "ensure_deps.py",
     "memory_init.py",
+    "handoff_check.py",
     "stack_detect.py",
 )
 
@@ -292,6 +293,20 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
                 "hooks": [build_hook_entry(memory_script, timeout=10)],
             })
             results.append("memory-init: added")
+
+    # --- SessionStart: pick up a handoff left by the previous session ---
+    handoff_script = hook_script.resolve().parent / "handoff_check.py"
+    if handoff_script.exists():
+        if "SessionStart" not in data["hooks"]:
+            data["hooks"]["SessionStart"] = []
+        start_events = data["hooks"]["SessionStart"]
+        if hook_already_present(start_events, handoff_script):
+            results.append("handoff-check: already configured")
+        else:
+            start_events.append({
+                "hooks": [build_hook_entry(handoff_script, timeout=10)],
+            })
+            results.append("handoff-check: added")
 
     # --- SessionStart: project stack awareness (injects detected stack note) ---
     stack_script = hook_script.resolve().parent / "stack_detect.py"

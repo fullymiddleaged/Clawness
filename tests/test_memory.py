@@ -16,7 +16,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from clawness.core import render_memory_block  # noqa: E402
+from clawness.core import MEMORY_TEMPLATE, render_memory_block  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 MEMORY_INIT = REPO / "hooks" / "memory_init.py"
@@ -51,6 +51,7 @@ def test_empty_file_renders_nothing():
 
 
 def test_content_is_wrapped_and_injected_verbatim():
+    # No query -> legacy whole-file mode (the CLI path).
     with tempfile.TemporaryDirectory() as d:
         p = _write(Path(d), "## Lessons\n- vitest needs --run in CI")
         block = render_memory_block(p)
@@ -58,9 +59,29 @@ def test_content_is_wrapped_and_injected_verbatim():
         assert "vitest needs --run in CI" in block
         assert block.strip().endswith("--- END CLAWNESS MEMORY ---")
         # carries the self-maintenance nudge — kept to a single short line since
-        # it re-ships every turn (WF-LESSONS-001 has the full instructions)
+        # it re-ships every turn (ENF-MEM-001 has the full instructions)
         footer_lines = [l for l in block.splitlines() if ".clawness/memory.md" in l]
         assert len(footer_lines) == 1 and len(footer_lines[0]) < 80
+
+
+def test_headings_and_html_comments_are_stripped():
+    # Both are addressed to the human editing the file; shipping them cost ~107
+    # tokens a turn on an otherwise EMPTY log, which is what prompted the rework.
+    with tempfile.TemporaryDirectory() as d:
+        p = _write(Path(d), MEMORY_TEMPLATE + "- postgres needs the seed script first\n")
+        block = render_memory_block(p)
+        assert "<!--" not in block and "-->" not in block
+        assert "# Project lessons" not in block
+        assert "postgres needs the seed script first" in block
+
+
+def test_untouched_template_renders_nothing():
+    # A freshly bootstrapped file is all heading + comment: after stripping there
+    # is no content, so it must cost zero tokens rather than ~107.
+    with tempfile.TemporaryDirectory() as d:
+        p = _write(Path(d), MEMORY_TEMPLATE)
+        assert render_memory_block(p) == ""
+        assert render_memory_block(p, query="anything at all") == ""
 
 
 def test_budget_keeps_the_tail_and_flags_trim():

@@ -38,7 +38,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 try:
     from clawness.core import Clawness, load_rules, Rule, render_memory_block
-    from clawness.session_state import bump_prompt_count, memory_changed, should_show_full
+    from clawness.session_state import (
+        bump_prompt_count,
+        context_snapshot,
+        memory_changed,
+        should_alert_context,
+        should_show_full,
+    )
 except Exception:
     # Dependencies not ready yet (e.g. the SessionStart bootstrap is still
     # installing pyyaml). Degrade silently rather than erroring the prompt.
@@ -153,6 +159,28 @@ def suggest_actions(prompt: str) -> str:
     return "\n--- CLAWNESS SUGGESTED ACTIONS ---\n" + "\n".join(f"- {ln}" for ln in lines)
 
 
+def context_note(event: dict, cwd: str, session_id: str) -> str:
+    """Alert text when this session's context is getting full, else "".
+
+    Imported lazily inside the function so a broken/absent context_watch can
+    never stop the rules block from printing."""
+    from clawness.context_watch import (
+        assess, find_transcript, read_context_tokens, render_alert,
+    )
+
+    transcript = find_transcript(event, cwd, session_id)
+    if not transcript:
+        return ""
+    tokens = read_context_tokens(transcript)
+    if not tokens:
+        return ""
+    previous = context_snapshot(session_id, tokens)
+    alert = assess(tokens, previous_tokens=previous)
+    if not alert or not should_alert_context(session_id, alert.level):
+        return ""
+    return render_alert(alert)
+
+
 def main() -> None:
     try:
         raw = sys.stdin.read()
@@ -224,19 +252,41 @@ def main() -> None:
     block = wl.retrieve(prompt, abbreviate_mandatory=not show_full)
 
     # --- Inject project memory (lessons-learned log), if present ---
-    # Follows the same cadence as the mandatory block, but a changed file
-    # always shows in full immediately regardless of cadence — a fresh lesson
-    # must never be abbreviated away the turn it was written.
+    # Memory is RETRIEVED, not dumped: pinned `## Always` entries plus the few
+    # lessons that match this prompt (see clawness/memory.py). That's a handful
+    # of lines however long the log gets, so it ships every turn rather than
+    # riding the mandatory block's cadence — abbreviating a block that's already
+    # prompt-specific and ~3 lines would save nothing and lose the match.
+    # A file that changed this session forces its newest entries in regardless of
+    # match, so a lesson written mid-session is never invisible on the next turn.
     memory_path = find_project_memory(cwd)
     if memory_path:
-        show_memory_full = show_full or memory_changed(session_id, memory_path)
-        if show_memory_full:
-            mem_budget = int(os.environ.get("CLAW_MEMORY_BUDGET", "2000"))
-            memory_block = render_memory_block(memory_path, char_budget=mem_budget)
-            if memory_block:
-                block = block + "\n\n" + memory_block
-        else:
-            block = block + "\n\n(CLAWNESS MEMORY unchanged since last shown this session — see above.)"
+        try:
+            mem_budget = int(os.environ.get("CLAW_MEMORY_BUDGET", "1200"))
+        except ValueError:
+            mem_budget = 1200
+        memory_block = render_memory_block(
+            memory_path,
+            char_budget=mem_budget,
+            query=prompt,
+            force_recent=memory_changed(session_id, memory_path),
+        )
+        if memory_block:
+            block = block + "\n\n" + memory_block
+
+    # --- Context-pressure watch ---
+    # Reads the session's own transcript to see how full the window is, and warns
+    # once per level so a long session gets told BEFORE it degrades or auto-
+    # compacts. Rides this hook rather than a separate one: it's a file tail plus
+    # arithmetic (~0.5ms), not worth another process spawn per prompt. Wrapped
+    # whole — a session that can't be measured must never break the prompt.
+    if not os.environ.get("CLAW_NO_CONTEXT_WATCH"):
+        try:
+            note = context_note(event, cwd, session_id)
+            if note:
+                block = block + "\n\n" + note
+        except Exception:
+            pass
 
     suggestions = suggest_actions(prompt)
     if suggestions:
