@@ -21,9 +21,21 @@ otherwise it exits 0 (defer to the normal permission flow). Fails open on any
 error so a gate bug never breaks the session.
 """
 
+import io
 import json
 import sys
 from pathlib import Path
+
+# The payload is raw UTF-8; without this a non-ASCII file path decodes as cp1252
+# on Windows, so is_plan_file() compares a mangled path and mis-gates the write.
+# isinstance narrows to the class that actually defines reconfigure() — sys.stdin
+# is typed TextIO, which doesn't — and skips an already-replaced stream.
+for _stream in (sys.stdin, sys.stdout):
+    if isinstance(_stream, io.TextIOWrapper):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

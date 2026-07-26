@@ -4,7 +4,6 @@ description: >
   Adversarial code reviewer. Use when you want a brutally honest review
   of code quality before a PR, merge, or deployment. Focuses on bugs,
   performance, maintainability, and missed edge cases. Read-only.
-model: sonnet
 effort: medium
 maxTurns: 15
 tools: Read, Grep, Glob

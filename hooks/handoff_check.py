@@ -12,6 +12,7 @@ root, silent when there's nothing to say, and fails open on every error. Opt out
 CLAW_NO_HANDOFF=1.
 """
 
+import io
 import json
 import os
 import shutil
@@ -22,14 +23,14 @@ from pathlib import Path
 # The payload (incl. the project cwd) arrives as UTF-8 on stdin; on Windows stdin
 # defaults to cp1252 and would mangle a non-ASCII project path. Pin UTF-8 both ways —
 # the handoff text itself is user prose and will contain non-ASCII sooner or later.
-try:
-    sys.stdin.reconfigure(encoding="utf-8")
-except Exception:
-    pass
-try:
-    sys.stdout.reconfigure(encoding="utf-8")
-except Exception:
-    pass
+# The isinstance check narrows to the class that actually defines reconfigure() —
+# sys.stdin is typed TextIO, which doesn't — and skips an already-replaced stream.
+for _stream in (sys.stdin, sys.stdout):
+    if isinstance(_stream, io.TextIOWrapper):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

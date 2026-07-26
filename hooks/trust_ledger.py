@@ -13,19 +13,20 @@ when disabled via CLAW_NO_TRUST_LEDGER. Fails open. Decision/scan logic lives in
 ``clawness/trust.py``.
 """
 
+import io
 import json
 import os
 import sys
 from pathlib import Path
 
-try:
-    sys.stdin.reconfigure(encoding="utf-8")
-except Exception:
-    pass
-try:
-    sys.stdout.reconfigure(encoding="utf-8")
-except Exception:
-    pass
+# The isinstance check narrows to the class that actually defines reconfigure() —
+# sys.stdin is typed TextIO, which doesn't — and skips an already-replaced stream.
+for _stream in (sys.stdin, sys.stdout):
+    if isinstance(_stream, io.TextIOWrapper):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

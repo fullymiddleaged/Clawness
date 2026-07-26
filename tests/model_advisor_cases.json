@@ -1,0 +1,56 @@
+{
+  "_comment": "Labeled eval set for clawness/model_advisor.py, in the spirit of ground_truth.json and LLM-EVAL-001. `tier` is the session's tier (2 = sonnet-class, 3 = opus/fable). `expect` is the verdict assess() must return: 'up', 'down', or 'silent'. The silent cases are the important half — they are the false-positive guard, and the CI floor requires ZERO of them to fire.",
+
+  "silent_routine": {
+    "_comment": "Ordinary first prompts. Must stay silent on BOTH tiers — these are checked at tier 2 and tier 3.",
+    "prompts": [
+      "add a test for parse_memory",
+      "fix the failing test in tests/test_core.py",
+      "what does scan_project return?",
+      "update the version to 1.4.0",
+      "add type hints to guard.py",
+      "run the test suite and tell me what fails",
+      "implement a --json flag for the stats command",
+      "where is the BM25 implementation?",
+      "commit this with a sensible message",
+      "explain how the retrieval floor works",
+      "add a docstring to should_advise",
+      "wire the new hook into plugin.json",
+      "read the changelog and tell me what shipped in 1.2.0",
+      "make load_rules skip files it cannot decode",
+      "what is CLAW_TOP_K set to by default?"
+    ]
+  },
+
+  "upgrade": {
+    "_comment": "Deep-reasoning work on a mid tier. Each needs >=2 distinct signal groups.",
+    "cases": [
+      {"tier": 2, "prompt": "should we migrate the retrieval engine to a vector database, and what are the trade-offs?"},
+      {"tier": 2, "prompt": "there is an intermittent race condition in the ask-ledger - why does it drop verdicts when two sessions run concurrently?"},
+      {"tier": 2, "prompt": "design a threat model for the access guard and audit it for injection vulnerabilities"},
+      {"tier": 2, "prompt": "refactor the hook layer to decouple retrieval from rendering, then tell me whether the design holds up"},
+      {"tier": 2, "prompt": "profile the prompt hook and redesign the hot path if the bottleneck turns out to be concept expansion"},
+      {"tier": 1, "prompt": "why does the distributed ledger lose idempotency under a concurrent write?"}
+    ]
+  },
+
+  "downgrade": {
+    "_comment": "Routine work on the top tier: needs >=2 routine signals, NO deep-work signal, and a short prompt.",
+    "cases": [
+      {"tier": 3, "prompt": "fix the typo in the readme"},
+      {"tier": 3, "prompt": "rename _stream and reformat the imports"},
+      {"tier": 3, "prompt": "bump the version and update the changelog"}
+    ]
+  },
+
+  "silent_guarded": {
+    "_comment": "The asymmetry and tier guards specifically. Each must stay silent for the stated reason.",
+    "cases": [
+      {"tier": 3, "prompt": "fix the typo", "why": "only one routine signal - below DOWNGRADE_MIN_SIGNALS"},
+      {"tier": 3, "prompt": "rename the helper and fix the race condition it introduces", "why": "an upgrade signal is present, so downgrade must never fire"},
+      {"tier": 3, "prompt": "should we migrate to a vector database and what are the trade-offs?", "why": "already top tier - never suggest moving within the top tier"},
+      {"tier": 2, "prompt": "fix the typo in the readme", "why": "downgrade only applies to the top tier"},
+      {"tier": 3, "prompt": "rename the module, reformat it, and fix the typo, but first walk me through why the retrieval floor was chosen at 0.06 and whether that still holds for the science domain given the off-stack penalty interacts with it", "why": "long prompt - routine-sounding words in a long brief are not routine work"}
+    ]
+  }
+}

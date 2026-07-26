@@ -15,9 +15,24 @@ Configure in settings.json under hooks.PostToolUse with matcher "Bash".
 
 from __future__ import annotations
 
+import io
 import json
 import re
 import sys
+
+# The payload is UTF-8 (Claude Code is Node; JSON.stringify emits raw UTF-8, not
+# \uXXXX escapes). Without this, stdin decodes as cp1252 on Windows and every
+# em-dash/smart-quote in the output round-trips back to Claude as mojibake
+# ("—" → "â€""). stdout matters too: the compressed block is re-encoded on the
+# way out. Same pin as every other stdin-reading hook.
+# isinstance narrows to the class that actually defines reconfigure() — sys.stdin
+# is typed TextIO, which doesn't — and skips an already-replaced stream.
+for _stream in (sys.stdin, sys.stdout):
+    if isinstance(_stream, io.TextIOWrapper):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
 
 
 # Lines below this threshold pass through unchanged
@@ -47,13 +62,49 @@ NOISE_PATTERNS = re.compile(
     r"^[\s│├└─┬┤]*$)",              # tree-drawing characters only
 )
 
+# Commands whose output IS the payload, not progress noise: the user/model asked
+# for file or diff CONTENT and will reason about it line by line. Dropping the
+# middle of a file is silently lossy in a way build noise never is — Claude acts
+# on a mangled view and can't tell what it lost. These skip noise-stripping and
+# error-extraction entirely (see _truncate_content): blank lines are structure
+# here, not noise, and there is no "error section" to hoist out of a source file.
+CONTENT_COMMANDS = re.compile(
+    r"(?i)(^|[|;&]\s*)(cat|bat|head|tail|sed\s+-n|nl|jq|"
+    r"grep|egrep|fgrep|rg|ag|"
+    r"git\s+show|git\s+diff|git\s+blame|type)\b",
+)
+
+# Verbatim lines kept for a content read before truncation kicks in. Generous on
+# purpose: this is content that was explicitly asked for.
+CONTENT_HEAD_LIMIT = 400
+
 # Commands known to be verbose — get extra compression
 VERBOSE_COMMANDS = re.compile(
     r"(?i)(npm test|npm run|npx jest|npx vitest|pytest|"
     r"npx next build|npx tsc|eslint|cargo test|cargo build|"
     r"go test|make |gradle |mvn |pip install|"
-    r"git log(?!\s+--oneline)|git diff(?!\s+--stat))",
+    r"git log(?!\s+--oneline))",   # git diff/show are CONTENT_COMMANDS, handled first
 )
+
+
+def _truncate_content(lines: list[str]) -> str | None:
+    """Compression for a content read: keep the head VERBATIM (blank lines and
+    all) and, if it overflows, say plainly what is missing and how to get it.
+
+    Head-plus-tail with the middle silently gone is the dangerous shape — the
+    model can't tell which lines it lost or recover them. An explicit, honest
+    truncation is safe: Claude knows exactly what it's missing and that Read/Grep
+    will fetch it."""
+    if len(lines) <= CONTENT_HEAD_LIMIT:
+        return None  # short enough — pass the content through untouched
+    omitted = len(lines) - CONTENT_HEAD_LIMIT
+    return "\n".join([
+        *lines[:CONTENT_HEAD_LIMIT],
+        "",
+        f"[clawness: content read truncated — {omitted} of {len(lines)} lines "
+        f"omitted after the first {CONTENT_HEAD_LIMIT}. Nothing was dropped from "
+        f"the text above. Use Read (with offset/limit) or Grep to get the rest.]",
+    ])
 
 
 def compress(output: str, command: str) -> str | None:
@@ -65,6 +116,13 @@ def compress(output: str, command: str) -> str | None:
 
     if len(raw_lines) <= SHORT_THRESHOLD:
         return None
+
+    # A content read is truncated honestly, never gutted. Checked BEFORE the
+    # noise/error passes: those are built for build logs and actively destroy
+    # source (blank lines stripped, middle discarded, "error" matching a mere
+    # mention of the word in prose).
+    if CONTENT_COMMANDS.search(command):
+        return _truncate_content(raw_lines)
 
     # Drop pure-noise lines up front so head/tail/error context is signal,
     # not npm-warn spam and separator bars.

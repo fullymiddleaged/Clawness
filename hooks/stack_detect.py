@@ -12,6 +12,7 @@ nothing recognizable is found, in non-project locations (home dir / filesystem
 root), or when disabled via CLAW_NO_STACK_NOTE. Fails open on any error.
 """
 
+import io
 import json
 import os
 import shutil
@@ -19,12 +20,17 @@ import subprocess
 import sys
 from pathlib import Path
 
-# The payload (incl. the project cwd) arrives as UTF-8 on stdin; on Windows stdin
-# defaults to cp1252 and would mangle a non-ASCII project path. Pin UTF-8.
-try:
-    sys.stdin.reconfigure(encoding="utf-8")
-except Exception:
-    pass
+# The payload (incl. the project cwd) arrives as UTF-8 on stdin; on Windows stdio
+# defaults to cp1252 and would mangle a non-ASCII project path on the way in, or
+# fail to encode the note on the way out. Pin UTF-8 both ways. The isinstance check
+# narrows to the class that actually defines reconfigure() — sys.stdin is typed
+# TextIO, which doesn't — and skips an already-replaced stream (e.g. pytest capture).
+for _stream in (sys.stdin, sys.stdout):
+    if isinstance(_stream, io.TextIOWrapper):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -60,6 +66,22 @@ def main() -> None:
         payload = json.load(sys.stdin)
     except Exception:
         sys.exit(0)
+
+    # Stash the active model for the model-tier advisor. ONLY SessionStart carries
+    # a `model` field (and even then it's optional, hence the settings fallback);
+    # UserPromptSubmit never does, so it has to be carried forward for the
+    # per-prompt hook to compare tier against the task. Deliberately before the
+    # stack-note opt-out below — the two features are independent.
+    if not os.environ.get("CLAW_NO_MODEL_ADVISOR"):
+        try:
+            from clawness.model_advisor import read_settings_model
+            from clawness.session_state import record_model
+            record_model(
+                payload.get("session_id", "") or "",
+                payload.get("model") or read_settings_model() or "",
+            )
+        except Exception:
+            pass
 
     if os.environ.get("CLAW_NO_STACK_NOTE"):
         sys.exit(0)

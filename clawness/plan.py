@@ -236,7 +236,8 @@ ASK_REASON = (
     "Clawness plan gate: no plan has been approved for this session yet. Approve "
     "this edit to proceed without a plan, or switch to plan mode (Shift+Tab) to plan "
     "first — either one clears the gate for the rest of the session, so you won't be "
-    "asked again. (Opt out: `clawness plan off`, or CLAW_NO_PLAN_GATE=1.)"
+    "asked again. (Opt out: set CLAW_NO_PLAN_GATE=1, or run `clawness plan off` if "
+    "you have the CLI.)"
 )
 
 # Back-compat alias: earlier versions exported DENY_REASON.

@@ -13,6 +13,11 @@ rule: >
   convene a panel where one skeptic suffices. Match model tier to task difficulty, not
   to role: keep planning, orchestration, and final judgment on the session's tier-1
   model — it vets what workers return — and delegate mechanical, well-scoped work
-  (code and test generation, pattern scans) to a cheaper tier.
+  (code and test generation, pattern scans) to a cheaper tier. In an agent definition
+  that means `model: inherit` (the default) for judgment and adversarial work, so it
+  tracks whatever tier the user chose; pin a cheaper alias only for mechanical work.
+  Never hardcode a frontier model in a shared or distributed agent — you cannot know
+  the user's plan, access, or budget, and silently downgrading their judgment work is
+  worse still, because a shallower answer reads exactly like a good one.
 violation: "Spawning five sub-agents to review a ten-line diff, or fanning out work that isn't independent"
 correct: "Do the small task inline; delegate only independent, context-heavy, or adversarial work — a cheaper tier for the legwork, tier-1 to orchestrate and judge"

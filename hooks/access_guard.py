@@ -34,6 +34,7 @@ multiple hooks as deny > ask > allow. Fails OPEN on any error so a guard bug
 never breaks a session. Opt out with CLAW_NO_ACCESS_GUARD=1.
 """
 
+import io
 import json
 import os
 import sys
@@ -41,11 +42,14 @@ from pathlib import Path
 
 # stdin/stdout arrive as UTF-8; on Windows they default to cp1252 and would
 # mangle non-ASCII paths in the payload or reason. Pin UTF-8.
+# isinstance narrows to the class that actually defines reconfigure() — sys.stdin
+# is typed TextIO, which doesn't — and skips an already-replaced stream.
 for _stream in (sys.stdin, sys.stdout):
-    try:
-        _stream.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+    if isinstance(_stream, io.TextIOWrapper):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 

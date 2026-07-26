@@ -119,7 +119,33 @@ dependency**. No ML models, no services, no Docker.
    - Truncation keeps the **head** (budget `CLAW_HANDOFF_BUDGET`, default 2000) —
      opposite of the lessons log, because a handoff's summary and state are written at
      the top. Opt-out `CLAW_NO_HANDOFF`.
-6. **Session security** (defense, not retrieval — independent of the engine):
+6. **Model-tier advisor** (`clawness/model_advisor.py`, stashed by `stack_detect`,
+   surfaced by `claude_hook` on prompt 1): compares the session's model tier against
+   what the opening task looks like and injects a note when they look mismatched.
+   - **The model must be carried across two hook events.** ONLY `SessionStart`
+     receives a `model` field (and the docs mark it optional — hence the
+     `read_settings_model()` fallback); `UserPromptSubmit` never does. But at
+     SessionStart there is no task yet, and codebase complexity is the wrong signal
+     (a README edit in a huge repo is trivial). So `stack_detect` stashes the model
+     via `session_state.record_model`, and prompt 1 of `claude_hook` reads it back.
+     Don't "simplify" this into one hook — neither event has both halves.
+   - **Evidence, not verdict.** The note reports the matched signals and explicitly
+     licenses Claude to say nothing. The heuristic WILL misfire; letting Claude
+     filter against the real task means a wrong guess usually dies before the user
+     sees it. A hook asserting "switch to X" would surface every false positive.
+   - **The thresholds are asymmetric on purpose.** An upgrade hint needs 2 signal
+     groups. A downgrade needs 2 *and* zero upgrade signals *and* a short prompt,
+     because a wrong downgrade is invisible harm — a shallower answer on hard work
+     reads exactly like a good one — while a wrong upgrade costs visible money.
+   - **opus and fable are both `TIER_TOP`.** There is no defensible ordering between
+     them, so a top-tier session is never told to move.
+   - Fails **silent**, not open (the opposite of the context watch): an unknown model
+     or unreadable ledger means say nothing. Dedup is once per project per tier in
+     `.clawness/model_advice.json`, so a tier change re-arms it. `CLAW_NO_MODEL_ADVISOR`.
+   - `tests/model_advisor_cases.json` is its eval set, and the CI floor is **zero
+     false positives** on routine prompts. Grow that file when tuning signals.
+
+7. **Session security** (defense, not retrieval — independent of the engine):
    - `hooks/access_guard.py` (PreToolUse; logic in `clawness/guard.py`) classifies each
      Bash/Write/Edit/Read call → `allow`/`ask`/`deny`. A hook decision overrides the
      user's permission allowlist, so `ask` fires *even on "always-allowed" tools* — the
@@ -187,7 +213,11 @@ dependency**. No ML models, no services, no Docker.
   session-aware re-injection (`bump_prompt_count`, `memory_changed`, `should_show_full`),
   plus context-watch state (`context_snapshot`, `should_alert_context`).
 - `clawness/context_watch.py` — context-pressure watch (`read_context_tokens`,
-  `infer_limit`, `assess`, `render_alert`, `find_transcript`).
+  `infer_limit`, `assess`, `render_alert`, `find_transcript`). `limit_from_settings`
+  delegates the settings read to `model_advisor.read_settings_model` (one source of
+  truth for "what model is configured?"), keeping only the `[1m]` reading here.
+- `clawness/model_advisor.py` — model-tier advice (`normalize_tier`, `assess`,
+  `should_advise`, `render_advice`, `read_settings_model`).
 - `clawness/handoff.py` — session handoff (`find_handoff`, `render_handoff_note`,
   `describe_age`, `HANDOFF_TEMPLATE`).
 - `hooks/` — runtime hooks (`claude_hook`, `compress_output`, `plan_gate`, `access_guard`,
@@ -221,6 +251,16 @@ dependency**. No ML models, no services, no Docker.
   approve` — a CLI the plugin path doesn't install, stranding them; `ask` has a working
   Yes button, so that trap is gone. **Plan-file writes (`<config>/plans/`) are exempt**
   (`is_plan_file`) — gating them is a catch-22. Fails open on any error.
+- **Agent `model:` is split by task type, and the judgment agents must stay on
+  `inherit`.** Subagent `model:` defaults to `inherit`, so pinning it is an ACTIVE
+  override of the user's choice — until 1.4.0 all seven agents pinned `sonnet`, which
+  meant an Opus user's `/clawness:audit` silently ran a tier below what they picked.
+  `security-red-team`, `security-blue-team`, `arch-challenger` and `code-critic` now
+  omit `model:` entirely; `test-writer`, `perf-auditor` and `refactor-advisor` keep
+  `sonnet` (mechanical work, and `sonnet` is an alias so it won't rot). **Never
+  hardcode `opus`/`fable` in a shipped agent** — a distributed plugin can't know the
+  user's plan, access or budget, and forcing a frontier tier is the same error as the
+  old downgrade pointed the other way. `effort:`/`maxTurns:` are unrelated and stay.
 - **Token efficiency:** mandatory rules render compact (id+RULE only); `CLAW_VERBOSE`
   / `CLAW_COMPACT` toggle. Keep the per-turn block lean.
 - **Two install paths:** plugin (hooks declared in `plugin.json`, loaded from cache)

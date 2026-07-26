@@ -4,7 +4,6 @@ description: >
   Devil's advocate for architecture decisions. Use when proposing a new
   system design, choosing a technology, or making a significant
   structural change. Challenges assumptions and proposes alternatives.
-model: sonnet
 effort: high
 maxTurns: 15
 tools: Read, Grep, Glob, WebSearch

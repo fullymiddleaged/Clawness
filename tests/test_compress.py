@@ -4,13 +4,17 @@ Tests for the PostToolUse output-compression hook (hooks/compress_output.py).
 Runs under pytest, or standalone:  python tests/test_compress.py
 """
 
+import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hooks"))
 
 import compress_output as C  # noqa: E402
+
+HOOK = Path(__file__).resolve().parent.parent / "hooks" / "compress_output.py"
 
 
 def _kept(block: str) -> int:
@@ -51,6 +55,67 @@ def test_verbose_command_with_no_errors_says_so():
     assert out is not None
     assert "no errors detected" in out
     assert _kept(out) == 10  # head 5 + tail 5, disjoint
+
+
+def test_content_read_is_not_gutted():
+    """A `cat` of source is content, not build noise: it must survive whole, with
+    blank lines (markdown/code structure) intact. The head+tail+error shape used
+    to cut 137 lines of SKILL.md down to 15."""
+    lines = [f"content line {i}" if i % 7 else "" for i in range(137)]
+    out = C.compress("\n".join(lines), "cat skills/audit/SKILL.md skills/review/SKILL.md")
+    assert out is None, "content reads under the limit must pass through untouched"
+
+
+def test_content_read_over_limit_truncates_honestly():
+    """Past the limit, keep the head verbatim and SAY what's missing — never drop
+    the middle silently."""
+    lines = [f"line {i}" for i in range(C.CONTENT_HEAD_LIMIT + 50)]
+    out = C.compress("\n".join(lines), "cat big_file.py")
+    assert out is not None
+    assert "line 0" in out and f"line {C.CONTENT_HEAD_LIMIT - 1}" in out
+    assert "50 of 450 lines omitted" in out
+    assert "Read" in out  # points at the way to recover the rest
+    # the tail must NOT be spliced on — that's the shape that hides the gap
+    assert f"line {C.CONTENT_HEAD_LIMIT + 49}" not in out
+
+
+def test_content_read_keeps_words_that_look_like_errors():
+    """Prose mentioning "error" in a source file must not be hoisted into an
+    "errors/warnings" section — it isn't one."""
+    lines = [f"line {i}" for i in range(100)]
+    lines[50] = "# Handle the error case gracefully"
+    out = C.compress("\n".join(lines), "git diff HEAD~1")
+    assert out is None
+    assert not C.CONTENT_COMMANDS.search("pytest -q")  # build cmds still compress
+
+
+def test_build_output_still_compresses():
+    """The bypass must not disarm the hook's actual job."""
+    out = C.compress("\n".join(f"ok {i}" for i in range(200)), "npm run build")
+    assert out is not None and "clawness: compressed" in out
+
+
+def test_hook_roundtrips_utf8_payload():
+    """End-to-end: Node's JSON.stringify sends RAW UTF-8. Reading stdin with the
+    platform default (cp1252 on Windows) turned every em-dash in the output into
+    mojibake on the way back to Claude."""
+    body = ["3. **Report** — Show what was tested"] + [f"x {i}" for i in range(200)]
+    payload = {
+        "tool_name": "Bash",
+        "tool_input": {"command": "npm run build"},
+        "tool_response": {"stdout": "\n".join(body), "stderr": ""},
+    }
+    proc = subprocess.run(
+        [sys.executable, str(HOOK)],
+        # ensure_ascii=False mirrors JSON.stringify: raw UTF-8, no \uXXXX escapes
+        input=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        capture_output=True,
+    )
+    assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
+    got = json.loads(proc.stdout.decode("utf-8"))
+    text = got["hookSpecificOutput"]["updatedToolOutput"]["stdout"]
+    assert "—" in text, "em-dash was mangled in transit"
+    assert "â€" not in text, "classic UTF-8-read-as-cp1252 mojibake"
 
 
 if __name__ == "__main__":

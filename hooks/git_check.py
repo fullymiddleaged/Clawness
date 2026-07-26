@@ -12,6 +12,7 @@ Silent when git is present, when git isn't installed, in non-project locations
 (home dir / filesystem root), or when disabled via CLAW_NO_GIT_CHECK. Fails open.
 """
 
+import io
 import json
 import os
 import shutil
@@ -19,12 +20,17 @@ import subprocess
 import sys
 from pathlib import Path
 
-# The payload (incl. the project cwd) arrives as UTF-8 on stdin; on Windows stdin
-# defaults to cp1252 and would mangle a non-ASCII project path. Pin UTF-8.
-try:
-    sys.stdin.reconfigure(encoding="utf-8")
-except Exception:
-    pass
+# The payload (incl. the project cwd) arrives as UTF-8 on stdin; on Windows stdio
+# defaults to cp1252 and would mangle a non-ASCII project path on the way in, or
+# fail to encode the note on the way out. Pin UTF-8 both ways. The isinstance check
+# narrows to the class that actually defines reconfigure() — sys.stdin is typed
+# TextIO, which doesn't — and skips an already-replaced stream (e.g. pytest capture).
+for _stream in (sys.stdin, sys.stdout):
+    if isinstance(_stream, io.TextIOWrapper):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
 
 # Directories never worth descending into when scanning for nested repos —
 # heavy/vendored trees that won't be a project's own .git and would slow the scan.

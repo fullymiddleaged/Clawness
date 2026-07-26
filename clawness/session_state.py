@@ -136,6 +136,28 @@ def should_alert_context(session_id: str, level: str) -> bool:
     return True
 
 
+def record_model(session_id: str, model: str) -> None:
+    """Stash the session's active model so a later prompt can read it.
+
+    Only SessionStart receives a `model` field — UserPromptSubmit never does — so
+    the model has to be carried forward if the per-prompt hook is ever to compare
+    it against the task. Best-effort: any failure just means the advisor stays
+    quiet, which is its safe default."""
+    if not session_id or not model:
+        return
+    state = _load(session_id)
+    state["model"] = str(model)
+    _save(session_id, state)
+
+
+def recorded_model(session_id: str) -> "str | None":
+    """The model recorded by record_model for this session, or None."""
+    if not session_id:
+        return None
+    model = _load(session_id).get("model")
+    return model if isinstance(model, str) and model else None
+
+
 def should_show_full(count: int, full_every: int) -> bool:
     """Whether this prompt count should get the full (not abbreviated) render.
 

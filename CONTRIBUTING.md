@@ -45,7 +45,7 @@ name: your-agent-name
 description: >
   When this agent should be invoked. Be specific — this text helps
   Claude decide when to delegate to your agent.
-model: claude-sonnet-4-6
+model: sonnet          # OMIT this line entirely for judgment/adversarial agents
 effort: medium
 maxTurns: 15
 tools: Read, Grep, Glob
@@ -64,7 +64,13 @@ You are a [role]. Your job is to [specific task].
 ### Agent checklist
 
 - [ ] `description` clearly states when to use this agent
-- [ ] `model` is set (default: `claude-sonnet-4-6`)
+- [ ] `model` matches the kind of work: **omit it** (Claude Code's `inherit`
+      default) for judgment and adversarial agents, so they track whatever tier
+      the user chose; pin the `sonnet` alias only for mechanical work like code
+      or test generation and pattern scans. Never hardcode a frontier model
+      (`opus`/`fable`) or a pinned ID in a shipped agent — we can't know a user's
+      plan, access, or budget, and silently downgrading their judgment work is
+      worse still, since a shallower answer reads exactly like a good one
 - [ ] `tools` is minimal — only grant what the agent needs
 - [ ] `maxTurns` is set to prevent runaway costs
 - [ ] Read-only agents don't have `Write` or `Edit` tools

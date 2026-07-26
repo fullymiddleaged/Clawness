@@ -57,7 +57,8 @@ Take coding rules — *"parameterized SQL only," "async I/O end-to-end," "API re
 - **Session security** — an access guard that forces a confirmation on likely-exfiltration or destructive tool calls *even when the tool is allow-listed* (beating approval fatigue), plus a trust ledger that flags a skill/agent/MCP server that changed since last session.
 - **Cleaner context** — long bash output is compressed to the lines that matter, and a per-project memory file recalls hard-won lessons, retrieving only the ones relevant to your prompt.
 - **Sessions that survive their own length** — Clawness reads your transcript and tells you when the context window is filling up, rather than letting quality quietly degrade. At that point it offers to write a handoff, which the *next* session in that project picks up automatically — no path to remember, nothing to ask for.
-- **Adversarial review on tap** — security red/blue team, code critic, architecture challenger, and more, one ask away. They run on a cheaper model tier and return findings tagged CONFIRMED/PLAUSIBLE; your main session spot-checks the high-stakes ones against the cited lines (or a quick repro) before acting — vetted, not rubber-stamped, and without re-reading everything the agent read.
+- **Adversarial review on tap** — security red/blue team, code critic, architecture challenger, and more, one ask away. The judgment agents **run on whatever model you chose** (they inherit your session's tier — Clawness never quietly downgrades a security review), while the mechanical ones stay on a cheaper tier. They return findings tagged CONFIRMED/PLAUSIBLE; your main session spot-checks the high-stakes ones against the cited lines (or a quick repro) before acting — vetted, not rubber-stamped, and without re-reading everything the agent read.
+- **A second opinion on your model tier** — on the first prompt of a session, if the task looks far deeper (or far more routine) than the model you're running, Clawness says so once. It suggests; it never switches anything.
 
 **Make them *your* standards.** The 165 built-in rules are a starting point. Add your own in seconds — run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/` and your whole team shares the same rules. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
 
@@ -345,6 +346,8 @@ which would defeat prompt caching for no benefit to the model. Set
 
 When Claude runs a bash command that produces 80+ lines of output (test suites, builds, long logs), the PostToolUse compression hook fires automatically. It extracts only the error/failure lines with context and provides a summary, keeping Claude's context clean for the next prompt.
 
+**Content reads are exempt.** `cat`, `head`/`tail`, `grep`/`rg`, `git diff`, `git show` and friends return content Claude reasons about line by line — compressing those would drop the middle of a file silently, and blank lines are structure there, not noise. They pass through whole; past ~400 lines they're truncated from the end with an explicit note saying how many lines are missing and to use Read/Grep for the rest. Build and test noise still compresses as before.
+
 ### Context Watch (on by default)
 
 Long sessions get worse before they break. The window fills, older turns get squeezed
@@ -429,6 +432,15 @@ clawness plan approve   # manual override (headless / no plan mode)
 **Version control:** the plan gate stops *unplanned* edits, but recovering from a *bad* edit is git's job — Clawness deliberately doesn't reimplement checkpoints. If you open a project that isn't a git repo, a SessionStart check nudges Claude to ask whether you'd like to `git init` (it never initializes without your say-so). The check looks upward (cwd and its parents) *and* a few levels down, so opening a workspace or monorepo parent whose repos live in subfolders won't trigger a false "no git" nudge. Silence it with `CLAW_NO_GIT_CHECK=1`.
 
 **Stack awareness:** at session start Clawness detects your project's stack from its files (the same detection as `clawness init`) and injects a one-line note — e.g. *"Detected project stack: Python, FastAPI, SQL"* — so Claude starts already knowing the ecosystem instead of inferring it. It's a heuristic, stated as such, and complements the per-prompt rule retrieval. Silence it with `CLAW_NO_STACK_NOTE=1`.
+
+**Model-tier check:** you pick a model once and rarely revisit it. On the **first prompt of a session only**, Clawness compares the tier you're running against what the opening task looks like, and mentions a mismatch once:
+
+- On a mid or small tier with work that reads as genuinely deep — architecture, migrations, concurrency, security, diagnosis, trade-offs — it notes a higher tier may suit it better.
+- On your top tier with work that reads as clearly routine — a typo, a rename, a version bump — it notes a cheaper tier would do.
+
+Three things keep it from becoming noise. It **suggests, never switches** — nothing changes without you running `/model`. It hands Claude the *evidence* rather than a verdict, so a wrong guess is usually filtered out before it reaches you. And it speaks **at most once per project per tier**: stay where you are and it stays quiet; change tier and it re-arms.
+
+The two directions are deliberately **not** symmetric. A wrong "spend more" costs money you can see. A wrong "spend less" means you quietly get a shallower answer on hard work and never find out — so a downgrade hint needs a strong signal, a short prompt, and the complete absence of any deep-work signal. Off with `CLAW_NO_MODEL_ADVISOR=1`.
 
 ### Session Security (access guard + trust ledger, on by default)
 
@@ -723,7 +735,7 @@ clawness --rules-dir /path/to/rules stats
 | **Rules** | 165 across 23 domains | Coding, science, research and LLM standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 6 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status` |
-| **Hooks** | 10 (rule injection & context watch, output compression, plan gate, access guard, trust ledger, git check, memory bootstrap, handoff pickup, stack detection, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
+| **Hooks** | 10 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory bootstrap, handoff pickup, stack detection, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
 | **CLI** | 9 commands | query, init, stats, lint, bench, eval, plan, agents-md, audit-skills |
 | **Installers** | bash + PowerShell (with matching uninstallers) | 7-step setup for Windows, macOS, Linux |
 | **Plugin manifest** | marketplace + plugin | For `claude plugin install` |
@@ -788,6 +800,7 @@ there.
 | `CLAW_MEMORY_PIN_BUDGET` | `400` | Max characters of the always-injected `## Always` section |
 | `CLAW_MEMORY_MAX_ENTRIES` | `200` | Only the newest N lessons are ranked, bounding hook latency on a runaway log (~1.6 ms at 40 entries, ~7 ms at 200) |
 | `CLAW_NO_STACK_NOTE` | (unset) | Don't inject the detected-stack note at session start |
+| `CLAW_NO_MODEL_ADVISOR` | (unset) | Don't check the session's model tier against the opening task |
 | `CLAW_NO_CONTEXT_WATCH` | (unset) | Disable the context-pressure warnings |
 | `CLAW_CONTEXT_LIMIT` | (auto) | Your context window in tokens. Auto-detected from the `[1m]` marker on your configured model, then corrected upward if usage exceeds the assumption — set it explicitly if that guess is wrong |
 | `CLAW_CONTEXT_WARN` | `0.70` | Fraction of the window at which to mention context is filling |
@@ -807,19 +820,24 @@ there.
 
 ### Agent Model Configuration
 
-Two-tier by default: your main session (orchestrator) runs **Opus** for planning and synthesis; the 7 sub-agents run **Sonnet 4.6** for focused analysis at lower cost. Start with `claude --model claude-opus-4-8` — sub-agents pick up Sonnet automatically.
+Split by **what the agent is for**, not by role:
+
+- **Judgment and adversarial work inherits your session's model.** A security review, an architecture challenge, or a code critique is only as good as the model making the call — and if it silently ran a tier below the one you chose, you'd get a shallower answer that reads exactly like a thorough one. `model:` is simply omitted on these, which is Claude Code's `inherit` default.
+- **Mechanical work is pinned to `sonnet`.** Test generation and pattern scans don't need your top tier, and pinning them is a genuine saving.
+
+Clawness deliberately never hardcodes a frontier model in a shipped agent — it can't know your plan, access, or budget.
 
 | Agent | Model | Effort | Max Turns |
 |-------|-------|--------|-----------|
-| `security-red-team` | claude-sonnet-4-6 | high | 25 |
-| `security-blue-team` | claude-sonnet-4-6 | high | 25 |
-| `code-critic` | claude-sonnet-4-6 | medium | 15 |
-| `test-writer` | claude-sonnet-4-6 | medium | 20 |
-| `perf-auditor` | claude-sonnet-4-6 | medium | 15 |
-| `refactor-advisor` | claude-sonnet-4-6 | medium | 15 |
-| `arch-challenger` | claude-sonnet-4-6 | high | 15 |
+| `security-red-team` | inherit | high | 25 |
+| `security-blue-team` | inherit | high | 25 |
+| `arch-challenger` | inherit | high | 15 |
+| `code-critic` | inherit | medium | 15 |
+| `test-writer` | `sonnet` | medium | 20 |
+| `perf-auditor` | `sonnet` | medium | 15 |
+| `refactor-advisor` | `sonnet` | medium | 15 |
 
-**Override** by editing an agent's `.md` in `~/.claude/agents/`: `model:` takes aliases (`haiku`/`sonnet`/`opus`) or pinned IDs (`claude-opus-4-8`); `effort:` is `low`→`max`; `maxTurns:` caps tool calls. Retarget all sub-agents at once with `CLAUDE_CODE_SUBAGENT_MODEL`, or the orchestrator with `claude --model …` / `/model …`.
+**Override** by editing an agent's `.md` in `~/.claude/agents/`: `model:` takes aliases (`haiku`/`sonnet`/`opus`/`fable`), a pinned ID (`claude-opus-5`), or `inherit` (the default when the field is absent); `effort:` is `low`→`max`; `maxTurns:` caps tool calls. Retarget all sub-agents at once with `CLAUDE_CODE_SUBAGENT_MODEL`, or your own session with `claude --model …` / `/model …`.
 
 ### Where Rules Live
 

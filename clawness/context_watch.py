@@ -147,15 +147,12 @@ def limit_from_settings() -> int | None:
     session and a 200k one alike. settings.local.json wins when both set it,
     matching Claude Code's own precedence.
     """
-    config = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
-    for name in ("settings.local.json", "settings.json"):
-        try:
-            data = json.loads((config / name).read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        model = data.get("model")
-        if isinstance(model, str) and "1m" in model.lower():
-            return 1_000_000
+    # Delegated so the settings read lives in one place (model_advisor owns
+    # "what model is configured?"); the [1m] interpretation stays here.
+    from clawness.model_advisor import read_settings_model
+    model = read_settings_model()
+    if isinstance(model, str) and "1m" in model.lower():
+        return 1_000_000
     return None
 
 

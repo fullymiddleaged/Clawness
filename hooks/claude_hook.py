@@ -15,6 +15,7 @@ Install once, works everywhere. Project rules layer on top when present.
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import sys
@@ -25,14 +26,14 @@ from pathlib import Path
 # em-dashes, accents, emoji — before we ever see it, and (b) mangles or crashes
 # (UnicodeEncodeError) when emitting the rules/memory blocks, dropping injection.
 # Claude speaks UTF-8 on both ends, so pin it regardless of platform.
-try:
-    sys.stdin.reconfigure(encoding="utf-8")
-except Exception:
-    pass
-try:
-    sys.stdout.reconfigure(encoding="utf-8")
-except Exception:
-    pass
+# isinstance narrows to the class that actually defines reconfigure() — sys.stdin
+# is typed TextIO, which doesn't — and skips an already-replaced stream.
+for _stream in (sys.stdin, sys.stdout):
+    if isinstance(_stream, io.TextIOWrapper):
+        try:
+            _stream.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -181,6 +182,30 @@ def context_note(event: dict, cwd: str, session_id: str) -> str:
     return render_alert(alert)
 
 
+def model_advice_note(prompt: str, session_id: str, cwd: str) -> str:
+    """Note text when the session's model tier looks mismatched to the task, else "".
+
+    Only meaningful on the session's FIRST prompt: that's the earliest turn where
+    both halves exist — the model (stashed at SessionStart, the only event that
+    receives it) and a task to weigh it against. Lazily imported for the same
+    reason as context_note: this must never be able to stop the rules block."""
+    from clawness.model_advisor import (
+        assess, normalize_tier, read_settings_model, render_advice, should_advise,
+    )
+    from clawness.plan import find_project_root
+    from clawness.session_state import recorded_model
+
+    tier = normalize_tier(recorded_model(session_id) or read_settings_model())
+    advice = assess(prompt, tier)
+    if advice is None:
+        return ""
+    # Ledger check last, so a prompt that wouldn't have advised anyway never
+    # burns this project's one-shot for the tier.
+    if not should_advise(find_project_root(Path(cwd)), advice.tier):
+        return ""
+    return render_advice(advice)
+
+
 def main() -> None:
     try:
         raw = sys.stdin.read()
@@ -283,6 +308,20 @@ def main() -> None:
     if not os.environ.get("CLAW_NO_CONTEXT_WATCH"):
         try:
             note = context_note(event, cwd, session_id)
+            if note:
+                block = block + "\n\n" + note
+        except Exception:
+            pass
+
+    # --- Model-tier advisor (first prompt only) ---
+    # Evidence, not a verdict: the note reports the signals and lets Claude decide
+    # whether to raise it, so a wrong heuristic usually dies here instead of
+    # reaching the user. Speaks at most once per project per tier. Wrapped whole
+    # and fails SILENT (not open, unlike the context watch) — an unprompted wrong
+    # opinion about someone's spend costs more than saying nothing.
+    if prompt_count == 1 and not os.environ.get("CLAW_NO_MODEL_ADVISOR"):
+        try:
+            note = model_advice_note(prompt, session_id, cwd)
             if note:
                 block = block + "\n\n" + note
         except Exception:

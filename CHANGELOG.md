@@ -5,6 +5,66 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-07-26
+
+Stops Clawness overriding your model choice for judgment work, adds a one-time
+model-tier check, and repairs the output-compression hook. 165 rules / 23 domains
+unchanged; 342 tests (was 324); retrieval MRR@5 0.990 / hit-rate 1.000.
+
+### Changed
+
+- **Adversarial sub-agents now inherit your session's model instead of being pinned
+  to Sonnet.** Subagent `model:` defaults to `inherit`, so the previous
+  `model: sonnet` on all seven agents was an *active override*: a user running Opus
+  who invoked `/clawness:audit` got their security review done a tier below the
+  model they chose — and a shallower threat model reads exactly like a thorough one.
+  `security-red-team`, `security-blue-team`, `arch-challenger` and `code-critic` now
+  omit `model:`. `test-writer`, `perf-auditor` and `refactor-advisor` stay pinned to
+  `sonnet` (mechanical work). `effort:`/`maxTurns:` are unchanged throughout.
+
+  > **This costs more if you run a top tier.** `/clawness:audit` and
+  > `/clawness:review` now run on your session's model rather than Sonnet. Pin
+  > `model: sonnet` back in `~/.claude/agents/*.md`, or set
+  > `CLAUDE_CODE_SUBAGENT_MODEL`, to restore the old behavior.
+
+### Added
+
+- **Model-tier check** (`clawness/model_advisor.py`). On the **first prompt of a
+  session only**, compares the tier you're running against what the opening task
+  looks like, and mentions a mismatch once — a higher tier for work that reads as
+  architecture/migration/concurrency/security/diagnosis, a cheaper one for a typo or
+  a version bump. It **suggests, never switches**. Speaks at most **once per project
+  per tier**, so staying put stays quiet and changing tier re-arms it.
+
+  The two directions are deliberately asymmetric: a wrong "spend more" costs money
+  you can see, while a wrong "spend less" hands you a shallower answer on hard work
+  that you never find out about — so a downgrade hint additionally requires a short
+  prompt and the complete absence of any deep-work signal. The hook passes Claude the
+  *evidence* rather than a verdict, so a misfire is usually filtered before you see
+  it. Ships with a labeled eval set (`tests/model_advisor_cases.json`) gated on
+  **zero false positives** across routine prompts. Off with `CLAW_NO_MODEL_ADVISOR=1`.
+
+### Fixed
+
+- **Output compression mangled file reads.** The PostToolUse hook fired on any bash
+  output over 80 lines, so a `cat` of two source files was cut from 137 lines to 15 —
+  blank lines stripped as "noise" (they're structure), the middle silently dropped,
+  and the word "error" in ordinary prose hoisted into an "errors/warnings" section.
+  Content commands (`cat`, `head`/`tail`, `grep`/`rg`, `git diff`, `git show`, `jq`
+  and friends) now bypass compression; past ~400 lines they truncate from the end
+  with an explicit note of how many lines are missing. Build and test output
+  compresses exactly as before.
+- **Mojibake in compressed output.** `compress_output.py` was the only stdin-reading
+  hook without a UTF-8 pin. Claude Code is Node, so `JSON.stringify` sends raw UTF-8
+  rather than `\uXXXX` escapes; on Windows stdin decoded it as cp1252 and every
+  em-dash came back to Claude as `â€"`.
+- **Type error on every hook's UTF-8 pin.** `sys.stdin`/`sys.stdout` are typed
+  `TextIO`, but `.reconfigure()` only exists on `io.TextIOWrapper`, so all nine hooks
+  tripped Pylance's `reportAttributeAccessIssue`. Now narrowed with `isinstance` —
+  a real fix rather than a suppression, and it correctly skips a replaced stream.
+- **Plan gate opt-out pointed at a CLI plugin users don't have.** `ASK_REASON` led
+  with `clawness plan off`; it now leads with `CLAW_NO_PLAN_GATE=1`.
+
 ## [1.3.1] - 2026-07-26
 
 Fixes science/research rules surfacing on ordinary coding work — found by driving
