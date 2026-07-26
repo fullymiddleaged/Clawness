@@ -25,6 +25,10 @@ DETECTORS: list[tuple[str, list[str], str]] = [
     ("tsconfig.json",          ["typescript"],                      "TypeScript"),
     ("next.config.*",          ["nextjs", "react"],                 "Next.js"),
     ("capacitor.config.*",     ["capacitor"],                       "Capacitor (mobile)"),
+    # Bare *.py matters: without it a repo holding paper.tex + analysis.py and no
+    # packaging file does NOT detect Python, so Python rules face the off-stack
+    # floor in exactly the mixed science+code case.
+    ("*.py",                   ["python"],                          "Python scripts"),
     ("requirements.txt",       ["python"],                          "Python (requirements.txt)"),
     ("pyproject.toml",         ["python"],                          "Python (pyproject.toml)"),
     ("Pipfile",                ["python"],                          "Python (Pipfile)"),
@@ -54,6 +58,13 @@ DETECTORS: list[tuple[str, list[str], str]] = [
     ("vitest.config.*",        ["react", "typescript"],             "Vitest testing"),
     ("pytest.ini",             ["python"],                          "Pytest"),
     (".env.example",           ["general"],                         "Environment config"),
+    # Scientific / research work. science/ is cross-cutting (never off-stack
+    # penalized), so these drive `clawness init` reporting and compose with the
+    # language domains — a numpy+LaTeX repo detects {science, python, general}.
+    ("*.tex",                  ["science"],                         "LaTeX manuscript"),
+    ("*.ipynb",                ["science", "python"],               "Jupyter notebook"),
+    ("Project.toml",           ["science"],                         "Julia project"),
+    ("DESCRIPTION",            ["science"],                         "R package"),
 ]
 
 # Deep scan: look inside package.json for specific dependencies
@@ -74,6 +85,10 @@ PACKAGE_JSON_DEPS: list[tuple[str, list[str], str]] = [
     ("@tanstack/react-query",  ["react"],                           "TanStack Query"),
     ("zustand",                ["react"],                           "Zustand state"),
     ("tailwindcss",            ["react", "general"],                "Tailwind CSS"),
+    ("@anthropic-ai/sdk",      ["llm"],                             "Anthropic SDK"),
+    ("openai",                 ["llm"],                             "OpenAI SDK"),
+    ("ai",                     ["llm"],                             "Vercel AI SDK"),
+    ("langchain",              ["llm"],                             "LangChain"),
 ]
 
 # Deep scan: look inside requirements.txt / pyproject.toml for deps
@@ -88,6 +103,17 @@ PYTHON_DEPS: list[tuple[str, list[str], str]] = [
     ("psycopg",                ["sql"],                             "PostgreSQL driver"),
     ("asyncpg",                ["sql"],                             "Async PostgreSQL driver"),
     ("pytest",                 ["python"],                          "Pytest"),
+    ("anthropic",              ["llm"],                             "Anthropic SDK"),
+    ("openai",                 ["llm"],                             "OpenAI SDK"),
+    ("langchain",              ["llm"],                             "LangChain"),
+    ("llama-index",            ["llm"],                             "LlamaIndex"),
+    ("litellm",                ["llm"],                             "LiteLLM"),
+    ("numpy",                  ["science", "python"],               "NumPy"),
+    ("scipy",                  ["science", "python"],               "SciPy"),
+    ("sympy",                  ["science", "python"],               "SymPy"),
+    ("matplotlib",             ["science", "python"],               "Matplotlib"),
+    ("astropy",                ["science", "python"],               "Astropy"),
+    ("pandas",                 ["science", "python"],               "pandas"),
 ]
 
 

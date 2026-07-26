@@ -1,0 +1,15 @@
+id: REL-RETRY-001
+domain: reliability
+severity: error
+tags: [retry, backoff, jitter, idempotent, thundering-herd, resilience, 429]
+triggers: [retry, retries, backoff, try again, transient failure, 429, rate limited, flaky network]
+when: Adding retry logic around a failing call.
+rule: >
+  Retry only operations that are safe to repeat, and only for genuinely transient
+  failures - never retry a 400 or a validation error. Use exponential backoff with
+  random jitter and a bounded attempt count: a tight retry loop turns a brief
+  dependency wobble into a self-inflicted denial of service, and synchronised
+  retries from many clients recreate the spike that caused the failure. Honour
+  Retry-After when the server sends it.
+violation: "for _ in range(10): try: post(order) except: continue   # retries a non-idempotent write, no delay"
+correct: "Bounded exponential backoff with jitter on idempotent calls only, respecting Retry-After"

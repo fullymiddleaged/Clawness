@@ -1,0 +1,15 @@
+id: REL-LIMIT-001
+domain: reliability
+severity: warning
+tags: [rate-limit, throttle, quota, 429, abuse, capacity, backpressure]
+triggers: [rate limit, throttle, too many requests, quota, abuse, ddos, capacity]
+when: Exposing an endpoint publicly, or calling an API with a published quota.
+rule: >
+  Rate-limit in both directions. On your own endpoints, cap per-client request
+  rates and return 429 with Retry-After, so one misbehaving caller cannot consume
+  the capacity every other user depends on. As a client, respect the quota you
+  are given: track your own usage, back off on 429 rather than hammering, and
+  make the limit a configured value rather than a number discovered in
+  production.
+violation: "An unauthenticated public endpoint doing expensive work with no per-client cap"
+correct: "Per-client token bucket, 429 with Retry-After, and a client-side limiter matching the published quota"

@@ -1,0 +1,14 @@
+id: RES-CONFLICT-001
+domain: research
+severity: error
+tags: [disagreement, contradiction, sources, consensus, uncertainty, evidence]
+triggers: [sources disagree, two sources disagree, they disagree, contradict, contradictory, conflicting evidence, which is right, consensus, debate, disagreement]
+when: Sources give different or contradictory answers.
+rule: >
+  Report the disagreement rather than silently picking a side. Say who claims
+  what, on what evidence, and what would distinguish them - sample size, method,
+  date, or conflict of interest. Presenting one position as settled when the
+  field is split hides exactly the information the reader needs, and a genuine
+  controversy reported as consensus is a worse error than admitting uncertainty.
+violation: "Reporting the answer you found first as established, with the contradicting sources unmentioned"
+correct: "'A and B disagree: A (n=40, 2019) finds X; B (n=2000, 2024) finds the opposite. B is better powered.'"

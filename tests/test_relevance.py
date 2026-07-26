@@ -122,15 +122,49 @@ def test_bm25_rescue_never_fires_when_tfidf_already_cleared_the_floor():
 
 def test_off_stack_rules_suppressed_when_stack_known():
     """A vague prompt in a Python project should not surface off-stack
-    (React/CSS/SQL/etc.) language rules — only in-stack + cross-cutting ones."""
-    wl = Clawness(RULES_DIR, stack_domains={"python", "bash", "general", "workflows"})
-    ids = wl.rank_ids("what rules do you see", top_k=8)
-    domains = {wl._ranked_rules[i].domain
-               for i in range(len(wl._ranked_rules))
-               if wl._ranked_rules[i].id in ids}
+    (React/CSS/SQL/etc.) language rules — only in-stack + cross-cutting ones.
+
+    Probes several signal-less prompts rather than one. The original single
+    probe was "what rules do you see", which is NOT signal-less against
+    RCT-HOOKS-001 — that rule is literally about the "Rules of Hooks", so the
+    shared token "rules" gave it a real lexical match that sat a hair under the
+    0.15 off-stack floor (0.137). Corpus growth raised the IDF of "rules" and
+    pushed it to 0.151, failing a test whose property still held. Pick prompts
+    with no token in common with any rule, and probe more than one, so the test
+    measures suppression instead of one rule's knife-edge score."""
     off_stack = {"react", "css", "sql", "capacitor", "go", "rust", "java",
-                 "nextjs", "docker", "fastapi", "typescript"}
-    assert not (domains & off_stack), f"off-stack domains leaked through: {domains & off_stack}"
+                 "nextjs", "docker", "fastapi", "typescript", "llm"}
+    wl = Clawness(RULES_DIR, stack_domains={"python", "bash", "general", "workflows"})
+    by_id = {r.id: r for r in wl._ranked_rules}
+    for prompt in ("hello", "ok thanks", "continue", "what should i do next"):
+        ids = wl.rank_ids(prompt, top_k=8)
+        leaked = {by_id[i].domain for i in ids} & off_stack
+        assert not leaked, f"off-stack domains leaked through on {prompt!r}: {leaked}"
+
+
+def test_llm_domain_is_stack_gated():
+    """llm/ is a stack domain, so prompt-caching and eval-set rules stay quiet in
+    a project that calls no model, while a project with an LLM SDK gets them.
+    Uses a marginal match on purpose: a STRONG match is designed to clear the
+    off-stack floor anyway (test_strong_off_stack_match_still_surfaces), so only
+    a mid-band score exercises the gate."""
+    prompt = "confirm before the side effect"
+    off = Clawness(RULES_DIR, stack_domains={"python", "science", "general"})
+    on = Clawness(RULES_DIR, stack_domains={"python", "llm", "general"})
+    off_ids = [i for i in off.rank_ids(prompt, top_k=8) if i.startswith("LLM-")]
+    on_ids = [i for i in on.rank_ids(prompt, top_k=8) if i.startswith("LLM-")]
+    assert not off_ids, f"llm rules leaked into a non-LLM project: {off_ids}"
+    assert on_ids, "llm rules missing from a project that uses an LLM SDK"
+
+
+def test_science_domain_is_cross_cutting():
+    """science/ must NOT be stack-gated: a researcher often works in a bare or
+    LaTeX-only directory where nothing is detected, and gating would silence the
+    rules exactly there. A physics question must win over the CSS units rule."""
+    wl = Clawness(RULES_DIR, stack_domains={"rust", "general"})
+    ids = wl.rank_ids("check the units in this equation", top_k=5)
+    assert "SCI-UNITS-001" in ids
+    assert ids[0] == "SCI-UNITS-001", f"CSS/other rule outranked it: {ids[:3]}"
 
 
 def test_strong_off_stack_match_still_surfaces():

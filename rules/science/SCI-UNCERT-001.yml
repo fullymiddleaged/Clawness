@@ -1,0 +1,14 @@
+id: SCI-UNCERT-001
+domain: science
+severity: error
+tags: [uncertainty, error-propagation, significant-figures, precision, measurement, error-bars]
+triggers: [uncertainty, error bars, error propagation, significant figures, measurement error, standard deviation, confidence interval]
+when: Reporting a computed result derived from measured or estimated inputs.
+rule: >
+  Propagate uncertainty through the calculation and report only the significant
+  figures the inputs support. A number quoted to more precision than its inputs
+  justify is a false claim about how well the quantity is known, and it survives
+  into other work as if it were solid. State the uncertainty alongside every
+  reported value, and say whether it is statistical, systematic, or both.
+violation: "Reporting 3.14159 m/s from inputs known to two significant figures"
+correct: "3.1 +/- 0.2 m/s (statistical), with the propagation shown"

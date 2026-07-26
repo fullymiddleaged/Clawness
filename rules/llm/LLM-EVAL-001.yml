@@ -1,0 +1,14 @@
+id: LLM-EVAL-001
+domain: llm
+severity: error
+tags: [eval, prompt, regression, baseline, quality, llm, testing]
+triggers: [prompt, tweak the prompt, improve the output, prompt engineering, eval, model output worse, tune the prompt]
+when: Changing a prompt, swapping a model, or adjusting generation parameters.
+rule: >
+  Judge prompt and model changes against a fixed eval set with a scored baseline,
+  not against one good-looking output. A prompt is code with no type checker and
+  no stack trace: the only signal that a change helped is a score on cases you
+  fixed in advance. Build the set from real failures, keep it in version control,
+  and record the before and after number in the same change.
+violation: "Rewriting the system prompt, eyeballing one response, and shipping it"
+correct: "Run the 40-case eval set before and after; keep the change only if the score moves the right way"

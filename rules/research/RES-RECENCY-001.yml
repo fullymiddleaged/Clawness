@@ -1,0 +1,15 @@
+id: RES-RECENCY-001
+domain: research
+severity: error
+tags: [recency, dates, currency, stale, outdated, publication-date, search]
+triggers: [recent, latest, up to date, current state of the art, newest, this year, as of today]
+when: Gathering sources, or judging whether what you know about a field is current.
+rule: >
+  Bound the sweep to the present - {{CURRENT_DATE}} - and state the cutoff you
+  actually used. Check the publication date of every source: search ranking
+  reflects popularity, not currency, so a highly ranked page can be years stale.
+  Your own sense of what is recent lags your training data by an unknown margin,
+  so treat it as a hypothesis to check rather than a fact, especially in
+  fast-moving areas where a year changes the answer.
+violation: "Summarising the state of the art from memory, with no dates checked and no cutoff stated"
+correct: "'Sources checked through {{CURRENT_DATE}}; newest relevant work is <date>' - with each date verified"

@@ -1,0 +1,15 @@
+id: RES-QUESTION-001
+domain: research
+severity: warning
+tags: [research-question, scope, falsifiable, hypothesis, framing, criteria]
+triggers: [research question, explore this area, frame the research, scope the study, what should i be asking, open ended research, hypothesis to test]
+when: Beginning an open-ended investigation or exploratory research.
+rule: >
+  Before gathering anything, write down the question, what would count as an
+  answer, and what would falsify it. Exploration without a stated criterion
+  becomes unbounded reading that never converges, because nothing can ever settle
+  it. Scope the question to what is tractable with the time, data, and compute
+  actually available, and revisit the framing explicitly when the evidence pushes
+  back rather than drifting to a different question unannounced.
+violation: "Reading 60 papers on a broad topic with no stated question, then summarising whatever was read"
+correct: "'Does X hold under condition Y? Answer = a measured effect with CI; falsified if the CI spans zero.'"

@@ -1,8 +1,8 @@
 id: NX-ACTION-001
 domain: nextjs
 severity: warning
-tags: [server-actions, forms, mutations, use-server, revalidate]
-triggers: [use server, action, form, submit, create, update, delete, mutation, revalidatePath, revalidateTag]
+tags: [server-actions, server-action, forms, form-submission, mutations, use-server, revalidate, nextjs]
+triggers: [use server, server action, server actions, action, form, form submission, submit, create, update, delete, mutation, revalidatePath, revalidateTag]
 when: Handling form submissions or data mutations.
 rule: >
   Use Server Actions for form mutations (create, update, delete). Define

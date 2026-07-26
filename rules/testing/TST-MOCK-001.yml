@@ -1,0 +1,15 @@
+id: TST-MOCK-001
+domain: testing
+severity: error
+tags: [mocking, stubs, behavior, coupling, test-quality, doubles]
+triggers: [mock, mocking, patch, stub, assert called with, test double, spy]
+when: Introducing a mock, stub, or spy into a test.
+rule: >
+  Mock at the system boundary - network, clock, filesystem, third-party API - and
+  never the unit under test. Assert on observable behaviour (returned values,
+  resulting state) rather than on how many times a mock was called: call-count
+  assertions pin the current implementation in place, so every refactor breaks
+  the suite while genuine regressions still pass. A test that mocks everything
+  proves only that the mocks were configured.
+violation: "mock_repo.save.assert_called_once()   # passes even if the saved object is wrong"
+correct: "Use an in-memory repository, then assert the stored record has the expected fields"

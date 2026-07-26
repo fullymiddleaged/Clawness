@@ -1,0 +1,14 @@
+id: TST-ISOLATION-001
+domain: testing
+severity: error
+tags: [isolation, shared-state, ordering, parallel, fixtures, teardown]
+triggers: [test order, tests interfere, shared state, parallel tests, only fails when run together, teardown]
+when: Tests share a database, filesystem, module-level state, or fixture.
+rule: >
+  Every test must pass alone, in any order, and in parallel. Shared mutable state
+  between tests creates failures that appear only in certain orders and vanish
+  under investigation, which is among the most expensive kinds of bug to chase.
+  Create state per test and tear it down in a fixture that runs even on failure;
+  never depend on a value another test left behind.
+violation: "test_b passing only because test_a inserted the user it queries"
+correct: "Per-test transaction or temp directory, rolled back in fixture teardown"

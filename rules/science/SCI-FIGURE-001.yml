@@ -1,0 +1,15 @@
+id: SCI-FIGURE-001
+domain: science
+severity: warning
+tags: [figure, plot, axes, caption, colorblind, visualization, chart]
+triggers: [plot, figure, chart, axes, label the axis, caption, colormap, graph the data]
+when: Producing a figure for a paper, report, or presentation.
+rule: >
+  A figure must be readable on its own. Label both axes with units, define every
+  error bar in the caption (standard deviation, standard error, or confidence
+  interval - they differ by a lot), write a caption that stands without the body
+  text, and choose a colorblind-safe palette that survives greyscale printing.
+  Never truncate or rescale an axis in a way that exaggerates the effect; that is
+  a claim, not a styling choice.
+violation: "Unlabelled y-axis starting at 95%, a rainbow colormap, and a caption reading Results"
+correct: "Axes labelled with units, zero-based or explicitly justified, viridis, error bars defined in the caption"

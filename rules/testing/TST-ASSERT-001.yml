@@ -1,0 +1,14 @@
+id: TST-ASSERT-001
+domain: testing
+severity: warning
+tags: [assertions, specificity, test-quality, truthiness, one-behavior]
+triggers: [assert, assertion, assert true, test passes but, weak test, what should i assert]
+when: Writing the assertions in a test.
+rule: >
+  Assert the specific expected value, not that something is truthy or non-empty -
+  assertTrue(result) passes for almost any bug that still returns an object. Test
+  one behaviour per test so a failure names the cause, and make the failure
+  message say what was expected versus received. Assert on error paths too: that
+  the right exception type is raised, with the right message.
+violation: "assert response   # true for an empty list, an error object, or the wrong user"
+correct: "assert response.status == 200 and response.json()['id'] == expected_id"

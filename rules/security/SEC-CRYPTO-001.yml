@@ -1,0 +1,15 @@
+id: SEC-CRYPTO-001
+domain: security
+severity: error
+tags: [crypto, hashing, passwords, encryption, bcrypt, argon2, random]
+triggers: [hash the password, encrypt, md5, sha1, salt, random token, crypto, store passwords]
+when: Hashing passwords, encrypting data, or generating security-sensitive values.
+rule: >
+  Use a slow, salted password hash built for the purpose - argon2id, scrypt, or
+  bcrypt - never MD5, SHA-1, or a bare SHA-256, which are fast by design and so
+  are cheap to brute-force. For everything else use a vetted library at a high
+  level rather than assembling primitives, take the defaults it recommends, and
+  generate tokens from a cryptographically secure source. Never design your own
+  scheme.
+violation: "hashlib.sha256(password.encode()).hexdigest()   and   token = str(random.random())"
+correct: "argon2.PasswordHasher().hash(password)   and   secrets.token_urlsafe(32)"

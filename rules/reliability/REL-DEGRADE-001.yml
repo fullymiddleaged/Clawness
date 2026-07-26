@@ -1,0 +1,15 @@
+id: REL-DEGRADE-001
+domain: reliability
+severity: warning
+tags: [degradation, fallback, circuit-breaker, cascading-failure, availability, resilience]
+triggers: [dependency down, service unavailable, cascading failure, circuit breaker, fallback, outage, graceful]
+when: Depending on a service whose failure should not take the whole system down.
+rule: >
+  Decide in advance what happens when each dependency fails, and make that a
+  degraded feature rather than a failed request. Serve a cached or default value,
+  hide the affected panel, or queue the work for later. Add a circuit breaker so
+  repeated failures stop being retried while the dependency is down. Without
+  this, a non-essential service - recommendations, avatars, analytics - takes the
+  checkout page with it.
+violation: "The product page returning 500 because the recommendations service timed out"
+correct: "Circuit-break the recommendations call; render the page without that panel and log the degradation"

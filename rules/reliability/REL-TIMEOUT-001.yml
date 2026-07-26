@@ -1,0 +1,15 @@
+id: REL-TIMEOUT-001
+domain: reliability
+severity: error
+tags: [timeout, network, hang, deadline, http, client, resilience]
+triggers: [timeout, hangs forever, request never returns, http client, api call, stuck, deadline]
+when: Making any network call - HTTP, database, RPC, queue, or external service.
+rule: >
+  Set an explicit timeout on every network call. Most client libraries default to
+  no timeout or to minutes, so one slow dependency holds a connection, then a
+  worker, then the pool, and the outage spreads to endpoints that never touched
+  it. Choose the value from the caller's own deadline rather than a round number,
+  and propagate a deadline through the call chain so downstream work stops when
+  nobody is still waiting for it.
+violation: "requests.get(url)   # no timeout: hangs until the socket dies, holding the worker"
+correct: "requests.get(url, timeout=(3.05, 10))  # explicit connect/read budget, derived from the caller deadline"

@@ -1,0 +1,15 @@
+id: SCI-DERIVE-001
+domain: science
+severity: error
+tags: [derivation, verification, limiting-case, symmetry, algebra, proof, sanity-check]
+triggers: [derivation, derive, check my algebra, proof, closed form, analytic result, is this derivation right]
+when: Relying on a derivation, closed form, or algebraic result.
+rule: >
+  Check a derivation independently before building on it. Four cheap checks catch
+  most errors: does it reduce correctly in known limiting or asymptotic cases, is
+  it dimensionally consistent, does it respect the symmetries of the problem, and
+  does a numerical evaluation match a direct simulation at a few points. Apply
+  this with particular force to a derivation a language model produced - fluent
+  algebra with a sign error reads exactly like fluent algebra.
+violation: "Building a whole analysis on a closed form that was never checked against the small-parameter limit"
+correct: "Verify the limiting cases, check dimensions, then spot-check numerically against simulation"

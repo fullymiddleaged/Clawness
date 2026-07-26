@@ -1,8 +1,8 @@
 id: GEN-ABSTRACTION-001
 domain: general
 severity: warning
-tags: [abstraction, yagni, premature, simplicity, over-engineering, dry]
-triggers: [abstract, interface, factory, generic, wrapper, refactor]
+tags: [abstraction, yagni, premature, simplicity, over-engineering, dry, extract, helper, layer, early]
+triggers: [abstract, abstracting, interface, factory, generic, wrapper, refactor, too early, premature, extract this, into a helper, add a layer, do i need an abstraction]
 when: Adding an abstraction, layer, generic, or configuration option.
 rule: >
   Don't abstract until the need is real. Prefer simple, direct code and add

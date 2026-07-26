@@ -1,0 +1,14 @@
+id: SEC-PATH-001
+domain: security
+severity: error
+tags: [path-traversal, filesystem, upload, download, sanitization, directory]
+triggers: [file path, filename from user, download file, upload, read the file, path traversal, serve static]
+when: Building a filesystem path from user-controlled input.
+rule: >
+  Resolve the path and confirm it stays inside the intended base directory before
+  opening it. Stripping "../" is not enough: encoded traversal, absolute paths,
+  symlinks, and Windows separators all get past naive filtering. Resolve to a
+  canonical absolute path, verify the base directory is a prefix of it, and
+  prefer generating your own storage name over trusting a user-supplied filename.
+violation: "open(os.path.join(UPLOAD_DIR, request.args['name']))   # name='../../etc/passwd'"
+correct: "p = (UPLOAD_DIR / name).resolve(); if not p.is_relative_to(UPLOAD_DIR.resolve()): reject"

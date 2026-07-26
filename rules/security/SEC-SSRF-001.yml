@@ -1,0 +1,15 @@
+id: SEC-SSRF-001
+domain: security
+severity: error
+tags: [ssrf, url, fetch, metadata, allowlist, internal, request-forgery]
+triggers: [fetch a url, user supplied url, webhook url, download from, proxy request, image url, callback url]
+when: Making a server-side request to a URL that came from user input.
+rule: >
+  Never fetch a user-supplied URL without an allowlist. Validate the destination
+  against permitted hosts and schemes, resolve DNS and check the resolved address
+  before connecting, and reject private, loopback, and link-local ranges - in
+  particular cloud metadata endpoints, which hand out credentials to anything
+  that can reach them. Re-check after every redirect, since a permitted host can
+  redirect inward, and disable redirects where you can.
+violation: "requests.get(request.json['avatar_url'])   # fetches 169.254.169.254 and returns the role credentials"
+correct: "Allowlist the host and scheme, resolve and reject private ranges, disable redirects, then fetch"

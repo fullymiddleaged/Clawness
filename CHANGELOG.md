@@ -5,6 +5,124 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-07-26
+
+Widens the corpus past web/backend coding into scientific computing, research method,
+and building with LLMs. **165 rules / 23 domains** (was 121 / 18); 316 tests; retrieval
+MRR@5 0.990 / hit-rate 1.000 on a 154-query set (was 0.983 / 1.000 on 59).
+
+### Added
+
+- **`llm/` (7 rules, stack-gated)** — building with models is now as routine as building
+  with a database and had no coverage: eval sets over vibes for prompt changes
+  (`LLM-EVAL-001`), untrusted content reaching a tool-using agent (`LLM-INJECT-001`),
+  schema-constrained output over regex-scraped prose (`LLM-OUTPUT-001`), prompt-cache
+  and token cost (`LLM-COST-001`), never asserting exact model text (`LLM-TEST-001`),
+  pinning a verified model id (`LLM-MODEL-001`), retrieval over context-stuffing
+  (`LLM-RETRIEVE-001`). Gated like a language domain — detected from
+  `anthropic`/`openai`/`langchain`/`llama-index`/`litellm` or the JS equivalents — so it
+  stays quiet in a repo that calls no model.
+
+  `LLM-INJECT-001` is not a duplicate of the mandatory `ENF-SEC-006`: that governs
+  *Claude's* handling of untrusted content, this governs the agent the user is *writing*.
+
+- **`science/` (10 rules) and `research/` (9 rules), both cross-cutting** — for physics,
+  maths and engineering work: prior art before committing effort, dimensional
+  consistency, numerical stability, uncertainty propagation, statistical discipline,
+  independent derivation checks, solver validation, reproducibility, paper claims
+  tracing to results, figure standards; plus source hygiene (primary sources,
+  separating inference from what a source says, date-bounded sweeps via
+  `{{CURRENT_DATE}}`, reporting disagreement) and the research programme itself
+  (framing a falsifiable question, mapping a frontier from what the field says is open,
+  negative-search before a novelty claim, explicit cross-domain mappings, structured
+  synthesis over per-paper summaries).
+
+  **Cross-cutting on purpose**, despite shipping detectors for them: a researcher often
+  works in a bare or LaTeX-only directory where nothing is detected, and gating would
+  silence these rules exactly where they are needed. Precision comes from tight
+  triggers instead.
+
+- **`reliability/` (5)** — explicit timeouts, bounded retry with jitter, idempotency
+  keys, rate limiting in both directions, graceful degradation. Language-agnostic and
+  constantly hit; previously present only incidentally inside `fastapi/`.
+
+- **`testing/` (4)** — its first ranked rules (it had one mandatory rule and nothing
+  else): determinism, mocking at the boundary rather than the subject, specific
+  assertions, test isolation.
+
+- **`security/` (+4)** — SSRF (acute now that agents fetch URLs), path traversal,
+  object-level authorization/IDOR, password hashing and crypto.
+
+- **`ci/` (3)** — SHA-pinned third-party actions, OIDC over long-lived secrets,
+  never running fork-PR code in a context holding secrets.
+
+- **`GEN-PRIORART-001`** (general) — check whether the thing already exists before
+  building it. Added because the corpus returned *nothing* for build-shaped prompts:
+  "write my own json parser" scored 0.064 of noise, "build a solver for this pde"
+  returned a Docker rule. Deliberately a rule, not a skill — a skill only fires when
+  invoked or when the model elects to load it, and neither is measurable by
+  `clawness eval`, which is the wrong property for a guardrail whose job is catching
+  you on the day you forgot.
+
+- **`ENF-VERIFY-001`** (mandatory, 8th) — evidence before assertion, and honest
+  confidence labelling when verification is genuinely impossible. Mandatory rather than
+  ranked for a structural reason: the hook sees only the *user's* prompt, and the moment
+  this must bind is when Claude is about to write "done, fixed it" — no prompt carries
+  that signal, so a ranked placement would essentially never fire. Costs ~120 tokens on
+  the 1-in-5 turns the mandatory block renders in full (2510 → 3002 chars).
+
+- **`clawness query --stack a,b`** — the hook's codebase-aware filtering was previously
+  unreachable from the CLI, so off-stack behaviour could not be tested without a real
+  hook run.
+
+- Detectors for `*.py`, `*.tex`, `*.ipynb`, `Project.toml`, `DESCRIPTION`, and the LLM
+  and scientific-Python packages. Detection composes as a set, so a paper repo with
+  numpy detects `{science, python, general}` and serves both kinds of question.
+
+### Fixed
+
+- **`clawness lint` reported success on a rule file that does not parse as YAML.**
+  `load_rules` skips unparseable files by design so one bad file cannot crash the hook,
+  but lint never checked, so a rule could vanish from the corpus with no signal beyond a
+  quieter `stats` count. Found the honest way: it swallowed one of this release's own
+  rules (an invalid `\{` escape in a double-quoted scalar) and reported "all 164 rules
+  pass". Lint now parses every file and fails loudly.
+
+- **`GEN-ABSTRACTION-001` lost "am i abstracting this too early" to `SCI-PAPER-001`** —
+  the noun sense of *abstract* outranking the verb sense. It now carries the vocabulary
+  people actually use (`too early`, `premature`, `extract this`, `into a helper`).
+
+- **`NX-ACTION-001` lost queries naming "next.js server action"** to `RCT-FORM-001`
+  after corpus growth shifted IDF; it now tags the multi-token term explicitly.
+
+- **`test_off_stack_rules_suppressed_when_stack_known` probed with "what rules do you
+  see"**, which is not signal-less against `RCT-HOOKS-001` — the *Rules of Hooks* rule.
+  The shared token sat at 0.137 against a 0.15 floor and drifted to 0.151 as the corpus
+  grew, failing a test whose property still held. Now probes four genuinely signal-less
+  prompts.
+
+### Changed
+
+- Retrieval is ~1.6ms, up from ~0.8ms, from 36% more rules and four new concept groups.
+  That is <1% of the ~400ms hook, which is dominated by interpreter startup;
+  `stats` and the docs now say ~2ms rather than ~1ms.
+
+### Added (earlier in this cycle)
+
+- **`GEN-RELEASE-001`** (general, warning) — versioning and release discipline for the
+  user's own project, a gap in the corpus: `GEN-GIT-001` covered commits and branches,
+  `GEN-DEPVER-001` covered *consuming* dependencies, and nothing covered publishing.
+  Deliberately skips the part a model already knows ("use SemVer") in favour of the
+  failure modes that actually bite:
+  - one source of truth for the version, with a test asserting the copies agree — a
+    partial bump ships an artifact that lies about what it is;
+  - one immutable tag and one changelog entry per released version; fix a bad release
+    with the next patch rather than moving a tag someone may have installed;
+  - confirm what the distribution channel serves — if installs resolve a *branch*,
+    pushing to it is releasing, and it must never sit ahead of its declared version.
+
+  That last clause is drawn from this repo's own 1.2.0 → 1.2.1 slip.
+
 ## [1.2.1] - 2026-07-26
 
 Accuracy pass on what 1.2.0 tells people it does. No behavior change to the hooks.

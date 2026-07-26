@@ -1,0 +1,20 @@
+id: GEN-RELEASE-001
+domain: general
+severity: warning
+tags: [release, version, semver, tag, changelog, publish, versioning, artifact]
+triggers: [release, version bump, bump the version, semver, tag, changelog, publish, cut a release, ship a version]
+when: Cutting a release, bumping a version, or publishing an artifact other people install.
+rule: >
+  Follow SemVer — breaking changes bump major, additive changes minor, fixes patch —
+  and keep one source of truth for the number. When the version appears in several
+  files (package.json, pyproject.toml, a plugin manifest, __init__.py), add a test
+  asserting they agree: a partial bump ships an artifact that lies about what it is.
+  Every released version gets exactly one immutable tag and one CHANGELOG entry, so
+  don't leave a version in the changelog untagged, and don't stack several unreleased
+  bumps — collapse the batch into one version. To correct a bad release, publish the
+  next patch; never move or delete a tag someone may already have installed. Confirm
+  what your distribution channel actually serves: if installs resolve a branch rather
+  than a tag or a registry artifact, pushing to that branch IS releasing, and the
+  branch must never sit ahead of the version it declares.
+violation: "Bumping package.json but not the manifest, then moving the v2.1.0 tag to a newer commit to 'fix' the release"
+correct: "One bump across every file a test checks, tagged v2.1.0 once with a changelog entry, and a v2.1.1 for the follow-up fix"

@@ -1,0 +1,14 @@
+id: SCI-NUMERIC-001
+domain: science
+severity: error
+tags: [floating-point, numerical, stability, cancellation, precision, matrix, nan, overflow, iteration]
+triggers: [float equality, compare floats, nan, numerical instability, catastrophic cancellation, invert the matrix, underflow, overflow, precision loss, blows up, diverges, produces nan, unstable iteration]
+when: Implementing numerical code - comparisons, sums, products, or linear algebra.
+rule: >
+  Floating point is not the reals. Never compare floats with == (use a tolerance
+  sized to the problem), avoid subtracting nearly equal quantities where
+  cancellation destroys the significant digits, work in log-space for products of
+  small probabilities, and solve linear systems rather than forming an explicit
+  inverse. A NaN appearing late in a run is usually one of these committed early.
+violation: "if x == 0.3:  ...   and   theta = inv(X.T @ X) @ X.T @ y"
+correct: "math.isclose(x, 0.3, rel_tol=1e-9)   and   theta = np.linalg.solve(X.T @ X, X.T @ y)"

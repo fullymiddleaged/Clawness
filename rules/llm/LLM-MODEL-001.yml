@@ -1,0 +1,15 @@
+id: LLM-MODEL-001
+domain: llm
+severity: error
+tags: [model-id, version, pinning, deprecation, provider, llm]
+triggers: [which model, model name, model id, model version, deprecated model, switch models]
+when: Choosing or hardcoding a model identifier.
+rule: >
+  Pin an explicit model identifier and verify it against the provider's current
+  model list before writing it down. Model ids recalled from memory are a
+  recurring source of silent breakage: training data lags releases, so a
+  plausible-looking id may be renamed, deprecated, or never have existed. Record
+  where the id was checked, and plan for the deprecation window — a pinned id is
+  a dated decision, not a permanent one.
+violation: "model='claude-3-opus'  # copied from a blog post, never checked against the current model list"
+correct: "Look up the provider's current model list, pin that exact id, and note the deprecation date"

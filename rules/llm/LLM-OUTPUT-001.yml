@@ -1,0 +1,15 @@
+id: LLM-OUTPUT-001
+domain: llm
+severity: error
+tags: [structured-output, json, schema, parsing, tool-use, validation, llm]
+triggers: [parse the response, json from the model, structured output, extract fields, model returns text]
+when: Extracting structured data from a model response.
+rule: >
+  Get structure from the mechanism the provider gives you — tool/function calling
+  or schema-constrained JSON — and validate the parsed result against that schema
+  before use. Never regex-scrape prose or assume the format held: models drift
+  into prefaces, code fences, and trailing commentary, and a parser that works on
+  a hundred samples fails on the hundred and first. Handle the parse failure as a
+  real branch with a retry or a surfaced error.
+violation: 'Regex-scraping the first {...} out of response.text, then json.loads on whatever matched'
+correct: "Request a tool call with a declared schema; validate with Pydantic/Zod; handle ValidationError explicitly"

@@ -1,0 +1,15 @@
+id: SCI-PAPER-001
+domain: science
+severity: error
+tags: [paper, manuscript, claims, abstract, conclusions, limitations, writing]
+triggers: [write the paper, abstract, manuscript, conclusions section, submit to a journal, write up the results, draft the paper]
+when: Drafting or revising the abstract, conclusions, or claims of a paper.
+rule: >
+  Every claim in the abstract and conclusions must trace to a specific result in
+  the paper - a named figure, table, or statistic. Scope each claim to the
+  conditions actually tested rather than the general statement you hope holds,
+  and state the limitations explicitly instead of leaving them for a referee to
+  find. When the evidence does not support the claim, change the claim; the one
+  thing that must not move is the evidence.
+violation: "An abstract claiming the method works across domains when it was tested on one dataset"
+correct: "On <dataset>, the method reduces error by 12% (Table 2); generalisation beyond this regime is untested"

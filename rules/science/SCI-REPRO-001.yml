@@ -1,0 +1,15 @@
+id: SCI-REPRO-001
+domain: science
+severity: error
+tags: [reproducibility, seed, versions, data, provenance, archive, environment, numerical, results, rerun]
+triggers: [reproducible, reproducibility, random seed, same results, rerun the analysis, share my code, replication, pin the environment, reproduce my results, numerical results]
+when: Producing a number, figure, or result that will be reported or published.
+rule: >
+  Every reported number must be regenerable. Pin the random seed, the library
+  versions, and the exact data revision; record the command that produced the
+  result; and keep the analysis in version control rather than in a notebook
+  state nobody else can reconstruct. Deposit code and data alongside the paper.
+  A result that ran once on one machine six months ago is indistinguishable from
+  a result that was never real.
+violation: "A figure produced by cells run out of order in an unsaved notebook against a since-overwritten CSV"
+correct: "A seeded script, a pinned environment file, a versioned data snapshot, and the command in the README"

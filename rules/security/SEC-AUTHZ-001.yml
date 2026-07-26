@@ -1,0 +1,15 @@
+id: SEC-AUTHZ-001
+domain: security
+severity: error
+tags: [authorization, idor, ownership, access-control, tenancy, permissions]
+triggers: [can see other users, change the id, access control, permission check, tenant, authorization, admin only]
+when: Returning or modifying a record identified by a client-supplied id.
+rule: >
+  Authenticating the caller is not authorising the action. Check on every request
+  that this user may act on this specific object, and scope the query by owner or
+  tenant rather than fetching by id and checking afterwards. Broken object-level
+  authorization is among the most common and most damaging web vulnerabilities
+  precisely because the code looks correct: the endpoint works, and it also works
+  for everyone else's records.
+violation: "Order.get(request.args['order_id'])  # any authenticated user can read any order by changing the id"
+correct: "Order.get(id=order_id, owner_id=current_user.id)  # ownership is part of the query, checked server-side"

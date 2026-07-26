@@ -1,0 +1,15 @@
+id: GEN-PRIORART-001
+domain: general
+severity: warning
+tags: [prior-art, reinvent, existing, library, stdlib, wheel, duplication, research]
+triggers: [from scratch, my own, roll my own, write my own, implement a, build a, reinvent, hand roll, custom implementation]
+when: About to build something non-trivial — a parser, scheduler, cache, auth flow, rate limiter, numerical method.
+rule: >
+  Before building it, establish whether it already exists: the standard library,
+  a maintained package, or a published method. Most hand-rolled parsers, date
+  handling, caches, and crypto lose to a battle-tested equivalent on edge cases
+  you have not thought of yet. Search first, then say plainly why the existing
+  option does not fit — an unsuitable dependency is a fine reason to build, but
+  not having looked is not.
+violation: "Writing a bespoke CSV parser, then discovering quoted newlines, BOMs, and embedded delimiters one bug at a time"
+correct: "Check the stdlib/ecosystem first; build only after naming what the existing option cannot do"

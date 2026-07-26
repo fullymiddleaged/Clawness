@@ -1,0 +1,14 @@
+id: RES-INFER-001
+domain: research
+severity: error
+tags: [inference, evidence, attribution, claims, honesty, interpretation]
+triggers: [does this mean, so it follows, the paper says, implies that, conclude, interpretation]
+when: Reporting what sources show alongside your own reasoning about them.
+rule: >
+  Keep what a source states separate from what you concluded from it. Mark each
+  clearly: this is what the source says, this is what I infer, this is my
+  confidence in the inference. An inference presented in the source's voice
+  borrows credibility the evidence never granted, and it is invisible to the
+  reader who would otherwise challenge the reasoning step.
+violation: "Reporting 'the study shows X causes Y' when the study reports a correlation and X causing Y is your inference"
+correct: "'The study reports a correlation (p<0.01). A causal reading is my inference and rests on <assumption>.'"

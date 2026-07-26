@@ -1,0 +1,15 @@
+id: SCI-PRIORART-001
+domain: science
+severity: error
+tags: [prior-art, literature, arxiv, survey, method, research, solver, scheme, implement]
+triggers: [derive, derivation, new method, novel approach, literature, arxiv, has this been done, prior work, before i start, build a solver, write a solver, implement a scheme, numerical method]
+when: Committing effort to a derivation, numerical scheme, or experimental design.
+rule: >
+  Search the literature before committing the effort: recent review articles
+  first for the shape of the field, then the primary papers they cite. Establish
+  the accepted method, the known failure modes, and the published negative
+  results - a negative result already in print saves the months you were about to
+  spend rediscovering it. Record what you searched and where, so the gap you
+  claim later rests on a search someone else can repeat.
+violation: "Spending three weeks deriving a closed form that appears as equation 12 of a 2019 review"
+correct: "Read two recent reviews and their key citations first; record the search terms and databases used"

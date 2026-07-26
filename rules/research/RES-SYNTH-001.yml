@@ -1,0 +1,15 @@
+id: RES-SYNTH-001
+domain: research
+severity: warning
+tags: [synthesis, literature-review, summary, structure, evidence, analysis]
+triggers: [summarize these papers, literature review, synthesize, what do these say, review the sources, pull it together]
+when: Reporting the result of reading multiple sources.
+rule: >
+  Produce a structured synthesis - what is established, what is contested, what
+  is open - not a list of per-paper summaries. Organise by claim and group the
+  evidence under it, noting where sources agree, where they conflict, and how
+  strongly each is supported. Forty summaries in publication order is a
+  bibliography: it leaves the actual work, deciding what the body of evidence
+  collectively shows, undone.
+violation: "'Paper 1 found... Paper 2 found... Paper 3 found...' for forty papers, with no cross-cutting structure"
+correct: "'Established (5 studies, consistent): X. Contested: Y - A and B disagree on method. Open: Z, untested.'"

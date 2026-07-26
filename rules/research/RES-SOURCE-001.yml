@@ -1,0 +1,14 @@
+id: RES-SOURCE-001
+domain: research
+severity: error
+tags: [citation, primary-source, sources, secondary, attribution, evidence]
+triggers: [cite, citation, source for this, where did you get, reference, according to, bibliography]
+when: Citing a source or attributing a claim to one.
+rule: >
+  Cite the primary source you actually opened, not a summary of it and not
+  another paper's description of it. Citing from an abstract, a blog post, or a
+  second-hand characterisation propagates errors that nobody downstream can see,
+  and it misrepresents what you checked. When you have only read the abstract or
+  a review, say so explicitly rather than citing as though you read the paper.
+violation: "Citing a 1998 study whose findings you know only from a blog post summarising a review of it"
+correct: "Open the 1998 paper, cite it for what it actually says, or cite the review as the review"

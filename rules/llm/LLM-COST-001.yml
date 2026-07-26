@@ -1,0 +1,15 @@
+id: LLM-COST-001
+domain: llm
+severity: warning
+tags: [cost, tokens, caching, latency, budget, llm, performance]
+triggers: [token cost, expensive, reduce cost, prompt caching, too slow, api bill, context window]
+when: A model call runs at scale, in a loop, or on every request.
+rule: >
+  Put stable content — system prompt, tool definitions, long reference material —
+  at the front of the prompt so the cached prefix is reused; editing early tokens
+  invalidates everything after them. Measure real token counts from the API
+  response rather than estimating, and match the model tier to the difficulty of
+  each call instead of sending everything to the largest one. Cost and latency
+  here are a design choice, not a fixed property.
+violation: "Interpolating a per-request timestamp into the first line of the system prompt, voiding the cache on every call"
+correct: "Static prefix first, variable content last; log usage per call; route easy calls to a smaller model"

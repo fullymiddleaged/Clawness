@@ -24,7 +24,8 @@ dependency**. No ML models, no services, no Docker.
    floor (`CLAW_OFFSTACK_MIN_RELEVANCE`, default 0.15) so e.g. a Python repo doesn't
    surface SQL/React noise, while strong cross-domain matches still pass. Cross-cutting
    domains (general/meta/workflows/security/testing) are never penalized. Passing no
-   stack (CLI/eval) disables the penalty, so eval is unaffected. ~1ms/prompt + ~3ms scan.
+   stack (CLI/eval) disables the penalty, so eval is unaffected. ~2ms/prompt + ~3ms scan
+   (retrieval is <1% of the ~400ms hook, which is dominated by interpreter startup).
    **Session-aware re-injection** (`clawness/session_state.py`): the mandatory block
    (identical every turn) renders in full only on prompt 1 and every `CLAW_FULL_EVERY`-th
    prompt after (default 5); other turns get a one-line id list — the rules stay just as
@@ -183,7 +184,12 @@ dependency**. No ML models, no services, no Docker.
   `describe_age`, `HANDOFF_TEMPLATE`).
 - `hooks/` — runtime hooks (`claude_hook`, `compress_output`, `plan_gate`, `access_guard`,
   `trust_ledger`, `git_check`, `memory_init`, `handoff_check`, `stack_detect`, `ensure_deps`) + setup helpers (`setup_settings/agents/skills` — manual install only).
-- `rules/<domain>/*.yml` — the corpus (120 rules / 18 domains; `_mandatory/` = always-on).
+- `rules/<domain>/*.yml` — the corpus (165 rules / 23 domains; `_mandatory/` = always-on).
+  Beyond the language domains: `llm/` (building with models — stack-gated, detected from
+  anthropic/openai/langchain deps), `science/` and `research/` (physics/maths/engineering
+  practice and research method — **cross-cutting on purpose**, since a researcher often
+  works in a bare or LaTeX-only directory where gating would silence them), plus
+  `reliability/`, `testing/` and `ci/`.
 - `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin.
 - `.claude-plugin/{plugin.json,marketplace.json}` — plugin + marketplace manifests.
 - `tests/ground_truth.json` — labeled eval queries (grow it when adding rule areas).
@@ -262,7 +268,10 @@ dependency**. No ML models, no services, no Docker.
   em-dashes/smart-quotes; bare `open()`/`read_text()`/`sys.stdin` default to cp1252
   on Windows and mangle them into mojibake (`—` → `â€"`) *at load time*. `clawness
   lint` now flags non-UTF-8 / U+FFFD rule files; keep new reads/writes UTF-8.
-- **Keep the hook ~1ms** — no heavy imports or model loads in `claude_hook.py`/`core.py`.
+- **Keep retrieval a couple of ms** — no heavy imports or model loads in
+  `claude_hook.py`/`core.py`. It was ~0.8ms at 121 rules and is ~1.6ms at 165; the
+  concept-expansion pass scales with both corpus size and `_CONCEPT_GROUPS`, so measure
+  with `clawness bench` when adding either.
 - **Version lives in 4 places** — bump `pyproject.toml`, `.claude-plugin/plugin.json`,
   `.claude-plugin/marketplace.json`, and `clawness/__init__.py` (`__version__`) together,
   and add a CHANGELOG entry. `tests/test_version.py` asserts all four agree + a CHANGELOG

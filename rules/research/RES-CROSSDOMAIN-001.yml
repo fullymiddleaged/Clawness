@@ -1,0 +1,15 @@
+id: RES-CROSSDOMAIN-001
+domain: research
+severity: warning
+tags: [cross-domain, analogy, transfer, interdisciplinary, mapping, assumptions]
+triggers: [another field, other field, different field, solved elsewhere, analogy, analogous, similar problem, borrow from, transfer, cross domain, other discipline, like in physics]
+when: Importing a method, model, or framing from a different field.
+rule: >
+  State the mapping explicitly - what in the source domain corresponds to what in
+  the target - and name where the analogy breaks. An unstated analogy silently
+  imports the assumptions that made it work elsewhere: stationarity, independence,
+  conservation, a metric that satisfies the triangle inequality. Cross-domain
+  transfer is a strong source of ideas and a common source of confident errors,
+  and the difference is whether the correspondence was written down and checked.
+violation: "Applying a diffusion model from physics to a network process without checking the conservation assumption holds"
+correct: "Tabulate the correspondence, list the source-domain assumptions, and test each against the target before relying on it"

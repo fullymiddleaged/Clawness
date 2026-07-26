@@ -1,0 +1,15 @@
+id: SCI-UNITS-001
+domain: science
+severity: error
+tags: [units, dimensional, physical, si, conversion, equation, quantity]
+triggers: [units, dimensional analysis, si units, convert units, physical quantity, equation, dimensionless]
+when: Writing, checking, or implementing any equation involving physical quantities.
+rule: >
+  Carry units through every quantity and check dimensional consistency before
+  trusting a result. A dimensionally inconsistent equation is wrong no matter how
+  reasonable the number looks, and dimensional analysis catches the error in
+  seconds where numerical debugging takes hours. State the unit system at the
+  boundary, convert once on entry rather than scattering factors through the
+  code, and prefer a units-aware type over a bare float for anything physical.
+violation: "energy = 0.5 * mass_g * velocity_km_per_h**2   # grams and km/h mixed into a joule"
+correct: "Convert to SI at the boundary, or use a units library (pint, astropy.units) so the mismatch raises"

@@ -1,0 +1,14 @@
+id: LLM-RETRIEVE-001
+domain: llm
+severity: warning
+tags: [rag, retrieval, chunking, context, grounding, citations, llm]
+triggers: [rag, retrieval, chunk, embed the docs, stuff the context, knowledge base, vector search]
+when: Feeding a corpus to a model for question answering or grounding.
+rule: >
+  Retrieve the relevant spans and cite them rather than stuffing the window.
+  Recall degrades as the window fills, so more context past a point makes answers
+  worse and costs more. Chunk on semantic boundaries with enough overlap that a
+  fact is never split across the seam, cap how much is injected, and return the
+  source span with each claim so the answer can be checked.
+violation: "Concatenating all 400 documents into the prompt and hoping the model finds the answer"
+correct: "Retrieve the top spans under a token cap, inject those, return each with its source for verification"

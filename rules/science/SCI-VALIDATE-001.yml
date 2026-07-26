@@ -1,0 +1,15 @@
+id: SCI-VALIDATE-001
+domain: science
+severity: error
+tags: [validation, solver, simulation, benchmark, convergence, analytic-solution]
+triggers: [simulation, solver, numerical scheme, converged, benchmark, validate the model, my results look wrong]
+when: Trusting output from a solver, simulation, or numerical scheme.
+rule: >
+  Validate against a case with a known answer before running the case you care
+  about: an analytic solution, a published benchmark, or a limit the scheme must
+  reproduce. Check convergence by refining the grid or timestep and confirming
+  the answer stops moving, and verify conserved quantities stay conserved. An
+  unvalidated solver produces plausible numbers for every input, including the
+  ones where it is wrong.
+violation: "Running the production simulation first and calibrating until the output looks like the expected physics"
+correct: "Reproduce an analytic test case to tolerance, show a grid-refinement study, then run the real case"

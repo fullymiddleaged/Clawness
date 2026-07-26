@@ -20,6 +20,8 @@ import sys
 import time
 from pathlib import Path
 
+import yaml
+
 from .core import Clawness, _estimate_tokens, load_rules
 
 
@@ -52,7 +54,21 @@ def cmd_query(args: argparse.Namespace) -> None:
         print(f"Rules directory not found: {rules_dir}", file=sys.stderr)
         sys.exit(1)
 
-    wl = Clawness(rules_dir, context_budget=args.budget, top_k=args.top_k)
+    # --stack makes the hook's codebase-aware filtering reachable from the CLI.
+    # Without it, off-stack behaviour can only be exercised through a real hook
+    # run, so a claim like "llm/ stays quiet in a Rust repo" is untestable here.
+    # Omitted (the default) leaves stack_domains=None, which disables the penalty
+    # entirely — so plain `clawness query` and `clawness eval` are unchanged.
+    stack = None
+    if args.stack:
+        stack = {d.strip() for d in args.stack.split(",") if d.strip()}
+
+    wl = Clawness(
+        rules_dir,
+        context_budget=args.budget,
+        top_k=args.top_k,
+        stack_domains=stack,
+    )
     # CLI output is for a human diagnosing retrieval, not model context — always
     # show relevance/timing here even though the hook hides them.
     result = wl.retrieve(args.query, domain=args.domain, show_meta=True)
@@ -68,7 +84,7 @@ def cmd_stats(args: argparse.Namespace) -> None:
     print(f"Ranked rules    : {s['ranked_rules']}")
     print(f"Mandatory rules : {s['mandatory_rules']}")
     print(f"Total           : {s['total_rules']}")
-    print(f"Retrieval       : BM25 + TF-IDF + RRF + concept expansion (lexical, ~1ms)")
+    print(f"Retrieval       : BM25 + TF-IDF + RRF + concept expansion (lexical, ~2ms)")
     ranked_room = max(0, s["context_budget"] - s["mandatory_tokens"])
     # What the mandatory block costs on the turns it's abbreviated to an id list
     # (see session_state / CLAW_FULL_EVERY) — computed, not assumed, so it stays
@@ -136,6 +152,23 @@ def cmd_lint(args: argparse.Namespace) -> None:
             issues += 1
             print(f"  {yml_path}:")
             print("    - contains the Unicode replacement char (U+FFFD) — encoding corruption")
+        # Parse pass: a rule that doesn't parse is silently dropped from the
+        # corpus by load_rules, so without this it disappears with no signal at
+        # all — `stats` just shows one fewer rule than the author wrote. The
+        # classic cause is an invalid escape (\{, \d) in a double-quoted scalar;
+        # use single quotes or a literal block for anything with backslashes.
+        try:
+            parsed = yaml.safe_load(text)
+        except yaml.YAMLError as e:
+            issues += 1
+            print(f"  {yml_path}:")
+            print(f"    - does not parse as YAML ({e.__class__.__name__}) — this rule is")
+            print("      silently dropped from the corpus until fixed")
+            continue
+        if not isinstance(parsed, dict):
+            issues += 1
+            print(f"  {yml_path}:")
+            print("    - top level is not a mapping — rule file must be a single YAML mapping")
 
     # Duplicate-id pass across the whole corpus (ranked + mandatory share one
     # namespace — the retriever and rendering both index by id).
@@ -453,6 +486,12 @@ def main() -> None:
     p_query.add_argument("--domain", "-d", default=None, help="Filter to domain")
     p_query.add_argument("--top-k", "-k", type=int, default=5)
     p_query.add_argument("--budget", "-b", type=int, default=4000, help="Token budget")
+    p_query.add_argument(
+        "--stack", default=None,
+        help="Comma-separated detected stack (e.g. python,science). Off-stack "
+             "language/framework rules then face the higher relevance floor, "
+             "matching what the hook does. Omit to disable the penalty.",
+    )
 
     # stats
     sub.add_parser("stats", help="Show corpus statistics")

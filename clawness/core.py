@@ -275,12 +275,15 @@ _CONCEPT_GROUPS: dict[str, tuple[str, ...]] = {
     "__test__": (
         "test", "tests", "testing", "unittest", "pytest", "jest", "vitest",
         "spec", "specs", "tdd", "coverage", "mock", "mocks", "stub", "fixture",
-        "assertion", "assert",
+        "assertion", "assert", "deterministic", "determinism", "seed", "flaky",
+        "snapshot", "e2e", "integration",
     ),
     "__security__": (
         "security", "secure", "vulnerability", "vulnerabilities", "vuln",
         "xss", "csrf", "injection", "sanitize", "sanitization", "exploit",
-        "exploits", "harden", "hardening", "owasp",
+        "exploits", "harden", "hardening", "owasp", "ssrf", "traversal", "idor",
+        "deserialization", "crypto", "cryptography", "encryption", "hashing",
+        "bcrypt", "argon2", "tls",
     ),
     "__perf__": (
         "performance", "perf", "optimize", "optimization", "optimise", "latency",
@@ -349,10 +352,15 @@ _CONCEPT_GROUPS: dict[str, tuple[str, ...]] = {
         "immutable", "immutability", "mutation", "mutate", "readonly",
         "frozen", "freeze", "const",
     ),
+    # NOTE: "actions" is deliberately absent. It already drags NX-ACTION-001
+    # (Next.js Server Actions) onto GitHub-Actions queries; adding it here would
+    # strengthen that false positive rather than fix it. CI-PIN-001 and friends
+    # disambiguate on "workflow"/"runner"/"oidc" instead.
     "__build__": (
         "build", "ci", "cicd", "pipeline", "compile", "compiler", "bundle",
         "bundler", "webpack", "vite", "rollup", "lint", "linter", "eslint",
-        "prettier", "format", "formatter",
+        "prettier", "format", "formatter", "github", "oidc", "runner",
+        "deploy", "deployment",
     ),
     "__git__": (
         "git", "commit", "commits", "branch", "branches", "merge", "rebase",
@@ -367,6 +375,40 @@ _CONCEPT_GROUPS: dict[str, tuple[str, ...]] = {
     "__shortcut__": (
         "shortcut", "hack", "temporary", "temporarily", "quick", "simple",
         "trivial", "obvious", "later", "assume", "assumption", "skip", "lazy",
+    ),
+    # Building WITH an LLM (the user's own agent/app), not Claude's own conduct.
+    # Deliberately excludes token/session/context/index: those already belong to
+    # __auth__/__db__, and cross-wiring them surfaces LLM rules on auth prompts.
+    "__llm__": (
+        "llm", "ai", "model", "models", "prompt", "prompts", "completion",
+        "chat", "embedding", "embeddings", "rag", "inference", "hallucination",
+        "anthropic", "openai", "claude", "gpt", "finetune", "finetuning",
+        "temperature", "agentic",
+    ),
+    "__science__": (
+        "dimensional", "dimension", "dimensions", "units", "si", "physical",
+        "equation", "equations", "derivation", "derive", "analytic", "numerical",
+        "numerics", "simulation", "solver", "uncertainty", "sigma", "significance",
+        "statistical", "arxiv", "paper", "papers", "manuscript", "preprint",
+        "reproducible", "reproducibility", "benchmark", "calibration",
+    ),
+    "__resilience__": (
+        "timeout", "timeouts", "retry", "retries", "backoff", "jitter",
+        "idempotent", "idempotency", "circuit", "breaker", "resilience",
+        "outage", "degrade", "throttle", "deadline", "failover",
+    ),
+    # Information-gathering discipline + the research programme itself.
+    # Deliberately excludes "open" (far too common: "open a file") and "review"
+    # (owned by code review — it would drag WF-CODE-REVIEW-001 onto literature
+    # queries and literature rules onto PR reviews).
+    "__research__": (
+        "research", "source", "sources", "cite", "citation", "citations",
+        "primary", "evidence", "claim", "claims", "corroborate", "stale",
+        "outdated", "provenance", "frontier", "unsolved", "novelty", "novel",
+        "gap", "gaps", "survey", "literature", "synthesis", "synthesise",
+        "synthesize", "analogy", "analogous", "interdisciplinary", "hypothesis",
+        # Shared with __science__ on purpose: a term may carry several markers.
+        "paper", "papers", "preprint", "arxiv",
     ),
 }
 
@@ -593,11 +635,20 @@ def _estimate_tokens(text: str) -> int:
 # Language/framework domains — these are penalized with a higher relevance floor
 # when they're NOT part of the project's detected stack, so a Python repo doesn't
 # surface scattershot SQL/Capacitor/React rules on a vague prompt. Everything else
-# (general, meta, workflows, security, testing) is cross-cutting — it applies
-# regardless of stack and always uses the base floor.
+# (general, meta, workflows, security, testing, ci, reliability, research, science)
+# is cross-cutting — it applies regardless of stack and always uses the base floor.
+#
+# science/ and research/ are cross-cutting ON PURPOSE despite having detectors:
+# a researcher often works in a bare directory or a LaTeX folder with no
+# detectable stack, and gating would silence those rules exactly where they are
+# needed most. Their precision comes from tight triggers, not from the floor.
 _STACK_DOMAINS = frozenset({
     "python", "fastapi", "typescript", "react", "nextjs", "capacitor",
     "go", "rust", "java", "sql", "bash", "css", "docker",
+    # "llm" is stack-gated like a language/framework: prompt-caching and
+    # eval-set rules are noise in a repo that calls no model. Detected from
+    # anthropic/openai/langchain deps (see init.py).
+    "llm",
 })
 
 

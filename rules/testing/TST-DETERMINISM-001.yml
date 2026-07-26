@@ -1,0 +1,14 @@
+id: TST-DETERMINISM-001
+domain: testing
+severity: error
+tags: [determinism, flaky, time, randomness, network, clock, seed]
+triggers: [flaky test, passes locally fails in ci, intermittent, random test failure, freeze time, test uses the network]
+when: A test touches the clock, randomness, the network, or the filesystem.
+rule: >
+  A unit test must produce the same result on every run and every machine. Inject
+  and freeze the clock instead of calling now(), seed every random source, and
+  never make a real network call - a test that depends on the outside world
+  reports its weather, not your code. Nondeterminism is what teaches a team to
+  ignore red builds, which costs far more than the original flake.
+violation: "assert order.expires_at.date() == date.today()   # fails when the run crosses midnight"
+correct: "Inject a fixed clock and seed; stub the network at the boundary"

@@ -1,0 +1,15 @@
+id: CI-PIN-001
+domain: ci
+severity: error
+tags: [supply-chain, pinning, sha, workflow, third-party, github, runner]
+triggers: [github workflow, ci config, pin the version, third party action, workflow yml, build pipeline, mutable tag]
+when: Referencing a third-party action, image, or script in a CI pipeline.
+rule: >
+  Pin third-party CI steps to a full commit SHA, not a moving tag. A tag is a
+  pointer the upstream owner can repoint at any time, and CI runs with your
+  secrets and your write tokens, so a repointed tag is arbitrary code execution
+  inside your build. This is a repeatedly exploited path, not a theoretical one.
+  Pin the SHA, note the human-readable version in a comment, and update through a
+  reviewed bot PR.
+violation: "uses: some-org/some-action@v3   # v3 can be repointed at any commit, silently"
+correct: "uses: some-org/some-action@e3b0c44298fc1c149afbf4c8996fb924...  # v3.1.2"

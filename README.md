@@ -2,16 +2,16 @@
 
 **Install once. Works everywhere. Your AI coding agent gets the right rules for every task — automatically.**
 
-Clawness is a Claude Code plugin that puts the right coding rules in context on every prompt, automatically. What's in the box:
+Clawness is a Claude Code plugin that puts the right rules in context on every prompt, automatically — whether you're shipping code, doing research, or both. What's in the box:
 
-- **120 coding rules** across 18 domains — only the ones matching your task are injected
+- **165 rules** across 23 domains — coding, plus scientific computing, research method, and building with LLMs. Only the ones matching your task are injected
 - **7 adversarial review sub-agents** — security red/blue team, code critic, architecture challenger
 - **A plan-approval gate** before the first edit of a session, on by default
 - **Session security** — an access guard on dangerous tool calls, plus a trust ledger for skills, agents and MCP servers
 - **Session continuity** — a per-project lessons memory, a warning when your context window is filling up, and a handoff the next session picks up on its own
-- **Token-frugal by design** — the whole corpus in CLAUDE.md would cost ~16,600 tokens *every turn*; Clawness injects ~630 fixed plus only what matches, re-states the always-on block in full on just 1 prompt in 5, and compresses long command output
+- **Token-frugal by design** — the whole corpus in CLAUDE.md would cost ~24,900 tokens *every turn*; Clawness injects ~755 fixed plus only what matches, re-states the always-on block in full on just 1 prompt in 5, and compresses long command output
 
-Install it once and it works across every project on your machine. Under 1 MB, no services, no models, ~1 ms per prompt.
+Install it once and it works across every project on your machine. Under 1 MB, no services, no models, ~2 ms per prompt.
 
 Inspired by [infinri/Writ](https://github.com/infinri/Writ), rebuilt from ~2GB of infrastructure to pure Python.
 
@@ -46,22 +46,82 @@ If it describes the injected rule block, you're live. (`/clawness:status` also w
 
 ## What Problem Does This Solve?
 
-Clawness makes Claude Code code the way your team does: your standards applied on every prompt, a gate before unplanned edits, a tripwire on dangerous tool calls, cleaner context, and adversarial review on demand — one install, ~1 ms of overhead, no infrastructure.
+Clawness makes Claude Code work the way you do: your standards applied on every prompt, a gate before unplanned edits, a tripwire on dangerous tool calls, cleaner context, and adversarial review on demand — one install, ~2 ms of overhead, no infrastructure. That applies to code and to research: see [For Researchers and Scientists](#for-researchers-and-scientists).
 
 None of that is built in. Vanilla Claude Code forgets your conventions between turns, trusts every tool call you've ever allow-listed, and gives you no cheap way to enforce a standard or rein in a runaway edit. Clawness fills each gap, automatically, per prompt.
 
 Take coding rules — *"parameterized SQL only," "async I/O end-to-end," "API responses use the envelope format."* Without Clawness you either dump them all into CLAUDE.md (wastes tokens, dilutes attention every turn) or mention them by hand (you forget, Claude forgets). With Clawness:
 
-- **The right rules, every prompt** — 120 rules in YAML; a hook injects only the ones relevant to your task, plus an always-on mandatory set (security, testing, lessons-memory). Nothing to remember, no context bloat.
+- **The right rules, every prompt** — 165 rules in YAML; a hook injects only the ones relevant to your task, plus an always-on mandatory set (security, testing, lessons-memory). Nothing to remember, no context bloat.
 - **A plan-first gate** — the first edit of a session prompts before it happens (it rides native plan mode), so the agent can't quietly rewrite half your repo. One click, at most once per session — never a hard block.
 - **Session security** — an access guard that forces a confirmation on likely-exfiltration or destructive tool calls *even when the tool is allow-listed* (beating approval fatigue), plus a trust ledger that flags a skill/agent/MCP server that changed since last session.
 - **Cleaner context** — long bash output is compressed to the lines that matter, and a per-project memory file recalls hard-won lessons, retrieving only the ones relevant to your prompt.
 - **Sessions that survive their own length** — Clawness reads your transcript and tells you when the context window is filling up, rather than letting quality quietly degrade. At that point it offers to write a handoff, which the *next* session in that project picks up automatically — no path to remember, nothing to ask for.
 - **Adversarial review on tap** — security red/blue team, code critic, architecture challenger, and more, one ask away. They run on a cheaper model tier and return findings tagged CONFIRMED/PLAUSIBLE; your main session spot-checks the high-stakes ones against the cited lines (or a quick repro) before acting — vetted, not rubber-stamped, and without re-reading everything the agent read.
 
-**Make them *your* standards.** The 120 built-in rules are a starting point. Add your own in seconds — run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/` and your whole team shares the same rules. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
+**Make them *your* standards.** The 165 built-in rules are a starting point. Add your own in seconds — run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/` and your whole team shares the same rules. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
 
 > **Tripwire, not a sandbox.** The guard is heuristics over the agent's own tool calls — it catches honest mistakes, copy-pasted `curl … | sh`, out-of-project secret reads, and data sent to hosts absent from your codebase, and breaks approval-fatigue autopilot. A determined adversary can still obfuscate around it; the real boundary is a container + egress allowlist. It stays out of normal work — reading your own `.env`, plain API GETs, and local traffic aren't prompted (a data-bearing or token-authenticated call to an external host asks once per host). Disable with `CLAW_NO_ACCESS_GUARD=1`.
+
+---
+
+---
+
+## For Researchers and Scientists
+
+Clawness isn't only for shipping software. Physics, maths, and engineering work has its own
+footguns, and 19 rules across `science/` and `research/` cover them — the same way the coding
+rules work, injected automatically, with no command to remember.
+
+**Catching the errors that survive review.** A dimensionally inconsistent equation is wrong no
+matter how reasonable the number looks; a float compared with `==` fails on the one input you
+didn't try; a result quoted to five significant figures from two-figure inputs is a false claim
+about how well the quantity is known. Ask a question and the relevant rule arrives with it:
+
+| You ask | You get |
+|---|---|
+| *"check the units in this equation"* | `SCI-UNITS-001` — carry units, check dimensional consistency first |
+| *"is this p value significant"* | `SCI-STATS-001` — multiple comparisons, effect size with a CI, not a bare p |
+| *"my simulation results look wrong"* | `SCI-VALIDATE-001` — validate against a known analytic case before trusting it |
+| *"make my numerical results reproducible"* | `SCI-REPRO-001` — pin seed, versions, data revision; record the command |
+| *"is this idea actually novel"* | `RES-NOVELTY-001` — run the negative search; most reinvention is a vocabulary mismatch |
+| *"find the frontier of this field"* | `RES-FRONTIER-001` — take it from what the field says is open, not from what you failed to find |
+
+**Doing the research, not just the code.** `research/` covers method: state a falsifiable
+question before gathering, cite the primary source you actually opened rather than a summary of
+it, keep what a source says separate from what you inferred, bound a literature sweep to the
+present and state the cutoff, report disagreement instead of quietly picking a side, and produce
+a structured synthesis — established / contested / open — rather than forty per-paper summaries.
+
+**Prior art before you commit the effort.** Two rules fire on a build- or derive-shaped request
+before the work starts: `GEN-PRIORART-001` for "is there already a library for this", and
+`SCI-PRIORART-001` for "is this already equation 12 of a 2019 review". The costliest research
+mistake is three weeks spent rediscovering a published negative result.
+
+**Checking what a model hands you.** `SCI-DERIVE-001` applies with particular force to a
+derivation an LLM produced — fluent algebra with a sign error reads exactly like fluent algebra
+— so it asks for limiting cases, a dimensional check, symmetry, and a numerical spot-check
+before you build on it. The always-on `ENF-VERIFY-001` backs this up on every turn: evidence
+before assertion, and an explicit statement of what's verified versus assumed when a claim
+can't be checked.
+
+**It works where you actually work.** `science/` and `research/` are deliberately *not*
+stack-gated: a directory holding only `paper.tex`, or nothing at all yet, still gets them —
+gating would silence these rules exactly where they're needed. And detection composes, so a
+repo with `paper.tex` alongside `analysis.py` is identified as *both* science and Python:
+
+```bash
+clawness query --stack science,python "is this derivation right"       # → SCI-DERIVE-001
+clawness query --stack science,python "mutable default argument here"  # → PY-MUTABLE-001
+```
+
+One prompt gets the physics rule, the next gets the Python rule, in the same project, with no
+mode to switch.
+
+**Building with LLMs?** The `llm/` domain covers that too — eval sets instead of vibes for
+prompt changes, schema-constrained output, prompt injection into tool-using agents, and never
+asserting exact model text in a test. It *is* stack-gated, so it stays out of projects that
+call no model.
 
 ---
 
@@ -86,7 +146,7 @@ You type a prompt in Claude Code
             ▼
 ┌──────────────────────────┐
 │  BM25 + TF-IDF + RRF     │  hybrid lexical retrieval + concept expansion
-│  + concept expansion     │  picks the top rules in ~1ms (pure Python)
+│  + concept expansion     │  picks the top rules in ~2ms (pure Python)
 │  context budget: 4000    │  stops adding rules when token budget is full
 └──────────┬───────────────┘
            │
@@ -98,7 +158,7 @@ You type a prompt in Claude Code
 └──────────────────────────┘
 ```
 
-**In plain terms:** for each prompt, Clawness scores every rule by how well it matches your task — shared keywords *and* concepts (login ↔ auth ↔ jwt bridges synonyms) — and quietly adds the few that fit, plus the always-on mandatory ones. No models, no downloads, ~1 ms, and you never touch any of it.
+**In plain terms:** for each prompt, Clawness scores every rule by how well it matches your task — shared keywords *and* concepts (login ↔ auth ↔ jwt bridges synonyms) — and quietly adds the few that fit, plus the always-on mandatory ones. No models, no downloads, ~2 ms, and you never touch any of it.
 
 **Two layers of rules:**
 - **Global** (`~/.claude/clawness/rules/`) — installed once, applies to every project
@@ -113,9 +173,9 @@ Pure Python, one dependency (PyYAML) — no ML models, no embeddings, no service
 - **Light stemming** collapses plural/verb forms (`caches` → `cache`, `maintained` → `maintain`).
 - **Mandatory rules** are always injected; the rest are ranked and capped by a token budget.
 
-**Measured quality** — run `clawness eval`: on a 57-query labeled set, **MRR@5 = 0.982** and **hit-rate = 1.000** (every query surfaces its expected rule, usually at rank 1). CI enforces floors on these so retrieval can't silently regress as rules are added.
+**Measured quality** — run `clawness eval`: on a 59-query labeled set, **MRR@5 = 0.983** and **hit-rate = 1.000** (every query surfaces its expected rule, usually at rank 1). CI enforces floors on these so retrieval can't silently regress as rules are added.
 
-**Cost** — **~1 ms per prompt**; ~510 tokens of always-on mandatory rules (rendered in full periodically; abbreviated to a one-line id list on most turns via session-aware re-injection) plus the few selected ranked rules. Run `clawness stats` for your exact per-turn estimate.
+**Cost** — **~2 ms per prompt**; ~755 tokens of always-on mandatory rules (rendered in full periodically; abbreviated to a one-line id list on most turns via session-aware re-injection) plus the few selected ranked rules. Run `clawness stats` for your exact per-turn estimate.
 
 ---
 
@@ -271,7 +331,7 @@ The mandatory rules always appear. The ranked rules change based on your prompt.
 which would defeat prompt caching for no benefit to the model. Set
 `CLAW_VERBOSE=1` to see them, or run `clawness query` directly.)
 
-**Token cost.** A typical turn injects **~1,200 tokens** — ~490 fixed for the always-on mandatory block (rendered compactly — directive only, no repeated examples) plus the selected ranked rules. `clawness stats` shows your exact estimate; tune with `CLAW_TOP_K` / `CLAW_BUDGET` / `CLAW_VERBOSE` / `CLAW_COMPACT`.
+**Token cost.** A typical turn injects **~1,700 tokens** — ~755 fixed for the always-on mandatory block (rendered compactly — directive only, no repeated examples) plus the selected ranked rules. `clawness stats` shows your exact estimate; tune with `CLAW_TOP_K` / `CLAW_BUDGET` / `CLAW_VERBOSE` / `CLAW_COMPACT`.
 
 **Relevance floor & stack awareness.** Ranked rules appear only when the prompt actually matches — a TF-IDF cosine floor drops coincidental hits (the `relevance=…` shown next to each rule *is* that score). Off-stack language/framework rules face a higher bar, so a vague prompt in a Python repo won't surface SQL/React noise, while a genuinely strong cross-domain match still gets through. Mandatory rules are always injected. Tune via `CLAW_MIN_RELEVANCE` / `CLAW_OFFSTACK_MIN_RELEVANCE` / `CLAW_NO_STACK_FILTER` (see [Configuration](#environment-variables)).
 
@@ -660,7 +720,7 @@ clawness --rules-dir /path/to/rules stats
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Rules** | 120 across 18 domains | Coding standards, injected per-prompt |
+| **Rules** | 165 across 23 domains | Coding, science, research and LLM standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 6 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status` |
 | **Hooks** | 10 (rule injection & context watch, output compression, plan gate, access guard, trust ledger, git check, memory bootstrap, handoff pickup, stack detection, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
@@ -672,26 +732,39 @@ clawness --rules-dir /path/to/rules stats
 
 | Domain | Rules | Covers |
 |--------|-------|--------|
-| `general` | 17 | Cross-cutting: abstraction/YAGNI, comments, memory, nesting, magic numbers, immutability, dependency selection, versioning/lockfiles, linting, naming, validation, logging, env config, accessibility, git, performance |
+| `general` | 20 | Cross-cutting: prior art before building, abstraction/YAGNI, comments, memory, nesting, magic numbers, immutability, dependency selection, versioning/lockfiles, release & version numbering, linting, naming, validation, logging, env config, accessibility, git, performance *(2 mandatory)* |
+| `security` | 11 | Auth, secrets, deps, untrusted-content/exfil *(4 mandatory)*; SQLi, XSS, package supply-chain, SSRF, path traversal, object-level authz/IDOR, password hashing & crypto *(ranked)* |
+| `workflows` | 11 | Multi-agent orchestration (security audit, code review, testing, perf, refactoring, architecture, parallel research), session handoff, sub-agent cost/vetting, and lessons-memory upkeep *(1 mandatory)* |
 | `nextjs` | 10 | Server/Client components, data fetching, caching, layouts, metadata, Server Actions |
+| `science` | 10 | Physics/maths/engineering practice: prior art, dimensional consistency, numerical stability, uncertainty propagation, statistical discipline, derivation checking, solver validation, reproducibility, paper claims, figure standards |
+| `research` | 9 | Source hygiene (primary sources, inference vs claim, date-bounded sweeps, reporting disagreement) and the research programme (falsifiable questions, mapping a frontier, novelty negative-search, cross-domain mapping, structured synthesis) |
 | `fastapi` | 8 | Pydantic v2, dependency injection, async, error handling, CORS, DB sessions |
 | `meta` | 8 | Rationalization counters — rebuttals to common AI shortcuts ("too simple to test", hardcode "temporarily", "I'll refactor later", trusting input) |
+| `llm` | 7 | Building with models: eval sets for prompt changes, prompt injection into tool-using agents, schema-constrained output, token cost & caching, testing non-determinism, model-id pinning, retrieval over context-stuffing |
 | `python` | 7 | Async I/O, imports, error handling, type hints, mutable defaults, context managers, pathlib |
-| `workflows` | 11 | Multi-agent orchestration (security audit, code review, testing, perf, refactoring, architecture, parallel research), session handoff, sub-agent cost/vetting, and lessons-memory upkeep *(1 mandatory)* |
 | `capacitor` | 6 | Platform detection, permissions, lifecycle, WebView, sync, App Store |
 | `css` | 6 | `!important`, relative units, flex/grid layout, custom properties, responsive, focus states |
 | `docker` | 6 | Layer caching, multi-stage builds, non-root, secrets, tag pinning, slim images |
 | `java` | 6 | Null safety, equals/hashCode, try-with-resources, exceptions, immutability, collections |
 | `go` | 5 | Error handling, nil maps, context, goroutine lifecycle, data races |
+| `reliability` | 5 | Network timeouts, bounded retry with backoff/jitter, idempotency keys, rate limiting, graceful degradation |
 | `rust` | 5 | unwrap/expect, error handling, clone, unsafe, iterators |
 | `sql` | 5 | N+1 queries, indexes, transactions, `SELECT *`, migrations |
-| `security` | 7 | Auth, secrets, deps, untrusted-content/exfil *(4 mandatory)*; SQLi, XSS, package supply-chain hardening *(ranked)* |
+| `testing` | 5 | Coverage for new code *(mandatory)*; determinism, mocking at the boundary, assertion specificity, test isolation *(ranked)* |
+| `bash` | 4 | Strict mode, quoting, error checking, shellcheck |
 | `react` | 4 | Hooks, state management, list keys, forms |
 | `typescript` | 4 | Null safety, async errors, strict mode, Zod |
-| `bash` | 4 | Strict mode, quoting, error checking, shellcheck |
-| `testing` | 1 | Test coverage for new code *(mandatory)* |
+| `ci` | 3 | SHA-pinned third-party actions, OIDC over long-lived secrets, never running fork-PR code with secrets |
 
-The 6 **mandatory** rules (always injected) are 4 `security` rules, the 1 `testing` rule, and 1 current-practices rule (counted under `general`). SQLi and XSS moved to ranked `security` rules in 0.7.0 — they still surface reliably whenever a prompt touches SQL or HTML rendering, at a lower always-on token cost.
+The 8 **mandatory** rules (always injected, never ranked) are the 4 `security` rules, the
+1 `testing` rule, the lessons-memory rule (counted under `workflows`), and 2 counted under
+`general` — current-practices and verification/confidence.
+
+`llm` is **stack-gated**: like the language domains, its rules face a higher relevance floor
+in a project that has no LLM SDK, so prompt-caching advice stays out of a plain Rust repo.
+`science` and `research` are deliberately **not** gated — a researcher often works in a bare
+or LaTeX-only directory where nothing is detected, and gating would silence them exactly
+there.
 
 ---
 

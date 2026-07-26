@@ -1,0 +1,15 @@
+id: RES-FRONTIER-001
+domain: research
+severity: warning
+tags: [frontier, open-problems, state-of-the-art, survey, unsolved, field-map]
+triggers: [frontier, state of the art, open problems, what is unsolved, whats left, active research, where is the field]
+when: Mapping what is solved and what remains open in a field.
+rule: >
+  Establish the frontier from what the field says about itself - recent review
+  articles, future-work sections, open-problem lists, workshop and challenge
+  statements - rather than inferring it from what you failed to find. Absence of
+  evidence in your search is evidence about your search. Separate three different
+  things that all look like a gap: genuinely unsolved, solved but obscure or
+  under a different name, and solved then abandoned because it did not work.
+violation: "Declaring an area unexplored because a few searches returned nothing"
+correct: "Pull the future-work sections of the three most recent reviews; cross-check against a workshop CFP"

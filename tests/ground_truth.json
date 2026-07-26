@@ -1,62 +1,944 @@
 {
   "_comment": "Labeled retrieval queries for `clawness eval`. Each entry maps a natural-language task to the ranked rule ID(s) that SHOULD surface in the top-k. Used to measure MRR@5 + hit-rate and gate CI against regressions. Expectations target RANKED rules only (mandatory rules are always injected, so they're not measured here). Keep this list frozen-ish as the corpus grows so regressions are visible.",
   "queries": [
-    { "q": "write a safe bash script with strict mode and error handling", "expect": ["SH-STRICT-001"] },
-    { "q": "I need to quote variables properly in my shell script", "expect": ["SH-QUOTE-001"] },
-    { "q": "detect whether the app is running on ios, android, or the web", "expect": ["CAP-PLATFORM-001"] },
-    { "q": "request camera permission in a capacitor mobile app", "expect": ["CAP-PERM-001"] },
-    { "q": "make focus states visible for keyboard navigation", "expect": ["CSS-FOCUS-001", "GEN-A11Y-001"] },
-    { "q": "build a responsive layout that adapts to mobile screens", "expect": ["CSS-RESPONSIVE-001", "CSS-LAYOUT-001"] },
-    { "q": "speed up my docker image build with better layer caching", "expect": ["DK-CACHE-001"] },
-    { "q": "run my container as a non-root user for security", "expect": ["DK-USER-001"] },
-    { "q": "keep build secrets out of the final docker image", "expect": ["DK-SECRET-001"] },
-    { "q": "define request and response schemas for my fastapi endpoint", "expect": ["FA-PYDANTIC-001"] },
-    { "q": "return proper http status codes and handle errors in fastapi", "expect": ["FA-ERROR-001"] },
-    { "q": "manage async database sessions per request in fastapi", "expect": ["FA-DBSESSION-001", "FA-ASYNC-001"] },
-    { "q": "configure cross-origin requests for my api", "expect": ["FA-CORS-001"] },
-    { "q": "stop using unexplained magic numbers in the code", "expect": ["GEN-MAGIC-001"] },
-    { "q": "set up structured application logging", "expect": ["GEN-LOG-001"] },
-    { "q": "pick a well maintained npm package for this", "expect": ["GEN-DEPS-001"] },
-    { "q": "fix an unbounded cache that keeps growing in memory", "expect": ["GEN-MEMORY-001"] },
-    { "q": "read configuration from environment variables", "expect": ["GEN-ENV-001"] },
-    { "q": "handle errors returned from functions in go", "expect": ["GO-ERROR-001"] },
-    { "q": "avoid data races when sharing state across goroutines", "expect": ["GO-RACE-001"] },
-    { "q": "implement equals and hashcode correctly in java", "expect": ["JV-EQUALS-001"] },
-    { "q": "close file and connection resources safely in java", "expect": ["JV-RESOURCE-001"] },
-    { "q": "fetch data inside a next.js server component", "expect": ["NX-FETCH-001", "NX-SERVER-001"] },
-    { "q": "add page title and metadata for seo in next.js", "expect": ["NX-META-001"] },
-    { "q": "handle a form submission with a next.js server action", "expect": ["NX-ACTION-001"] },
-    { "q": "optimize and serve images efficiently in next.js", "expect": ["NX-IMAGE-001"] },
-    { "q": "avoid mutable default arguments in python functions", "expect": ["PY-MUTABLE-001"] },
-    { "q": "add type hints to my python code", "expect": ["PY-TYPES-001"] },
-    { "q": "use pathlib instead of os.path for file paths", "expect": ["PY-PATHLIB-001"] },
-    { "q": "fix the missing key warning when rendering a react list", "expect": ["RCT-KEY-001"] },
-    { "q": "manage form state and validation in react", "expect": ["RCT-FORM-001"] },
-    { "q": "avoid unwrap and handle the option or result safely in rust", "expect": ["RS-UNWRAP-001", "RS-ERROR-001"] },
-    { "q": "reduce unnecessary clone calls in rust", "expect": ["RS-CLONE-001"] },
-    { "q": "fix the n+1 query problem hitting the database in a loop", "expect": ["SQL-NPLUSONE-001"] },
-    { "q": "stop selecting all columns with select star", "expect": ["SQL-SELECT-001"] },
-    { "q": "wrap multiple writes in a single database transaction", "expect": ["SQL-TXN-001"] },
-    { "q": "add an index to speed up this slow query", "expect": ["SQL-INDEX-001"] },
-    { "q": "handle null and undefined safely in typescript", "expect": ["TS-NULL-001"] },
-    { "q": "validate untrusted external json with zod", "expect": ["TS-ZOD-001"] },
-    { "q": "run a security audit on the authentication module", "expect": ["WF-SECURITY-AUDIT-001"] },
-    { "q": "review my changes before i merge this pull request", "expect": ["WF-CODE-REVIEW-001"] },
-    { "q": "avoid wasting tokens spawning too many subagents for a small task", "expect": ["WF-DELEGATE-COST-001"] },
-    { "q": "write a handoff so the next session can pick up where we left off", "expect": ["WF-HANDOFF-001"] },
-    { "q": "the code critic returned findings, should i just apply them or verify first", "expect": ["WF-VET-SUBAGENT-001"] },
-    { "q": "this change is too simple so i'll skip writing a test", "expect": ["RAT-SKIP-TEST-001", "RAT-SIMPLE-001"] },
-    { "q": "i'll just hardcode this value for now and fix it later", "expect": ["RAT-TEMP-HACK-001"] },
-    { "q": "the input comes from an internal service so i don't need to validate it", "expect": ["RAT-TRUST-INPUT-001"] },
-    { "q": "is this npm package safe to install, check for typosquatting", "expect": ["SEC-PKG-001"] },
-    { "q": "should i disable postinstall lifecycle scripts for an untrusted package", "expect": ["SEC-PKG-001"] },
-    { "q": "build a sql query using a value from a form", "expect": ["SEC-SQLI-001"] },
-    { "q": "execute a database query with a user-supplied id", "expect": ["SEC-SQLI-001"] },
-    { "q": "render user-submitted comments as html in a react component", "expect": ["SEC-XSS-001"] },
-    { "q": "use dangerouslySetInnerHTML to display user content", "expect": ["SEC-XSS-001"] },
-    { "q": "commit the lockfile and pin dependency versions", "expect": ["GEN-DEPVER-001"] },
-    { "q": "set up dependabot to keep dependency versions updated", "expect": ["GEN-DEPVER-001"] },
-    { "q": "validate and sanitize input from an api request body", "expect": ["GEN-VALIDATE-001"] },
-    { "q": "fix a missing dependency in my useEffect hook", "expect": ["RCT-HOOKS-001"] }
+    {
+      "q": "write a safe bash script with strict mode and error handling",
+      "expect": [
+        "SH-STRICT-001"
+      ]
+    },
+    {
+      "q": "I need to quote variables properly in my shell script",
+      "expect": [
+        "SH-QUOTE-001"
+      ]
+    },
+    {
+      "q": "detect whether the app is running on ios, android, or the web",
+      "expect": [
+        "CAP-PLATFORM-001"
+      ]
+    },
+    {
+      "q": "request camera permission in a capacitor mobile app",
+      "expect": [
+        "CAP-PERM-001"
+      ]
+    },
+    {
+      "q": "make focus states visible for keyboard navigation",
+      "expect": [
+        "CSS-FOCUS-001",
+        "GEN-A11Y-001"
+      ]
+    },
+    {
+      "q": "build a responsive layout that adapts to mobile screens",
+      "expect": [
+        "CSS-RESPONSIVE-001",
+        "CSS-LAYOUT-001"
+      ]
+    },
+    {
+      "q": "speed up my docker image build with better layer caching",
+      "expect": [
+        "DK-CACHE-001"
+      ]
+    },
+    {
+      "q": "run my container as a non-root user for security",
+      "expect": [
+        "DK-USER-001"
+      ]
+    },
+    {
+      "q": "keep build secrets out of the final docker image",
+      "expect": [
+        "DK-SECRET-001"
+      ]
+    },
+    {
+      "q": "define request and response schemas for my fastapi endpoint",
+      "expect": [
+        "FA-PYDANTIC-001"
+      ]
+    },
+    {
+      "q": "return proper http status codes and handle errors in fastapi",
+      "expect": [
+        "FA-ERROR-001"
+      ]
+    },
+    {
+      "q": "manage async database sessions per request in fastapi",
+      "expect": [
+        "FA-DBSESSION-001",
+        "FA-ASYNC-001"
+      ]
+    },
+    {
+      "q": "configure cross-origin requests for my api",
+      "expect": [
+        "FA-CORS-001"
+      ]
+    },
+    {
+      "q": "stop using unexplained magic numbers in the code",
+      "expect": [
+        "GEN-MAGIC-001"
+      ]
+    },
+    {
+      "q": "set up structured application logging",
+      "expect": [
+        "GEN-LOG-001"
+      ]
+    },
+    {
+      "q": "pick a well maintained npm package for this",
+      "expect": [
+        "GEN-DEPS-001"
+      ]
+    },
+    {
+      "q": "fix an unbounded cache that keeps growing in memory",
+      "expect": [
+        "GEN-MEMORY-001"
+      ]
+    },
+    {
+      "q": "read configuration from environment variables",
+      "expect": [
+        "GEN-ENV-001"
+      ]
+    },
+    {
+      "q": "handle errors returned from functions in go",
+      "expect": [
+        "GO-ERROR-001"
+      ]
+    },
+    {
+      "q": "avoid data races when sharing state across goroutines",
+      "expect": [
+        "GO-RACE-001"
+      ]
+    },
+    {
+      "q": "implement equals and hashcode correctly in java",
+      "expect": [
+        "JV-EQUALS-001"
+      ]
+    },
+    {
+      "q": "close file and connection resources safely in java",
+      "expect": [
+        "JV-RESOURCE-001"
+      ]
+    },
+    {
+      "q": "fetch data inside a next.js server component",
+      "expect": [
+        "NX-FETCH-001",
+        "NX-SERVER-001"
+      ]
+    },
+    {
+      "q": "add page title and metadata for seo in next.js",
+      "expect": [
+        "NX-META-001"
+      ]
+    },
+    {
+      "q": "handle a form submission with a next.js server action",
+      "expect": [
+        "NX-ACTION-001"
+      ]
+    },
+    {
+      "q": "optimize and serve images efficiently in next.js",
+      "expect": [
+        "NX-IMAGE-001"
+      ]
+    },
+    {
+      "q": "avoid mutable default arguments in python functions",
+      "expect": [
+        "PY-MUTABLE-001"
+      ]
+    },
+    {
+      "q": "add type hints to my python code",
+      "expect": [
+        "PY-TYPES-001"
+      ]
+    },
+    {
+      "q": "use pathlib instead of os.path for file paths",
+      "expect": [
+        "PY-PATHLIB-001"
+      ]
+    },
+    {
+      "q": "fix the missing key warning when rendering a react list",
+      "expect": [
+        "RCT-KEY-001"
+      ]
+    },
+    {
+      "q": "manage form state and validation in react",
+      "expect": [
+        "RCT-FORM-001"
+      ]
+    },
+    {
+      "q": "avoid unwrap and handle the option or result safely in rust",
+      "expect": [
+        "RS-UNWRAP-001",
+        "RS-ERROR-001"
+      ]
+    },
+    {
+      "q": "reduce unnecessary clone calls in rust",
+      "expect": [
+        "RS-CLONE-001"
+      ]
+    },
+    {
+      "q": "fix the n+1 query problem hitting the database in a loop",
+      "expect": [
+        "SQL-NPLUSONE-001"
+      ]
+    },
+    {
+      "q": "stop selecting all columns with select star",
+      "expect": [
+        "SQL-SELECT-001"
+      ]
+    },
+    {
+      "q": "wrap multiple writes in a single database transaction",
+      "expect": [
+        "SQL-TXN-001"
+      ]
+    },
+    {
+      "q": "add an index to speed up this slow query",
+      "expect": [
+        "SQL-INDEX-001"
+      ]
+    },
+    {
+      "q": "handle null and undefined safely in typescript",
+      "expect": [
+        "TS-NULL-001"
+      ]
+    },
+    {
+      "q": "validate untrusted external json with zod",
+      "expect": [
+        "TS-ZOD-001"
+      ]
+    },
+    {
+      "q": "run a security audit on the authentication module",
+      "expect": [
+        "WF-SECURITY-AUDIT-001"
+      ]
+    },
+    {
+      "q": "review my changes before i merge this pull request",
+      "expect": [
+        "WF-CODE-REVIEW-001"
+      ]
+    },
+    {
+      "q": "avoid wasting tokens spawning too many subagents for a small task",
+      "expect": [
+        "WF-DELEGATE-COST-001"
+      ]
+    },
+    {
+      "q": "write a handoff so the next session can pick up where we left off",
+      "expect": [
+        "WF-HANDOFF-001"
+      ]
+    },
+    {
+      "q": "the code critic returned findings, should i just apply them or verify first",
+      "expect": [
+        "WF-VET-SUBAGENT-001"
+      ]
+    },
+    {
+      "q": "this change is too simple so i'll skip writing a test",
+      "expect": [
+        "RAT-SKIP-TEST-001",
+        "RAT-SIMPLE-001"
+      ]
+    },
+    {
+      "q": "i'll just hardcode this value for now and fix it later",
+      "expect": [
+        "RAT-TEMP-HACK-001"
+      ]
+    },
+    {
+      "q": "the input comes from an internal service so i don't need to validate it",
+      "expect": [
+        "RAT-TRUST-INPUT-001"
+      ]
+    },
+    {
+      "q": "is this npm package safe to install, check for typosquatting",
+      "expect": [
+        "SEC-PKG-001"
+      ]
+    },
+    {
+      "q": "should i disable postinstall lifecycle scripts for an untrusted package",
+      "expect": [
+        "SEC-PKG-001"
+      ]
+    },
+    {
+      "q": "build a sql query using a value from a form",
+      "expect": [
+        "SEC-SQLI-001"
+      ]
+    },
+    {
+      "q": "execute a database query with a user-supplied id",
+      "expect": [
+        "SEC-SQLI-001"
+      ]
+    },
+    {
+      "q": "render user-submitted comments as html in a react component",
+      "expect": [
+        "SEC-XSS-001"
+      ]
+    },
+    {
+      "q": "use dangerouslySetInnerHTML to display user content",
+      "expect": [
+        "SEC-XSS-001"
+      ]
+    },
+    {
+      "q": "commit the lockfile and pin dependency versions",
+      "expect": [
+        "GEN-DEPVER-001"
+      ]
+    },
+    {
+      "q": "set up dependabot to keep dependency versions updated",
+      "expect": [
+        "GEN-DEPVER-001"
+      ]
+    },
+    {
+      "q": "cut a release, bump the version and tag it",
+      "expect": [
+        "GEN-RELEASE-001"
+      ]
+    },
+    {
+      "q": "is this a breaking change or a patch release",
+      "expect": [
+        "GEN-RELEASE-001"
+      ]
+    },
+    {
+      "q": "validate and sanitize input from an api request body",
+      "expect": [
+        "GEN-VALIDATE-001"
+      ]
+    },
+    {
+      "q": "fix a missing dependency in my useEffect hook",
+      "expect": [
+        "RCT-HOOKS-001"
+      ]
+    },
+    {
+      "q": "my prompt tweak made the model output worse",
+      "expect": [
+        "LLM-EVAL-001"
+      ]
+    },
+    {
+      "q": "how do i know if this prompt change actually helped",
+      "expect": [
+        "LLM-EVAL-001"
+      ]
+    },
+    {
+      "q": "my agent reads web pages and can call tools",
+      "expect": [
+        "LLM-INJECT-001"
+      ]
+    },
+    {
+      "q": "prompt injection through retrieved documents",
+      "expect": [
+        "LLM-INJECT-001"
+      ]
+    },
+    {
+      "q": "the model sometimes returns prose instead of json",
+      "expect": [
+        "LLM-OUTPUT-001"
+      ]
+    },
+    {
+      "q": "parse structured fields out of the model response",
+      "expect": [
+        "LLM-OUTPUT-001"
+      ]
+    },
+    {
+      "q": "reduce the token cost of my model calls",
+      "expect": [
+        "LLM-COST-001"
+      ]
+    },
+    {
+      "q": "set up prompt caching so calls are cheaper",
+      "expect": [
+        "LLM-COST-001"
+      ]
+    },
+    {
+      "q": "how do i test code that calls an llm",
+      "expect": [
+        "LLM-TEST-001"
+      ]
+    },
+    {
+      "q": "my ai test is flaky because the wording changes",
+      "expect": [
+        "LLM-TEST-001"
+      ]
+    },
+    {
+      "q": "which model id should i pin",
+      "expect": [
+        "LLM-MODEL-001"
+      ]
+    },
+    {
+      "q": "is this model deprecated",
+      "expect": [
+        "LLM-MODEL-001"
+      ]
+    },
+    {
+      "q": "build a rag pipeline over our docs",
+      "expect": [
+        "LLM-RETRIEVE-001",
+        "LLM-INJECT-001"
+      ]
+    },
+    {
+      "q": "should i just stuff everything into the context window",
+      "expect": [
+        "LLM-RETRIEVE-001"
+      ]
+    },
+    {
+      "q": "check the units in this equation",
+      "expect": [
+        "SCI-UNITS-001"
+      ]
+    },
+    {
+      "q": "dimensional analysis of this formula",
+      "expect": [
+        "SCI-UNITS-001"
+      ]
+    },
+    {
+      "q": "compare floats for equality",
+      "expect": [
+        "SCI-NUMERIC-001"
+      ]
+    },
+    {
+      "q": "my computation produces nan after a few iterations",
+      "expect": [
+        "SCI-NUMERIC-001"
+      ]
+    },
+    {
+      "q": "propagate the uncertainty through this calculation",
+      "expect": [
+        "SCI-UNCERT-001"
+      ]
+    },
+    {
+      "q": "how many significant figures should i report",
+      "expect": [
+        "SCI-UNCERT-001"
+      ]
+    },
+    {
+      "q": "is this p value significant",
+      "expect": [
+        "SCI-STATS-001"
+      ]
+    },
+    {
+      "q": "i tested lots of subgroups and one came out significant",
+      "expect": [
+        "SCI-STATS-001"
+      ]
+    },
+    {
+      "q": "verify this derivation",
+      "expect": [
+        "SCI-DERIVE-001"
+      ]
+    },
+    {
+      "q": "check my algebra on this closed form",
+      "expect": [
+        "SCI-DERIVE-001"
+      ]
+    },
+    {
+      "q": "my simulation results look wrong",
+      "expect": [
+        "SCI-VALIDATE-001"
+      ]
+    },
+    {
+      "q": "validate the solver against a known solution",
+      "expect": [
+        "SCI-VALIDATE-001"
+      ]
+    },
+    {
+      "q": "make my numerical results reproducible",
+      "expect": [
+        "SCI-REPRO-001"
+      ]
+    },
+    {
+      "q": "pin the seed and versions for this analysis",
+      "expect": [
+        "SCI-REPRO-001"
+      ]
+    },
+    {
+      "q": "write the abstract for my paper",
+      "expect": [
+        "SCI-PAPER-001"
+      ]
+    },
+    {
+      "q": "draft the conclusions section of the manuscript",
+      "expect": [
+        "SCI-PAPER-001"
+      ]
+    },
+    {
+      "q": "label the axes on this plot",
+      "expect": [
+        "SCI-FIGURE-001"
+      ]
+    },
+    {
+      "q": "what should the figure caption say",
+      "expect": [
+        "SCI-FIGURE-001"
+      ]
+    },
+    {
+      "q": "search the literature before i derive this",
+      "expect": [
+        "SCI-PRIORART-001"
+      ]
+    },
+    {
+      "q": "has this numerical method already been published",
+      "expect": [
+        "SCI-PRIORART-001"
+      ]
+    },
+    {
+      "q": "what source should i cite for this",
+      "expect": [
+        "RES-SOURCE-001"
+      ]
+    },
+    {
+      "q": "can i cite a paper from its abstract",
+      "expect": [
+        "RES-SOURCE-001"
+      ]
+    },
+    {
+      "q": "does the study actually say that or is it my reading",
+      "expect": [
+        "RES-INFER-001"
+      ]
+    },
+    {
+      "q": "separate what the paper claims from what i concluded",
+      "expect": [
+        "RES-INFER-001"
+      ]
+    },
+    {
+      "q": "gather recent prior art up to today",
+      "expect": [
+        "RES-RECENCY-001"
+      ]
+    },
+    {
+      "q": "is this still the current state of the art",
+      "expect": [
+        "RES-RECENCY-001"
+      ]
+    },
+    {
+      "q": "these two sources disagree",
+      "expect": [
+        "RES-CONFLICT-001"
+      ]
+    },
+    {
+      "q": "the evidence is contradictory, which do i report",
+      "expect": [
+        "RES-CONFLICT-001"
+      ]
+    },
+    {
+      "q": "help me frame a research question",
+      "expect": [
+        "RES-QUESTION-001"
+      ]
+    },
+    {
+      "q": "where should i start investigating this area",
+      "expect": [
+        "RES-QUESTION-001"
+      ]
+    },
+    {
+      "q": "find the frontier of this field and what is unsolved",
+      "expect": [
+        "RES-FRONTIER-001"
+      ]
+    },
+    {
+      "q": "what are the open problems in this area",
+      "expect": [
+        "RES-FRONTIER-001"
+      ]
+    },
+    {
+      "q": "is this idea actually novel",
+      "expect": [
+        "RES-NOVELTY-001"
+      ]
+    },
+    {
+      "q": "has anyone published this before i claim it is new",
+      "expect": [
+        "RES-NOVELTY-001"
+      ]
+    },
+    {
+      "q": "has anyone solved this in another field",
+      "expect": [
+        "RES-CROSSDOMAIN-001",
+        "RES-NOVELTY-001",
+        "RES-FRONTIER-001"
+      ]
+    },
+    {
+      "q": "borrow an analogy from physics for this problem",
+      "expect": [
+        "RES-CROSSDOMAIN-001"
+      ]
+    },
+    {
+      "q": "synthesize what these 40 papers collectively show",
+      "expect": [
+        "RES-SYNTH-001"
+      ]
+    },
+    {
+      "q": "write a literature review from these sources",
+      "expect": [
+        "RES-SYNTH-001"
+      ]
+    },
+    {
+      "q": "the api call hangs forever",
+      "expect": [
+        "REL-TIMEOUT-001"
+      ]
+    },
+    {
+      "q": "set a timeout on this http request",
+      "expect": [
+        "REL-TIMEOUT-001"
+      ]
+    },
+    {
+      "q": "retry the failed request with exponential backoff",
+      "expect": [
+        "REL-RETRY-001"
+      ]
+    },
+    {
+      "q": "should i retry on a 429",
+      "expect": [
+        "REL-RETRY-001",
+        "REL-LIMIT-001"
+      ]
+    },
+    {
+      "q": "duplicate charges when the webhook is delivered twice",
+      "expect": [
+        "REL-IDEMPOTENT-001"
+      ]
+    },
+    {
+      "q": "idempotency key for this endpoint",
+      "expect": [
+        "REL-IDEMPOTENT-001"
+      ]
+    },
+    {
+      "q": "rate limit this public endpoint",
+      "expect": [
+        "REL-LIMIT-001"
+      ]
+    },
+    {
+      "q": "one client is using all our capacity",
+      "expect": [
+        "REL-LIMIT-001"
+      ]
+    },
+    {
+      "q": "stop one service outage taking down the whole page",
+      "expect": [
+        "REL-DEGRADE-001"
+      ]
+    },
+    {
+      "q": "add a circuit breaker around this dependency",
+      "expect": [
+        "REL-DEGRADE-001"
+      ]
+    },
+    {
+      "q": "this test passes locally but fails in ci",
+      "expect": [
+        "TST-DETERMINISM-001"
+      ]
+    },
+    {
+      "q": "freeze the clock in my tests",
+      "expect": [
+        "TST-DETERMINISM-001"
+      ]
+    },
+    {
+      "q": "my test asserts the mock was called",
+      "expect": [
+        "TST-MOCK-001"
+      ]
+    },
+    {
+      "q": "am i mocking too much in this test",
+      "expect": [
+        "TST-MOCK-001"
+      ]
+    },
+    {
+      "q": "what should i assert in this test",
+      "expect": [
+        "TST-ASSERT-001"
+      ]
+    },
+    {
+      "q": "my test passes but the bug is still there",
+      "expect": [
+        "TST-ASSERT-001",
+        "RAT-WORKS-001"
+      ]
+    },
+    {
+      "q": "tests only fail when run together",
+      "expect": [
+        "TST-ISOLATION-001"
+      ]
+    },
+    {
+      "q": "my tests depend on the order they run in",
+      "expect": [
+        "TST-ISOLATION-001"
+      ]
+    },
+    {
+      "q": "fetch a url that the user submitted",
+      "expect": [
+        "SEC-SSRF-001"
+      ]
+    },
+    {
+      "q": "let users give us a webhook url to call",
+      "expect": [
+        "SEC-SSRF-001"
+      ]
+    },
+    {
+      "q": "build a file path from a user supplied filename",
+      "expect": [
+        "SEC-PATH-001"
+      ]
+    },
+    {
+      "q": "serve a file the user asked for by name",
+      "expect": [
+        "SEC-PATH-001"
+      ]
+    },
+    {
+      "q": "user can read another users record by changing the id",
+      "expect": [
+        "SEC-AUTHZ-001"
+      ]
+    },
+    {
+      "q": "check the caller owns this object before returning it",
+      "expect": [
+        "SEC-AUTHZ-001"
+      ]
+    },
+    {
+      "q": "how should i hash passwords",
+      "expect": [
+        "SEC-CRYPTO-001"
+      ]
+    },
+    {
+      "q": "generate a secure random token",
+      "expect": [
+        "SEC-CRYPTO-001"
+      ]
+    },
+    {
+      "q": "pin my github actions to a commit sha",
+      "expect": [
+        "CI-PIN-001"
+      ]
+    },
+    {
+      "q": "is it safe to use a third party action by tag",
+      "expect": [
+        "CI-PIN-001"
+      ]
+    },
+    {
+      "q": "store deploy credentials for the pipeline",
+      "expect": [
+        "CI-SECRET-001"
+      ]
+    },
+    {
+      "q": "use oidc instead of a long lived cloud key",
+      "expect": [
+        "CI-SECRET-001"
+      ]
+    },
+    {
+      "q": "run tests on pull requests from forks",
+      "expect": [
+        "CI-UNTRUSTED-001"
+      ]
+    },
+    {
+      "q": "is pull_request_target safe",
+      "expect": [
+        "CI-UNTRUSTED-001"
+      ]
+    },
+    {
+      "q": "write my own json parser",
+      "expect": [
+        "GEN-PRIORART-001"
+      ]
+    },
+    {
+      "q": "roll my own rate limiter",
+      "expect": [
+        "GEN-PRIORART-001"
+      ]
+    },
+    {
+      "q": "implement a fast multipole method from scratch",
+      "expect": [
+        "GEN-PRIORART-001",
+        "SCI-PRIORART-001"
+      ]
+    },
+    {
+      "q": "build a solver for this pde",
+      "expect": [
+        "GEN-PRIORART-001",
+        "SCI-PRIORART-001"
+      ]
+    },
+    {
+      "q": "use rem instead of px for font sizes",
+      "expect": [
+        "CSS-UNITS-001"
+      ]
+    },
+    {
+      "q": "compare two java strings for equality",
+      "expect": [
+        "JV-EQUALS-001"
+      ]
+    },
+    {
+      "q": "submit this form using a next.js server action",
+      "expect": [
+        "NX-ACTION-001"
+      ]
+    },
+    {
+      "q": "should i extract this into a helper yet",
+      "expect": [
+        "GEN-ABSTRACTION-001"
+      ]
+    },
+    {
+      "q": "make my docker image build faster",
+      "expect": [
+        "DK-CACHE-001",
+        "DK-SLIM-001",
+        "DK-MULTISTAGE-001"
+      ]
+    },
+    {
+      "q": "one sub agent per angle for this research",
+      "expect": [
+        "WF-PARALLEL-RESEARCH-001"
+      ]
+    },
+    {
+      "q": "am i abstracting this too early",
+      "expect": [
+        "GEN-ABSTRACTION-001"
+      ]
+    }
   ]
 }

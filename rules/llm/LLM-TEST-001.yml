@@ -1,0 +1,16 @@
+id: LLM-TEST-001
+domain: llm
+severity: error
+tags: [testing, nondeterminism, fixtures, assertions, llm, mocking]
+triggers: [test the llm, mock the model, flaky ai test, assert the response, snapshot the output]
+when: Writing tests for code that calls a model.
+rule: >
+  Never assert on exact model text — it varies by sampling, model version, and
+  provider-side change, so the assertion tests the weather. Assert the contract
+  instead: the response parses against its schema, the expected tool was called
+  with sane arguments, invariants hold, refusals are handled. Record real
+  responses as fixtures and replay them so the suite is deterministic and offline,
+  and keep live-model checks in a separate eval that is allowed to score rather
+  than pass or fail.
+violation: "assert response.text == 'The capital of France is Paris.'"
+correct: "assert schema.validate(parsed) and parsed.city == 'Paris'  # replayed from a recorded fixture"

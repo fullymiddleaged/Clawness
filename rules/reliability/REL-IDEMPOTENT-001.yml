@@ -1,0 +1,14 @@
+id: REL-IDEMPOTENT-001
+domain: reliability
+severity: error
+tags: [idempotency, duplicates, webhook, exactly-once, delivery, payments]
+triggers: [duplicate, charged twice, webhook, delivered twice, idempotency key, exactly once, replay]
+when: Writing an endpoint or consumer that performs a side effect on receipt.
+rule: >
+  Assume every message and request can arrive more than once. Networks retry,
+  queues deliver at least once, and users double-click, so exactly-once delivery
+  does not exist - exactly-once *effect* is what you build. Accept an idempotency
+  key from the caller, or derive one from the payload, and record processed keys
+  so a repeat returns the original result instead of performing the work twice.
+violation: "A payment webhook that charges the card on every delivery of the same event id"
+correct: "Store the event id in a unique-constrained table; on conflict return the original result"

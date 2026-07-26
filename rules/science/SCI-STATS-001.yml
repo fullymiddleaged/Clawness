@@ -1,0 +1,15 @@
+id: SCI-STATS-001
+domain: science
+severity: error
+tags: [statistics, p-value, multiple-comparisons, effect-size, significance, preregistration]
+triggers: [p value, statistically significant, significance test, multiple comparisons, correlation, sample size, hypothesis test]
+when: Running or reporting a statistical test.
+rule: >
+  Decide the analysis - outcome, test, exclusions, sample size - before looking at
+  the data, and say so when reporting. Correct for multiple comparisons whenever
+  more than one test touches the same data; twenty tests at p<0.05 buy one
+  significant result from pure noise. Report the effect size with a confidence
+  interval, since a bare p-value says something might be nonzero while saying
+  nothing about whether it matters.
+violation: "Testing 30 subgroup correlations, reporting the two with p<0.05, and omitting the other 28"
+correct: "Pre-specified primary outcome, Benjamini-Hochberg correction, effect size with a 95% CI"

@@ -1,0 +1,15 @@
+id: CI-UNTRUSTED-001
+domain: ci
+severity: error
+tags: [fork, pull-request, untrusted-code, secrets, ci, pwn-request, pull-request-target, workflow-trigger]
+triggers: [fork pr, pull request workflow, pull_request_target, pull request target, is pull_request_target safe, run tests on prs, external contributor, ci from forks, forked pull request]
+when: A CI workflow runs against code from a fork or an external contributor.
+rule: >
+  Never execute fork-supplied code in a job that holds secrets or write
+  permissions. Workflow triggers that run in the base repository's privileged
+  context while checking out the pull request head hand an attacker your
+  credentials through an ordinary-looking PR. Run untrusted code in the
+  unprivileged trigger with no secrets, and do privileged work in a separate job
+  keyed on the reviewed result.
+violation: "pull_request_target with an explicit checkout of the PR head, then running the PR's build script"
+correct: "Build and test forks under pull_request with no secrets; deploy from a separate job after review"
