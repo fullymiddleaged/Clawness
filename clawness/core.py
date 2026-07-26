@@ -185,7 +185,8 @@ MEMORY_TEMPLATE = """\
 <!-- Clawness retrieves from this file each prompt: `## Always` entries are
      injected every turn (keep to 3), `## Lessons` entries only when they match
      the prompt. Tell Claude "remember this: ..." or append a bullet yourself
-     (one line, <=120 chars, newest at the bottom). See ENF-MEM-001. -->
+     (one line, <=120 chars, newest at the bottom). Only lessons that would cost
+     real rework if forgotten belong here — not a session log. See ENF-MEM-001. -->
 
 ## Always
 
@@ -651,6 +652,17 @@ _STACK_DOMAINS = frozenset({
     "llm",
 })
 
+# Cross-cutting but topically NARROW. These are never stack-gated — a researcher
+# often works in a bare or LaTeX-only directory where nothing is detected, and
+# gating would silence them exactly there. But unlike general/meta/workflows they
+# don't genuinely apply to every prompt, and at the base floor they fill top-k
+# slots on ordinary coding work: measured at 1.3.0, 11 of 30 routine dev prompts
+# surfaced one ("write a test for this" -> SCI-PAPER-001, "the build is failing"
+# -> RES-NOVELTY-001). A middle floor keeps them un-gated while demanding a real
+# match. Genuine science/research questions score 0.20-0.45, far above it, so the
+# bare-directory case is unaffected; the noise band is 0.06-0.12.
+_TOPICAL_DOMAINS = frozenset({"science", "research"})
+
 
 class Clawness:
     """
@@ -670,6 +682,7 @@ class Clawness:
         min_relevance: Optional[float] = None,  # TF-IDF cosine floor for ranked rules
         stack_domains: Optional[Iterable[str]] = None,  # project's detected stack
         off_stack_min_relevance: Optional[float] = None,  # higher floor for off-stack
+        topical_min_relevance: Optional[float] = None,  # middle floor for science/research
         build_index: bool = True,       # False: caller will add_rules() then build_index()
     ) -> None:
         self.rules_dir = Path(rules_dir)
@@ -710,6 +723,22 @@ class Clawness:
             except ValueError:
                 off_stack_min_relevance = 0.15
         self.off_stack_min_relevance = max(self.min_relevance, off_stack_min_relevance)
+
+        # Middle floor for topically-narrow cross-cutting domains (see
+        # _TOPICAL_DOMAINS). Sits between the base and off-stack floors: high
+        # enough to drop the 0.06-0.12 noise band that put science/research rules
+        # into ordinary coding results, low enough that a real question (0.20+)
+        # is untouched even in a directory where nothing is detected. Never below
+        # the base floor. Tunable via CLAW_TOPICAL_MIN_RELEVANCE; set it to the
+        # base floor to restore 1.3.0 behaviour.
+        if topical_min_relevance is None:
+            try:
+                topical_min_relevance = float(
+                    os.environ.get("CLAW_TOPICAL_MIN_RELEVANCE", "0.12")
+                )
+            except ValueError:
+                topical_min_relevance = 0.12
+        self.topical_min_relevance = max(self.min_relevance, topical_min_relevance)
 
         # Rendering verbosity (token efficiency). Mandatory rules repeat on
         # every turn, so they render compact (id + RULE only) unless
@@ -876,11 +905,14 @@ class Clawness:
     def _floor_for(self, domain: str) -> float:
         """Relevance floor for a rule's domain. Language/framework rules from a
         stack the project doesn't use must clear the higher off-stack floor;
+        topically-narrow cross-cutting rules must clear the topical floor;
         everything else uses the base floor."""
         if (self.stack_domains is not None
                 and domain in _STACK_DOMAINS
                 and domain not in self.stack_domains):
             return self.off_stack_min_relevance
+        if domain in _TOPICAL_DOMAINS:
+            return self.topical_min_relevance
         return self.min_relevance
 
     def rank_ids(

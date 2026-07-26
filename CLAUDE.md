@@ -23,7 +23,15 @@ dependency**. No ML models, no services, no Docker.
    off-stack language/framework rules (`_STACK_DOMAINS` minus detected) face a higher
    floor (`CLAW_OFFSTACK_MIN_RELEVANCE`, default 0.15) so e.g. a Python repo doesn't
    surface SQL/React noise, while strong cross-domain matches still pass. Cross-cutting
-   domains (general/meta/workflows/security/testing) are never penalized. Passing no
+   domains (general/meta/workflows/security/testing) are never penalized.
+   **`science`/`research` are cross-cutting but topically NARROW** (`_TOPICAL_DOMAINS`),
+   so they take a middle floor (`CLAW_TOPICAL_MIN_RELEVANCE`, default 0.12) between the
+   base and off-stack floors: un-gated, so a researcher in a bare/LaTeX-only directory
+   still gets them, but they must genuinely match. At the base floor (1.3.0) 11 of 30
+   routine dev prompts surfaced one; the stack filter makes this WORSE, not better,
+   since suppressing off-stack rules frees top-k slots these then fill. That is also
+   why `clawness query` (no stack) cannot see this class of bug — drive the real hook
+   against a project fixture instead. Passing no
    stack (CLI/eval) disables the penalty, so eval is unaffected. ~2ms/prompt + ~3ms scan
    (retrieval is <1% of the ~400ms hook, which is dominated by interpreter startup).
    **Session-aware re-injection** (`clawness/session_state.py`): the mandatory block

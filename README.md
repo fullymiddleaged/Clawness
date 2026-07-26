@@ -333,7 +333,7 @@ which would defeat prompt caching for no benefit to the model. Set
 
 **Token cost.** A typical turn injects **~1,700 tokens** — ~755 fixed for the always-on mandatory block (rendered compactly — directive only, no repeated examples) plus the selected ranked rules. `clawness stats` shows your exact estimate; tune with `CLAW_TOP_K` / `CLAW_BUDGET` / `CLAW_VERBOSE` / `CLAW_COMPACT`.
 
-**Relevance floor & stack awareness.** Ranked rules appear only when the prompt actually matches — a TF-IDF cosine floor drops coincidental hits (the `relevance=…` shown next to each rule *is* that score). Off-stack language/framework rules face a higher bar, so a vague prompt in a Python repo won't surface SQL/React noise, while a genuinely strong cross-domain match still gets through. Mandatory rules are always injected. Tune via `CLAW_MIN_RELEVANCE` / `CLAW_OFFSTACK_MIN_RELEVANCE` / `CLAW_NO_STACK_FILTER` (see [Configuration](#environment-variables)).
+**Relevance floor & stack awareness.** Ranked rules appear only when the prompt actually matches — a TF-IDF cosine floor drops coincidental hits (the `relevance=…` shown next to each rule *is* that score). Off-stack language/framework rules face a higher bar, so a vague prompt in a Python repo won't surface SQL/React noise, while a genuinely strong cross-domain match still gets through. Topically narrow cross-cutting domains (`science`, `research`) face a middle bar — they're never stack-gated, so a researcher in a bare or LaTeX-only directory still gets them, but they have to genuinely match rather than drift into ordinary coding results. Mandatory rules are always injected. Tune via `CLAW_MIN_RELEVANCE` / `CLAW_TOPICAL_MIN_RELEVANCE` / `CLAW_OFFSTACK_MIN_RELEVANCE` / `CLAW_NO_STACK_FILTER` (see [Configuration](#environment-variables)).
 
 ### Verify It's Working
 
@@ -778,6 +778,7 @@ there.
 | `CLAW_TOP_K` | `5` | Max ranked rules per prompt |
 | `CLAW_BUDGET` | `4000` | Max tokens for the rule block. Project memory is budgeted separately — total injection ≈ `CLAW_BUDGET` + `CLAW_MEMORY_BUDGET` + a few fixed lines |
 | `CLAW_MIN_RELEVANCE` | `0.06` | TF-IDF cosine floor for ranked rules — below it a rule is treated as noise and not injected. Raise it to be stricter (fewer, more on-topic rules), set `0` to disable the floor |
+| `CLAW_TOPICAL_MIN_RELEVANCE` | `0.12` | Middle floor for topically narrow cross-cutting domains (`science`, `research`). They are never stack-gated — a bare or LaTeX-only directory still gets them — so this is what keeps them out of ordinary coding results. Set to `0.06` to disable. Never drops below `CLAW_MIN_RELEVANCE` |
 | `CLAW_OFFSTACK_MIN_RELEVANCE` | `0.15` | Higher floor for language/framework rules from a stack the project doesn't use (e.g. SQL/React rules in a Python repo). Keeps vague prompts on-stack while letting strong cross-domain matches through. Never drops below `CLAW_MIN_RELEVANCE` |
 | `CLAW_NO_STACK_FILTER` | (unset) | Disable codebase-aware filtering — rank all domains equally regardless of detected stack |
 | `CLAW_NO_MEMORY` | (unset) | Don't auto-create `.clawness/memory.md` on first session |

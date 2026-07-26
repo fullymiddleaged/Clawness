@@ -2,7 +2,7 @@ id: RES-QUESTION-001
 domain: research
 severity: warning
 tags: [research-question, scope, falsifiable, hypothesis, framing, criteria]
-triggers: [research question, explore this area, frame the research, scope the study, what should i be asking, open ended research, hypothesis to test]
+triggers: [research question, explore this area, investigating this area, where should i start, frame the research, scope the study, what should i be asking, open ended research, falsifiable hypothesis, what would answer this]
 when: Beginning an open-ended investigation or exploratory research.
 rule: >
   Before gathering anything, write down the question, what would count as an

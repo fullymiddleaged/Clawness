@@ -167,6 +167,74 @@ def test_science_domain_is_cross_cutting():
     assert ids[0] == "SCI-UNITS-001", f"CSS/other rule outranked it: {ids[:3]}"
 
 
+# Ordinary development prompts — none is about science or research. Kept as a
+# batch because the failure mode is statistical: any single prompt pulling one
+# science rule looks like bad luck, and only the rate shows the real problem.
+_ROUTINE_DEV_PROMPTS = [
+    "extract this into a helper function", "my component re-renders too often",
+    "add pagination to this endpoint", "why is my docker image so big",
+    "handle a form submission", "rename this variable", "fix this type error",
+    "add error handling to this function", "write a test for this",
+    "the build is failing", "refactor this class", "add logging here",
+    "why is this query slow", "set up ci for this repo", "update the readme",
+    "add a new api route", "validate this request body", "fix the lint errors",
+    "cache the response", "add a database migration", "deploy this to prod",
+    "review this pull request", "split this file up", "add types to this module",
+    "why does this return undefined", "clean up these imports",
+    "make this function async", "handle the null case", "add a loading state",
+    "fix the failing test",
+]
+
+
+def test_science_research_do_not_leak_into_routine_dev_work():
+    """science/ and research/ must stay out of ordinary coding results.
+
+    They are cross-cutting (never stack-gated) so a researcher in a bare
+    directory still gets them — which means only the topical floor and trigger
+    precision hold them back. At 1.3.0, 11 of these 30 prompts surfaced one
+    ("write a test for this" -> SCI-PAPER-001 via the word "tested" in its body,
+    "the build is failing" -> RES-NOVELTY-001 via "Failing to find"). The stack
+    filter makes it worse, not better: suppressing off-stack rules frees top-k
+    slots that these then fill, so this asserts under a real stack."""
+    for stack in ({"typescript", "react", "nextjs", "css", "general"},
+                  {"python", "fastapi", "sql", "general"}):
+        wl = Clawness(RULES_DIR, stack_domains=stack)
+        leaks = []
+        for prompt in _ROUTINE_DEV_PROMPTS:
+            for rid in wl.rank_ids(prompt, top_k=5):
+                if rid.startswith(("SCI-", "RES-")):
+                    leaks.append((prompt, rid))
+        assert not leaks, f"science/research leaked into routine dev work: {leaks}"
+
+
+def test_topical_floor_does_not_silence_real_research_questions():
+    """The topical floor must not cost recall: a genuine science or research
+    question scores far above it, including in a directory where nothing is
+    detected (the bare-LaTeX case that made these domains cross-cutting)."""
+    wl = Clawness(RULES_DIR, stack_domains={"general"})
+    for prompt, expected in [
+        ("check the units in this equation", "SCI-UNITS-001"),
+        ("verify this derivation", "SCI-DERIVE-001"),
+        ("is this p value significant", "SCI-STATS-001"),
+        ("is this idea actually novel", "RES-NOVELTY-001"),
+        ("where should i start investigating this area", "RES-QUESTION-001"),
+        ("write the abstract for my paper", "SCI-PAPER-001"),
+    ]:
+        ids = wl.rank_ids(prompt, top_k=5)
+        assert expected in ids, f"{prompt!r} lost {expected}; got {ids}"
+
+
+def test_topical_floor_is_between_base_and_off_stack():
+    """Ordering matters: at or below the base floor it does nothing, and at the
+    off-stack floor it would effectively gate domains we chose not to gate."""
+    wl = Clawness(RULES_DIR)
+    assert wl.min_relevance < wl.topical_min_relevance <= wl.off_stack_min_relevance
+    assert wl._floor_for("science") == wl.topical_min_relevance
+    assert wl._floor_for("research") == wl.topical_min_relevance
+    assert wl._floor_for("general") == wl.min_relevance
+    assert wl._floor_for("meta") == wl.min_relevance
+
+
 def test_strong_off_stack_match_still_surfaces():
     """A genuinely strong cross-domain match must clear the off-stack floor, so a
     React question in a Python repo still gets React rules (mid-session deps)."""

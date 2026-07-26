@@ -5,6 +5,68 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-07-26
+
+Fixes science/research rules surfacing on ordinary coding work — found by driving
+the installed 1.3.0 hook against real project fixtures, which local CLI testing had
+missed. No new rules; 165 rules / 23 domains unchanged. 319 tests; retrieval MRR@5
+0.990 / hit-rate 1.000 (unchanged — the fix costs no recall).
+
+### Fixed
+
+- **`science/` and `research/` rules appeared in routine development results.**
+  Measured at 1.3.0: **11 of 30** ordinary coding prompts surfaced one — *"write a
+  test for this"* → `SCI-PAPER-001`, *"the build is failing"* → `RES-NOVELTY-001`,
+  *"clean up these imports"* → `RES-CROSSDOMAIN-001`. That breaks the project's
+  "never nag normal dev work" rule.
+
+  The cause was structural rather than one bad trigger. Both domains are
+  deliberately cross-cutting — never stack-gated, so a researcher in a bare or
+  LaTeX-only directory still gets them — but unlike `general`/`meta`/`workflows`
+  they are topically *narrow*, and at the base 0.06 floor they cleared it on
+  weak-signal prompts. The stack filter compounded it: suppressing off-stack rules
+  frees top-k slots, which these then filled. That is also why the bug was invisible
+  to `clawness query` (no stack) and only appeared when driving the real hook.
+
+  Two-part fix:
+  - **A topical relevance floor** (`_TOPICAL_DOMAINS`, default **0.12**, tunable via
+    `CLAW_TOPICAL_MIN_RELEVANCE`) sitting between the base 0.06 and off-stack 0.15
+    floors. These domains stay un-gated but must earn the slot. Chosen from measured
+    separation: genuine science/research hits score 0.20–0.45, the false positives
+    0.066–0.165. Set it to `0.06` to restore 1.3.0 behaviour.
+  - **Four token collisions reworded**, each identified by measurement:
+    `SCI-PAPER-001` said "conditions actually tested" and "untested" (the token
+    `test` is why a test-writing prompt matched it) → "regime you actually measured"
+    / "unverified"; its `writing` tag → `scientific-writing`. `RES-NOVELTY-001` said
+    "**Failing** to find something" → "An empty search result". `RES-QUESTION-001`
+    had the trigger `hypothesis to test` → `falsifiable hypothesis`.
+
+  `RES-QUESTION-001` also *gained* the research-framing vocabulary the new floor
+  makes safe to carry: *"where should i start investigating this area"* goes from
+  0.084 (below where it reliably surfaced) to **0.252**.
+
+  Result: **0 science/research appearances** across 60 prompt×stack combinations,
+  down from 12, with eval MRR@5 and hit-rate unchanged at 0.990 / 1.000.
+
+### Changed
+
+- **`ENF-MEM-001` (mandatory) now sets a higher bar for what reaches
+  `.clawness/memory.md`.** It previously said to record when "a correction repeats
+  or a fix costs real time", which in practice admitted session narration. It now
+  asks for only what would cost real rework if forgotten — a trap that bit, a
+  non-obvious constraint — and explicitly excludes anything the code, git history
+  or `CLAUDE.md` already records, with "when in doubt, don't". Entries should name
+  the file or flag so they retrieve later. Slightly *reduces* the always-on block
+  (3002 → 2975 chars).
+
+### Added
+
+- Three regression tests: the 30-prompt leak sweep under two realistic stacks,
+  a check that genuine research questions still clear the topical floor in a bare
+  directory, and one pinning the floor ordering
+  (`base < topical <= off-stack`). Verified non-vacuous — forcing
+  `CLAW_TOPICAL_MIN_RELEVANCE=0.06` makes the leak test fail.
+
 ## [1.3.0] - 2026-07-26
 
 Widens the corpus past web/backend coding into scientific computing, research method,

@@ -3,13 +3,13 @@ domain: workflows
 severity: info
 tags: [memory, lessons, gotcha, correction, retrospective, journal]
 triggers: [remember, lesson, again, every time, same mistake, gotcha, note for next time]
-when: Any session — a correction repeats, a gotcha costs real time, or the user says to remember something.
+when: A trap already cost real time, a non-obvious constraint surfaced, or the user says to remember something.
 rule: >
-  Maintain .clawness/memory.md yourself; don't wait to be asked. When a correction
-  repeats, a fix costs real time to rediscover, or the user says "remember this",
-  append a bullet under '## Lessons' (newest last) naming the trap and the fix: one
-  line, 120 chars max, no paragraphs or code blocks. Edit a near-duplicate rather
-  than adding one. '## Always' holds at most 3 always-on bullets. Prune what no
-  longer holds; past 40, merge the weakest before adding.
-violation: "A six-line entry pasting the whole failing command, added while three near-identical bullets already sit above it"
+  Write to .clawness/memory.md only what would cost real rework if forgotten: a trap
+  that bit, a non-obvious constraint. Never record what the code, git history or
+  CLAUDE.md already says, nor session narration; when in doubt, don't. One line under
+  '## Lessons' (newest last), 120 chars max, naming the file or flag so it retrieves
+  later. Edit near-duplicates rather than adding. '## Always' holds 3 max; past 40,
+  merge the weakest.
+violation: "Appending 'refactored core.py and fixed the tests today' — a session narration already in the git log"
 correct: "- eval fails unless CLAW_NO_PLAN_GATE is unset — the gate tests assert it is on"

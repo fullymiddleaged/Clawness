@@ -9,7 +9,7 @@ rule: >
   under other names, other notations, and in adjacent fields, plus review
   articles and published negative results. Most reinvention is a vocabulary
   mismatch, not a genuine gap - the same construction carries different names in
-  statistics, physics, and machine learning. Failing to find something is a fact
-  about the search, not about the literature; report what you searched.
+  statistics, physics, and machine learning. An empty search result is a fact
+  about your search, not about the literature; report what you searched.
 violation: "'This appears to be novel' after three searches in one field using one set of terms"
 correct: "Search under 3-4 synonym sets across adjacent fields, check reviews, then state the search that supports the claim"
