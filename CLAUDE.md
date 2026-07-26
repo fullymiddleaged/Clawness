@@ -239,6 +239,24 @@ dependency**. No ML models, no services, no Docker.
   `clawness stats`, `clawness bench`.
 - CI (`.github/workflows/ci.yml`) runs lint + tests + eval across ubuntu/macOS/windows × py3.10–3.14.
 
+## Releasing
+- **`marketplace.json` sets `"source": "./"`, so a push to `main` IS a release.** Users
+  get whatever `main` holds on their next `claude plugin update` — the tag and GitHub
+  release are markers for humans, not the delivery mechanism. Consequence: `main` must
+  never sit ahead of the version it declares. Anything user-visible that lands there
+  (rules, hooks, README, manifest copy) needs a version bump in the same push, or the
+  work belongs on a branch until you're ready to release.
+- **Every version in CHANGELOG.md gets exactly one tag and one GitHub release.** Don't
+  leave an entry untagged, and don't stack several unreleased bumps — collapse the
+  batch into one version instead. (v1.2.0 shipped that way: three features, one minor.)
+- The sequence: bump the four version places → CHANGELOG entry → `pytest` + `clawness
+  lint` + `clawness eval` → commit → `git tag -a vX.Y.Z` → push `main` and the tag →
+  `gh release create vX.Y.Z --notes-file <extracted CHANGELOG entry>`. Verify with
+  `git rev-list -n1 vX.Y.Z` against `origin/main` and
+  `git show vX.Y.Z:clawness/__init__.py`.
+- Publishing is outward-facing — confirm the release shape with the user before pushing
+  a tag or creating a release.
+
 ## Gotchas
 - **Always pass `encoding="utf-8"` on file I/O and stdin/stdout.** The corpus uses
   em-dashes/smart-quotes; bare `open()`/`read_text()`/`sys.stdin` default to cp1252

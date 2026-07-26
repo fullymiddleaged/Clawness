@@ -5,6 +5,30 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-07-26
+
+Accuracy pass on what 1.2.0 tells people it does. No behavior change to the hooks.
+
+### Fixed
+
+- **The plugin and marketplace descriptions still advertised project memory as
+  "injected every turn."** 1.2.0 made that false — it's retrieved per prompt — and
+  neither manifest mentioned the context watch or the session handoff. Since the
+  marketplace entry sources the plugin from the repo (`"source": "./"`), this copy is
+  what users read before installing.
+- **`clawness stats` reported the mandatory block as costing "~631 every turn."**
+  Session-aware re-injection made that wrong: the full block renders on 1 prompt in
+  `CLAW_FULL_EVERY` (default 5) and costs ~35 tokens as an id list in between. The
+  abbreviated figure is now computed from the actual mandatory ids rather than
+  hardcoded, and `CLAW_FULL_EVERY=1` reads "every turn" instead of "1 prompt in 1".
+
+### Changed
+
+- README opens with a scannable feature list instead of one 70-word sentence, and
+  states the token economics with measured numbers: the full corpus pasted into
+  CLAUDE.md would cost ~16,600 tokens *every turn*, against ~631 fixed (~35 on 4 turns
+  in 5) plus only the rules matching the prompt.
+
 ## [1.2.0] - 2026-07-26
 
 Session continuity. A session now knows how full it is, says so before quality
