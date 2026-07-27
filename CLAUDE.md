@@ -251,6 +251,39 @@ dependency**. No ML models, no services, no Docker.
   approve` — a CLI the plugin path doesn't install, stranding them; `ask` has a working
   Yes button, so that trap is gone. **Plan-file writes (`<config>/plans/`) are exempt**
   (`is_plan_file`) — gating them is a catch-22. Fails open on any error.
+- **The gate has NO per-project off switch, and must never regain one (1.5.0).** It had
+  two — `clawness plan off` (`plan_gate.enabled:false` in `<project>/.clawness/config.json`)
+  and `clawness plan approve` (`status:approved` in `plan.json`, "until reset"). Both were
+  permanent, silent, and project-local, and a plugin install doesn't ship the CLI that
+  undoes them. This repo's own gate sat off for a month before anyone noticed, which is the
+  one failure a process keeper cannot have: **an absent prompt is indistinguishable from a
+  working one**, so nothing ever surfaces the mistake. Both are gone, along with
+  `load_config`/`save_config`/`approve`/`reset`/`manually_approved` and `plan.json`.
+  `gate_enabled` now reads only `CLAW_NO_PLAN_GATE` (dies with the shell) and
+  `plan_gate.enabled:false` in `<config>/clawness/config.json` (global, so it can't be a
+  thing you forgot about in one repo). It still takes `root` for call-site symmetry —
+  don't "restore" a project lookup behind it. Only an explicit `false` disables; a corrupt
+  or partial config leaves the gate ON, failing toward the prompt rather than toward
+  silence. A stale pre-1.5.0 `config.json`/`plan.json` left in a project is inert by
+  design and `tests/test_semantic_and_plan.py` pins that. The global config is registered
+  as a guard control file (`_is_global_plan_config`) — it lives outside the project, so
+  without that it would key on its parent DIRECTORY and one earlier approved write in
+  `~/.claude/clawness/` would let a later write silently disable the gate. It's matched by
+  exact path, not "a dir named clawness", because this repo's own checkout is one.
+- **Headless and interactive read the SAME signal, `permission_mode` off the hook
+  payload — there is no separate "are we headless" branch (1.5.0).** `claude -p` still
+  plans: `--permission-mode plan` behaves exactly like Shift+Tab, clearing the gate on
+  ExitPlanMode through the identical `record_session_approval` path. What changes is
+  only the modes that mean "edit without asking me" were already chosen up front —
+  `acceptEdits`/`auto`/`dontAsk`/`bypassPermissions` (`PREAUTHORIZED_MODES` in
+  `plan.py`) — where re-asking isn't a second safeguard, it's the same question twice:
+  interactively the harness auto-answers it before a human sees it, headlessly there is
+  no human to answer it, so the only effect of asking anyway is stalling a run the user
+  explicitly configured to be unattended. `default`/`plan` are live questions in both
+  contexts and always gate. An unrecognized or missing `permission_mode` (older Claude
+  Code build, unexpected value) falls through to asking — same fail-toward-prompt
+  direction as the rest of the gate. Don't build a `--headless`/env-detection heuristic
+  here: the harness already tells you the thing you'd be inferring.
 - **Agent `model:` is split by task type, and the judgment agents must stay on
   `inherit`.** Subagent `model:` defaults to `inherit`, so pinning it is an ACTIVE
   override of the user's choice — until 1.4.0 all seven agents pinned `sonnet`, which

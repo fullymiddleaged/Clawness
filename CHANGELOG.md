@@ -5,6 +5,57 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-07-27
+
+Removes the plan gate's per-project off switches, and aligns headless with
+interactive so the same gate behaves the same way in both. Permanent, silent
+per-project switches were the reason this repo's own gate sat disabled for a
+month without anyone noticing. 165 rules / 23 domains unchanged; 349 tests
+(was 342).
+
+### Added
+
+- **The plan gate now reads the hook payload's `permission_mode`, so headless
+  runs behave exactly like interactive ones instead of needing their own
+  workaround.** `claude -p --permission-mode plan` plans and clears the gate on
+  ExitPlanMode through the identical path Shift+Tab uses. `--permission-mode
+  acceptEdits`/`auto`/`dontAsk`/`bypassPermissions` means the run already said
+  "edit without asking me" up front, so the gate treats that as the same yes it
+  would get from a clicked dialog and doesn't ask again — asking would just
+  stall a run with no one there to answer. `default`/`plan` remain live
+  questions in both contexts, and a missing or unrecognized mode still asks.
+
+### Changed
+
+- **The plan gate can no longer be disabled for a single project.** `clawness
+  plan off` wrote `plan_gate.enabled: false` into `<project>/.clawness/config.json`
+  and `clawness plan approve` wrote `status: approved` into `plan.json` "until
+  reset". Neither expired, neither announced itself, and a plugin install doesn't
+  ship the CLI that undoes them — so the only signal that a gate had been off for
+  weeks was the absence of a prompt, which looks exactly like a gate that works.
+  Both switches, both commands, and `plan.json` are gone.
+- **Two ways to turn it off, both global and both deliberate:**
+  `CLAW_NO_PLAN_GATE=1`, which dies with your shell, or `plan_gate.enabled: false`
+  in `<config>/clawness/config.json`, which applies everywhere until you change it
+  back. Only an explicit `false` counts: a corrupt or partial config leaves the
+  gate ON, failing toward the prompt rather than toward silence.
+- `clawness plan` now only reports status — and when the gate is off, says which
+  of the two switches did it. `approve`, `reset`, `on` and `off` are removed.
+- A stale pre-1.5.0 `.clawness/config.json` or `plan.json` left in a project is
+  inert. Nothing needs cleaning up; delete them if you like.
+
+### Fixed
+
+- The global opt-out file is now treated as an access-guard control file, so it
+  asks per-file. It lives outside the project, so without this it would key on
+  its parent directory like any out-of-project write, and one earlier approved
+  write in `~/.claude/clawness/` would have let a later write disable the gate
+  with no prompt. Matched by exact path, so an ordinary `config.json` inside a
+  checkout that happens to be named `clawness` is unaffected.
+- The plan gate's PostToolUse half no longer records a session approval when the
+  gate is disabled. It was appending a row to `sessions.json` per session for a
+  feature that was switched off and never read it.
+
 ## [1.4.0] - 2026-07-26
 
 Stops Clawness overriding your model choice for judgment work, adds a one-time

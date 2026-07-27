@@ -13,15 +13,38 @@ requires zero clawness-specific commands:
     edit through AND clears the gate for the rest of the session, so the prompt
     appears at most once per session, not per edit.
 
-  - ON by default. Disable per-project with `clawness plan off`, or globally
-    with the CLAW_NO_PLAN_GATE environment variable.
+  - Headless matches interactive, not a separate mode: `claude -p` sends the
+    same `permission_mode` field on every hook call that an interactive session
+    does, and the gate reads it the same way either way. `--permission-mode
+    plan` plans and clears the gate on ExitPlanMode exactly like Shift+Tab does;
+    `--permission-mode acceptEdits` (or `auto`/`dontAsk`/`bypassPermissions`)
+    has already told Claude Code "edit without asking me", so the gate treats
+    that as the same yes it would get from a clicked dialog and doesn't ask
+    again — there is no one to ask in a headless run, and re-asking would just
+    stall it. `default`/`plan` are live questions in both contexts and always
+    prompt if unapproved. See PREAUTHORIZED_MODES.
+  - ON by default, and the ONLY way to turn it off is global and deliberate:
+    the CLAW_NO_PLAN_GATE environment variable, or `plan_gate.enabled: false`
+    in the user-level <config>/clawness/config.json.
   - Approval is recorded automatically on native plan approval (ExitPlanMode) OR
-    on the first edit the user approves. `clawness plan approve` remains a
-    headless/CLI fallback; it is never the required path.
+    on the first edit the user approves.
   - Approval is per-session (each new session re-plans), keyed by Claude Code's
     session_id.
-  - Fails OPEN: any unexpected error defers to the normal permission flow rather
-    than blocking work.
+  - Fails OPEN: any unexpected error, or a missing/unrecognized permission_mode,
+    defers to the normal permission flow (i.e. still asks) rather than silently
+    letting an edit through.
+
+Design note (1.5.0): there used to be TWO per-project kill switches, both
+permanent and both silent — `plan off` wrote ``plan_gate.enabled: false`` into
+<project>/.clawness/config.json, and `plan approve` wrote ``status: approved``
+into <project>/.clawness/plan.json "until reset". Neither expired, neither
+announced itself, and a plugin install does not ship the CLI that would undo
+them. This repo's own gate sat off for a month that way before anyone noticed —
+which is the exact failure a process keeper cannot have, because an absent
+prompt is indistinguishable from a working one. Both are gone. The gate is now
+session-scoped, full stop: an opt-out either dies with your shell (env var) or
+is a global choice you made once for every project (user config). Nothing
+project-local can silently disable it again.
 
 Design note: this used to emit a hard ``deny``, which on the VS Code build has no
 in-Claude override — a session with no recorded ExitPlanMode approval (e.g. the
@@ -30,10 +53,11 @@ approve``, a CLI the plugin install path does not put on PATH. An ``ask`` has a
 working approve button, so the gate can never trap the user; that is why the
 decision is ``ask``, not ``deny``.
 
-State lives in <project>/.clawness/:
-  - config.json   : { plan_gate: { enabled } }
-  - sessions.json : { <session_id>: <approved_at>, ... }   (auto-managed)
-  - plan.json     : { status, approved_at }                (manual override)
+State:
+  - <project>/.clawness/sessions.json : { <session_id>: <approved_at>, ... }
+    (auto-managed, pruned after 24h — the only per-project state there is)
+  - <config>/clawness/config.json     : { plan_gate: { enabled } }
+    (global opt-out, written by hand; absent means ON)
 """
 
 from __future__ import annotations
@@ -46,9 +70,6 @@ from typing import Optional
 
 WRITE_TOOLS = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 PLAN_APPROVAL_TOOL = "ExitPlanMode"
-
-STATUS_NONE = "none"
-STATUS_APPROVED = "approved"
 
 _SESSION_TTL_SECONDS = 24 * 3600  # prune session approvals older than a day
 
@@ -120,38 +141,36 @@ def is_plan_file(target: "str | Path | None") -> bool:
     return False
 
 
-def _now() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%S")
+# --- global opt-out (default ON) ------------------------------------------
+
+def global_config_paths() -> list[Path]:
+    """Where a user-level opt-out may live: <config>/clawness/config.json for
+    each Claude Code config dir. Deliberately NOT per-project — see the module
+    docstring."""
+    return [d / "clawness" / "config.json" for d in _claude_config_dirs()]
 
 
-# --- config (default ON) --------------------------------------------------
-
-def default_config() -> dict:
-    return {"plan_gate": {"enabled": True}}
-
-
-def load_config(root: Path) -> dict:
-    base = default_config()
-    path = clawness_dir(root) / "config.json"
-    try:
-        cfg = json.loads(path.read_text(encoding="utf-8"))
-        if isinstance(cfg.get("plan_gate"), dict):
-            base["plan_gate"].update(cfg["plan_gate"])
-    except Exception:
-        pass
-    return base
-
-
-def save_config(root: Path, cfg: dict) -> None:
-    d = clawness_dir(root)
-    d.mkdir(parents=True, exist_ok=True)
-    (d / "config.json").write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
+def global_gate_disabled() -> bool:
+    """True if the user turned the gate off for every project. Only an explicit
+    ``plan_gate.enabled: false`` counts; a missing, unreadable or unrelated file
+    leaves the gate ON, so a corrupt config can never silently disable it."""
+    for path in global_config_paths():
+        try:
+            cfg = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        gate = cfg.get("plan_gate")
+        if isinstance(gate, dict) and gate.get("enabled") is False:
+            return True
+    return False
 
 
 def gate_enabled(root: Path) -> bool:
+    """*root* is accepted for call-site symmetry but deliberately unused: no
+    project-local file may disable the gate."""
     if os.environ.get("CLAW_NO_PLAN_GATE"):
         return False
-    return bool(load_config(root).get("plan_gate", {}).get("enabled", True))
+    return not global_gate_disabled()
 
 
 # --- per-session approval (native plan mode) ------------------------------
@@ -194,54 +213,44 @@ def session_approved(root: Path, session_id: str) -> bool:
     return isinstance(ts, (int, float)) and (time.time() - ts) < _SESSION_TTL_SECONDS
 
 
-# --- manual override (fallback, no plan mode) -----------------------------
-
-def default_state() -> dict:
-    return {"status": STATUS_NONE, "approved_at": None}
-
-
-def load_state(root: Path) -> dict:
-    base = default_state()
-    try:
-        st = json.loads((clawness_dir(root) / "plan.json").read_text(encoding="utf-8"))
-        base.update({k: st[k] for k in base if k in st})
-    except Exception:
-        pass
-    return base
-
-
-def save_state(root: Path, state: dict) -> None:
-    atomic_write_text(clawness_dir(root) / "plan.json", json.dumps(state, indent=2) + "\n")
-
-
-def approve(root: Path) -> dict:
-    """Manual, session-independent approval (fallback / headless use)."""
-    st = {"status": STATUS_APPROVED, "approved_at": _now()}
-    save_state(root, st)
-    return st
-
-
-def reset(root: Path) -> dict:
-    save_state(root, default_state())
-    return default_state()
-
-
-def manually_approved(root: Path) -> bool:
-    return load_state(root).get("status") == STATUS_APPROVED
-
-
 # --- the gate decision ----------------------------------------------------
 
+# NOTE: the opt-out named here must be one the reader can actually use. It used
+# to name `clawness plan off` — a command the plugin install doesn't ship, and
+# since 1.5.0 one that doesn't exist at all. Keep this to the env var, which
+# needs nothing installed.
 ASK_REASON = (
     "Clawness plan gate: no plan has been approved for this session yet. Approve "
     "this edit to proceed without a plan, or switch to plan mode (Shift+Tab) to plan "
     "first — either one clears the gate for the rest of the session, so you won't be "
-    "asked again. (Opt out: set CLAW_NO_PLAN_GATE=1, or run `clawness plan off` if "
-    "you have the CLI.)"
+    "asked again. (Opt out for this shell: set CLAW_NO_PLAN_GATE=1.)"
 )
 
 # Back-compat alias: earlier versions exported DENY_REASON.
 DENY_REASON = ASK_REASON
+
+
+# Permission modes in which the user has ALREADY answered "yes, edit without
+# asking me" — at the harness level, for the whole session, in advance. Asking
+# again is not a second safeguard, it is the same question a second time:
+# interactively the answer is auto-supplied (the prompt never reaches a human),
+# and headlessly there is no human to reach at all, so the ask can only stall a
+# run the user explicitly set up to be unattended.
+#
+# This is what keeps headless and interactive intuitive: the gate does not care
+# whether anyone is watching, only whether edits have been pre-authorised. A
+# `claude -p` run with --permission-mode acceptEdits behaves exactly like an
+# interactive session where the user pressed Shift+Tab — because it IS the same
+# statement. Headless planning still works and still clears the gate the normal
+# way: --permission-mode plan → ExitPlanMode → recorded, identical to the
+# interactive path.
+#
+# "default" and "plan" are deliberately absent: in both, a permission prompt is
+# still a live question. Values come from the documented `permission_mode` field
+# on the hook payload; an unknown or missing value falls through to asking,
+# which is the safe direction (a spurious prompt costs one click, a skipped one
+# costs the whole point of the gate).
+PREAUTHORIZED_MODES = frozenset({"acceptEdits", "auto", "dontAsk", "bypassPermissions"})
 
 
 def gate_decision(
@@ -249,6 +258,7 @@ def gate_decision(
     tool_name: str,
     session_id: str = "",
     target_path: "str | Path | None" = None,
+    permission_mode: str = "",
 ) -> tuple[bool, str]:
     """Return (prompt, reason). prompt=True means the tool call should surface an
     approve dialog (permissionDecision="ask"), NOT a hard block — an unapproved
@@ -263,7 +273,9 @@ def gate_decision(
         # plan mode, before approval, and are how the gate gets cleared.
         if is_plan_file(target_path):
             return (False, "")
-        if session_approved(root, session_id) or manually_approved(root):
+        if session_approved(root, session_id):
+            return (False, "")
+        if permission_mode in PREAUTHORIZED_MODES:
             return (False, "")
         return (True, ASK_REASON)
     except Exception:

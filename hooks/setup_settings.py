@@ -226,7 +226,7 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
             })
             added_any = True
         results.append(
-            "plan-gate: added (on by default; `clawness plan off` to disable)"
+            "plan-gate: added (on by default; CLAW_NO_PLAN_GATE=1 to disable)"
             if added_any else "plan-gate: already configured")
 
     # --- Access guard (ON by default; PreToolUse classify + PostToolUse confirm) ---

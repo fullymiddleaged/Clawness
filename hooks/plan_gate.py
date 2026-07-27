@@ -43,6 +43,7 @@ try:
     from clawness.plan import (
         find_project_root,
         gate_decision,
+        gate_enabled,
         record_session_approval,
         PLAN_APPROVAL_TOOL,
         WRITE_TOOLS,
@@ -73,9 +74,13 @@ def main() -> None:
         #       a tool_response there as proof the call actually ran, so a declined
         #       ask (which stops before PostToolUse, and would carry no response
         #       even if it ever fired) never settles as approved.
+        # A disabled gate records nothing: without this check every session in
+        # every project would still append a row to sessions.json for a feature
+        # that is switched off and never reads it.
         if event == "PostToolUse":
-            if tool_name == PLAN_APPROVAL_TOOL or (
-                tool_name in WRITE_TOOLS and "tool_response" in payload
+            if gate_enabled(root) and (
+                tool_name == PLAN_APPROVAL_TOOL
+                or (tool_name in WRITE_TOOLS and "tool_response" in payload)
             ):
                 try:
                     record_session_approval(root, session_id)
@@ -88,7 +93,13 @@ def main() -> None:
         # gated.
         tool_input = payload.get("tool_input") or {}
         target_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
-        prompt, reason = gate_decision(root, tool_name, session_id, target_path)
+        # permission_mode keeps headless and interactive behaving the same: a mode
+        # that pre-authorises edits has already answered the gate's question, so it
+        # doesn't get asked again (and can't stall an unattended run).
+        permission_mode = payload.get("permission_mode") or ""
+        prompt, reason = gate_decision(
+            root, tool_name, session_id, target_path, permission_mode
+        )
         if not prompt:
             sys.exit(0)
     except SystemExit:

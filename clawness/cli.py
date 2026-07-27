@@ -295,25 +295,22 @@ def cmd_plan(args: argparse.Namespace) -> None:
         enabled = P.gate_enabled(root)
         print(f"Project   : {root}")
         print(f"Plan gate : {'ON (default)' if enabled else 'off'}")
-        print(f"Manual approve (override): {'active' if P.manually_approved(root) else 'none'}")
+        if not enabled:
+            if os.environ.get("CLAW_NO_PLAN_GATE"):
+                print("  off because CLAW_NO_PLAN_GATE is set in this shell.")
+            else:
+                for path in P.global_config_paths():
+                    if path.exists():
+                        print(f"  off because {path} sets plan_gate.enabled = false.")
+                        break
         print()
-        print("Normal flow needs no commands: present a plan, the user approves it")
-        print("in plan mode, and the gate clears for the session automatically.")
+        print("The gate asks once per session and clears when you approve a plan or")
+        print("the first edit. It cannot be turned off for one project: the only")
+        print("switches are CLAW_NO_PLAN_GATE=1 in your environment, or")
+        print(f'  {P.global_config_paths()[0]}')
+        print('  containing {"plan_gate": {"enabled": false}}')
 
-    action = args.action
-    if action in ("show", "status"):
-        show()
-    elif action == "approve":
-        P.approve(root)
-        print("Manually approved — file edits allowed for this project until reset.")
-    elif action == "reset":
-        P.reset(root)
-        print("Manual approval cleared.")
-    elif action in ("on", "off"):
-        cfg = P.load_config(root)
-        cfg["plan_gate"]["enabled"] = (action == "on")
-        P.save_config(root, cfg)
-        print(f"Plan gate {'enabled' if action == 'on' else 'disabled'} for {root}.")
+    show()
 
 
 AGENTS_MD_TEMPLATE = """\
@@ -337,13 +334,15 @@ returns:
 
 ## Optional plan gate
 
-This project may have a plan gate enabled (on by default; check
-`clawness plan status`). File edits are blocked until a plan is approved. In
-Claude Code, approve a plan via native plan mode and the gate clears for the
-session. In other agents, a human can approve manually:
+Clawness has a plan gate, on by default (check `clawness plan status`). The
+first file edit of a session prompts for confirmation. In Claude Code, approving
+a plan in native plan mode — or approving that first edit — clears the gate for
+the rest of the session.
 
-    clawness plan approve     # allow edits for this project
-    clawness plan off         # disable the gate entirely
+It cannot be switched off for a single project, by design: a project-local
+kill switch is invisible and permanent, and a gate that is silently off looks
+exactly like one that is working. Set `CLAW_NO_PLAN_GATE=1` for a headless run,
+which lasts only as long as that shell.
 
 ## Notes
 
@@ -522,11 +521,13 @@ def main() -> None:
     p_init.add_argument("--write", action="store_true", help="Write starter rule to disk")
 
     # plan (process-keeper gate; ON by default, cleared via native plan mode)
-    p_plan = sub.add_parser("plan", help="Plan gate status / overrides (on by default)")
+    p_plan = sub.add_parser("plan", help="Show plan gate status (the gate is on by default)")
     p_plan.add_argument(
         "action",
-        choices=["show", "status", "approve", "reset", "on", "off"],
-        help="status | approve (manual override) | reset | on | off",
+        nargs="?",
+        default="status",
+        choices=["show", "status"],
+        help="status (the only action — the gate has no per-project switches)",
     )
     p_plan.add_argument("--project", default=".", help="Project directory (default: cwd)")
 

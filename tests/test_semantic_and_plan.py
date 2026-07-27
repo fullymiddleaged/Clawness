@@ -4,6 +4,7 @@ Tests for the concept-expansion layer and the plan gate.
 Runs under pytest, or standalone:  python tests/test_semantic_and_plan.py
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -87,30 +88,108 @@ def test_native_plan_approval_clears_session():
     assert P.gate_decision(root, "Edit", "sess-B")[0] is True
 
 
-def test_manual_approve_override():
+def test_no_project_local_file_can_disable_the_gate():
+    """1.5.0: the per-project kill switches are gone. A project-local
+    config.json/plan.json — including one left behind by an older version — must
+    NOT disable the gate, because a silently-off process keeper is
+    indistinguishable from a working one."""
     root = _fresh_project()
-    assert P.gate_decision(root, "Write", "x")[0] is True
-    P.approve(root)  # session-independent fallback
-    assert P.gate_decision(root, "Write", "anything")[0] is False
-    P.reset(root)
+    (root / ".clawness").mkdir()
+    (root / ".clawness" / "config.json").write_text(
+        json.dumps({"plan_gate": {"enabled": False}}), encoding="utf-8"
+    )
+    (root / ".clawness" / "plan.json").write_text(
+        json.dumps({"status": "approved", "approved_at": "2026-01-01T00:00:00"}),
+        encoding="utf-8",
+    )
     assert P.gate_decision(root, "Write", "x")[0] is True
 
 
-def test_disable_via_config_and_env():
+def test_preauthorized_permission_modes_are_not_asked_again():
+    """A mode that pre-authorises edits has already answered the gate's question.
+    This is what makes headless behave like interactive: `claude -p
+    --permission-mode acceptEdits` matches an interactive Shift+Tab session,
+    because it is the same statement."""
     root = _fresh_project()
-    cfg = P.load_config(root)
-    cfg["plan_gate"]["enabled"] = False
-    P.save_config(root, cfg)
-    assert P.gate_decision(root, "Write", "x")[0] is False
+    for mode in ("acceptEdits", "auto", "dontAsk", "bypassPermissions"):
+        assert P.gate_decision(root, "Write", "s", None, mode)[0] is False, mode
 
-    # env override on a fresh (default-on) project
-    root2 = _fresh_project()
+
+def test_answerable_modes_still_ask():
+    """default/plan are live questions, and an unknown or missing mode falls
+    through to asking — a spurious prompt costs a click, a skipped one costs the
+    gate."""
+    root = _fresh_project()
+    for mode in ("default", "plan", "", "somethingNew", None):
+        assert P.gate_decision(root, "Write", "s", None, mode)[0] is True, mode
+
+
+def test_headless_planning_clears_the_gate_like_interactive():
+    """Planning headlessly (--permission-mode plan → ExitPlanMode) must clear the
+    gate by exactly the same path as an interactive plan approval."""
+    root = _fresh_project()
+    assert P.gate_decision(root, "Edit", "headless-1", None, "plan")[0] is True
+    P.record_session_approval(root, "headless-1")   # what ExitPlanMode records
+    assert P.gate_decision(root, "Edit", "headless-1", None, "plan")[0] is False
+    assert P.gate_decision(root, "Edit", "headless-1", None, "default")[0] is False
+
+
+def test_disable_via_env():
+    root = _fresh_project()
     os.environ["CLAW_NO_PLAN_GATE"] = "1"
     try:
-        assert P.gate_decision(root2, "Write", "x")[0] is False
+        assert P.gate_decision(root, "Write", "x")[0] is False
     finally:
         del os.environ["CLAW_NO_PLAN_GATE"]
-    assert P.gate_decision(root2, "Write", "x")[0] is True  # back on
+    assert P.gate_decision(root, "Write", "x")[0] is True  # back on
+
+
+def _isolated_config_dir():
+    """Point the global-config lookup at a temp dir. Patches the function rather
+    than CLAUDE_CONFIG_DIR so the developer's real ~/.claude can't decide the
+    result. Returns (dir, restore)."""
+    cfgdir = Path(tempfile.mkdtemp())
+    original = P._claude_config_dirs
+    P._claude_config_dirs = lambda: [cfgdir]  # type: ignore[assignment]
+    return cfgdir, lambda: setattr(P, "_claude_config_dirs", original)
+
+
+def test_disable_via_global_config():
+    root = _fresh_project()
+    cfgdir, restore = _isolated_config_dir()
+    try:
+        assert P.gate_decision(root, "Write", "x")[0] is True  # absent file -> ON
+
+        target = cfgdir / "clawness" / "config.json"
+        target.parent.mkdir(parents=True)
+        target.write_text(json.dumps({"plan_gate": {"enabled": False}}), encoding="utf-8")
+        assert P.gate_decision(root, "Write", "x")[0] is False
+        # ...and it applies to every project, not just this one
+        assert P.gate_decision(_fresh_project(), "Write", "y")[0] is False
+    finally:
+        restore()
+
+
+def test_global_config_only_explicit_false_disables():
+    """A corrupt or unrelated global config must leave the gate ON — failing
+    toward the prompt, never toward silence."""
+    root = _fresh_project()
+    cfgdir, restore = _isolated_config_dir()
+    try:
+        target = cfgdir / "clawness" / "config.json"
+        target.parent.mkdir(parents=True)
+        for content in (
+            "{ not json",
+            json.dumps({}),
+            json.dumps({"plan_gate": {}}),
+            json.dumps({"plan_gate": "off"}),
+            json.dumps({"plan_gate": {"enabled": "false"}}),  # string, not bool
+            json.dumps({"something_else": True}),
+        ):
+            target.write_text(content, encoding="utf-8")
+            assert P.gate_decision(root, "Write", "x")[0] is True, content
+    finally:
+        restore()
 
 
 def test_gate_fails_open_on_bad_state():

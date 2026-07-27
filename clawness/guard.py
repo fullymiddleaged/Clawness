@@ -662,12 +662,30 @@ _GUARD_HOOK_FILES = {
 }
 
 
+def _is_global_plan_config(p: Path) -> bool:
+    """The user-level plan-gate opt-out (<config>/clawness/config.json).
+
+    Matched by exact path, not by "a dir called clawness" — this repo's own
+    checkout lives in one, and every config.json under it would otherwise start
+    asking. It lives OUTSIDE any project, so without this it would key on its
+    parent directory like an ordinary out-of-project write: approve one write in
+    ~/.claude/clawness/ and a later write disabling the gate would pass silently.
+    It is the one file that can switch the plan gate off, so it asks per-file."""
+    try:
+        from .plan import global_config_paths
+        return any(p == q.expanduser().resolve() for q in global_config_paths())
+    except Exception:
+        return False
+
+
 def _is_control_file(p: Path) -> bool:
     parts = set(p.parts)
     name = p.name
     if name in _CLAUDE_CONTROL_JSON and ".claude" in parts:
         return True
     if name in _CLAWNESS_CONTROL_JSON and ".clawness" in parts:
+        return True
+    if _is_global_plan_config(p):
         return True
     if name in _GUARD_HOOK_FILES and p.parent.name == "hooks":
         return True

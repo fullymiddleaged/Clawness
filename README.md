@@ -421,16 +421,15 @@ Clawness nudges a plan-first workflow: before the first file edit (`Write`/`Edit
 
 If Claude tries to edit before a plan is approved, you'll see a native **approve dialog** ("proceed without a plan?"). Approve it to let the edit through, or switch to plan mode (Shift+Tab) to plan first. Either way clears the gate for the rest of the session, so you're asked **at most once per session**. It's a prompt with a working Yes button, never a dead end, and the gate can't strand you behind a command.
 
-**To turn it off, no command needed:** set `CLAW_NO_PLAN_GATE=1` in your environment to disable the gate globally.
+**Headless works the same way, because it's the same signal.** `claude -p --permission-mode plan` plans and clears the gate exactly like Shift+Tab does. Run headless with `--permission-mode acceptEdits` (or `auto`/`dontAsk`/`bypassPermissions`), and the gate treats that the same as an approved dialog: you've already told Claude Code "edit without asking me" for the whole run, so there's nothing left to confirm and no prompt that could stall it. A plain headless run with no permission mode set behaves like an interactive session with no plan approved: gated, same as always.
 
-For finer control there's a CLI (available after a manual install, or any `pip install`, see the [CLI Reference](#cli-reference)):
+**Turning it off is deliberately a global choice, not a per-project one.** Either set `CLAW_NO_PLAN_GATE=1` in your environment, which lasts as long as that shell, or put this in `~/.claude/clawness/config.json`, which applies to every project until you change it back:
 
-```bash
-clawness plan off       # disable for this project
-clawness plan on        # re-enable
-clawness plan status    # show current state
-clawness plan approve   # manual override (headless / no plan mode)
+```json
+{ "plan_gate": { "enabled": false } }
 ```
+
+There is no way to switch the gate off for a single project, and that's on purpose. A project-local kill switch is a file you write once and then forget, it never expires, and it announces nothing — so a gate that's been off for a month looks exactly like a gate that's working. (Clawness's own repo sat that way until we noticed. Versions before 1.5.0 had `clawness plan off` and `clawness plan approve`, which is how.) `clawness plan status` now reports whether the gate is on, and if it's off, which of the two switches did it.
 
 **Version control:** the plan gate stops *unplanned* edits, but recovering from a *bad* edit is git's job, and Clawness doesn't reimplement checkpoints. If you open a project that isn't a git repo, a SessionStart check nudges Claude to ask whether you'd like to `git init`. It never initializes without your say-so. The check looks upward (cwd and its parents) *and* a few levels down, so opening a workspace or monorepo parent whose repos live in subfolders won't trigger a false "no git" nudge. Silence it with `CLAW_NO_GIT_CHECK=1`.
 
@@ -740,9 +739,7 @@ clawness eval              # retrieval quality: MRR@5 + hit-rate vs. ground trut
 clawness eval --floor-mrr 0.85 --floor-hit 0.95   # fail below floors (CI gate)
 
 # Plan gate (on by default; normal flow uses native plan mode)
-clawness plan status       # show gate state
-clawness plan off          # disable for this project
-clawness plan approve      # manual override (headless use)
+clawness plan status       # show gate state, and what turned it off if it is
 
 # Emit an AGENTS.md so any agent (not just Claude Code) can use the CLI
 clawness agents-md --write
@@ -838,7 +835,7 @@ silence them exactly there.
 | `CLAW_VERBOSE` | (unset) | Render mandatory rules in full (`WHEN`/`BAD`/`GOOD`) instead of compact, and show retrieval metadata (relevance scores, timing). More tokens per turn |
 | `CLAW_COMPACT` | (unset) | Also render ranked rules compactly (directive only). Fewer tokens per turn |
 | `CLAW_FULL_EVERY` | `5` | Show the full mandatory block on prompt 1 and every Nth prompt after (abbreviated to an id list in between). The same rules stay binding either way. `1` restores the old every-turn-full behavior |
-| `CLAW_NO_PLAN_GATE` | (unset) | Disable the plan gate globally |
+| `CLAW_NO_PLAN_GATE` | (unset) | Turn the plan gate off. This and `plan_gate.enabled: false` in `~/.claude/clawness/config.json` are the only two switches; there is deliberately no per-project one |
 | `CLAW_NO_ACCESS_GUARD` | (unset) | Turn off the access guard, so data-sending and destructive commands are no longer questioned |
 | `CLAW_NO_TRUST_LEDGER` | (unset) | Don't fingerprint skills/agents/MCP or warn when they change |
 | `CLAW_NO_GIT_CHECK` | (unset) | Stop offering to `git init` when a project isn't under version control |

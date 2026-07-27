@@ -581,6 +581,38 @@ def test_control_file_writes_ask_even_in_project():
         assert "control" in reason
 
 
+def test_global_plan_config_is_a_control_file():
+    """<config>/clawness/config.json is the only switch that can disable the plan
+    gate (1.5.0), and it lives outside any project — so it must ask per-FILE, not
+    key on its parent dir like an ordinary out-of-project write. Otherwise
+    approving any earlier write in ~/.claude/clawness/ would let a later write
+    silently turn the gate off."""
+    from clawness.plan import global_config_paths
+    root = _project()
+    target = global_config_paths()[0]
+
+    d, reason = _classify("Write", {"file_path": str(target)}, root)
+    assert d == G.ASK
+    assert "control" in reason
+    # keyed per-file, so blessing the directory can't cover it
+    key = G.dedup_key("Write", {"file_path": str(target)})
+    assert not key.startswith("dir:")
+    assert str(target.expanduser().resolve()) in key
+
+    # a sibling file in that same dir is NOT a control file (no over-reach)
+    sibling = target.parent / "notes.json"
+    assert G.dedup_key("Write", {"file_path": str(sibling)}).startswith("dir:")
+
+
+def test_repo_named_clawness_does_not_make_every_config_a_control_file():
+    """The match is by exact path. This project's own checkout can live in a
+    directory called `clawness`, and an ordinary config.json inside it must stay
+    an ordinary file."""
+    root = _project()
+    assert G._is_control_file(root / "clawness" / "config.json") is False
+    assert G._is_control_file(root / "src" / "clawness" / "config.json") is False
+
+
 def test_memory_and_rules_not_gated():
     # The lessons log and rule corpus are meant to be edited freely.
     root = _project()
