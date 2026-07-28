@@ -289,6 +289,37 @@ def test_plan_file_writes_are_never_gated():
     assert P.gate_decision(root, "Write", "s", str(plan))[0] is False
 
 
+def test_hook_reads_permission_mode_from_payload():
+    # Pins the payload KEY, not just the logic behind it. The mode tests above
+    # call gate_decision directly, so dropping or renaming the read in
+    # hooks/plan_gate.py leaves them green while an unattended
+    # `claude -p --permission-mode acceptEdits` run stalls on a prompt with
+    # nobody there to answer it — a hang whose cause nothing surfaces.
+    root = _fresh_project()
+    target = {"file_path": str(root / "src" / "app.py")}
+    rc, out = _run_hook({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "session_id": "sess-headless",
+        "cwd": str(root),
+        "tool_input": target,
+        "permission_mode": "acceptEdits",
+    })
+    assert rc == 0
+    assert out is None, out  # pre-authorised: no ask emitted
+    # The same payload WITHOUT the field must still ask, so the assertion above
+    # can't pass for the wrong reason (a crashed or silently no-op hook).
+    rc, out = _run_hook({
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "session_id": "sess-headless-gated",
+        "cwd": str(root),
+        "tool_input": target,
+    })
+    assert rc == 0
+    assert out["hookSpecificOutput"]["permissionDecision"] == "ask", out
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     passed = 0
