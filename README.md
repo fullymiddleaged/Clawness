@@ -57,7 +57,7 @@ None of that is built in. Vanilla Claude Code forgets your conventions between t
 
 Take coding rules: *"parameterized SQL only," "async I/O end-to-end," "API responses use the envelope format."* Without Clawness you either dump them all into CLAUDE.md (wastes tokens, dilutes attention every turn) or mention them by hand (you forget, Claude forgets). With Clawness:
 
-- **The right rules, every prompt.** 165 rules in YAML; a hook injects only the ones relevant to your task, plus an always-on mandatory set (security, testing, lessons-memory). Nothing to remember, no context bloat.
+- **The right rules, every prompt.** 165 rules in YAML; a hook injects only the ones relevant to your task, plus an always-on mandatory set (security, testing, lessons-memory) — handy for full-stack developers moving between frontend, backend, and SQL in the same session. Nothing to remember, no context bloat.
 - **A plan-first gate.** The first edit of a session asks before it happens, working through Claude Code's own plan mode, so the agent can't rewrite half your repo before you've looked. One click, at most once per session, and never a hard block.
 - **Session security.** An access guard asks you to confirm a tool call that looks like it's sending your data somewhere, or deleting something it shouldn't, *even when you've already allowed that tool*. That's the point: once you've allowed something, you stop reading the prompts. A trust ledger flags a skill, agent or MCP server that changed since last session.
 - **Cleaner context.** Long bash output is compressed to the lines that matter, and a per-project memory file recalls hard-won lessons, retrieving only the ones relevant to your prompt.
