@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest a rule, agent, hook, or other improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What's missing or awkward today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: >
+        If it's a rule, a rough `id`/`domain`/`rule` sketch is great —
+        see CONTRIBUTING.md's rule template. If it's a hook/agent/skill,
+        describe the trigger and desired behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false

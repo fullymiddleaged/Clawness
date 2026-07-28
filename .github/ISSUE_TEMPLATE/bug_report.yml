@@ -1,0 +1,47 @@
+name: Bug report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you see instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Prompt(s), project stack, and any relevant `.clawness/` config.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Clawness version
+      description: From `.claude-plugin/plugin.json` or `clawness --version`
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS + Python version
+      placeholder: "e.g. Windows 11, Python 3.12"
+    validations:
+      required: true
+  - type: textarea
+    id: install-path
+    attributes:
+      label: Install method
+      description: Plugin marketplace, or manual install.sh/install.ps1?
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Hook output, error text, or `clawness lint`/`bench`/`eval` output.
+      render: shell
+    validations:
+      required: false

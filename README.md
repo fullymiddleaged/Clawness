@@ -1,5 +1,10 @@
 # Clawness
 
+[![CI](https://github.com/fullymiddleaged/Clawness/actions/workflows/ci.yml/badge.svg)](https://github.com/fullymiddleaged/Clawness/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/fullymiddleaged/Clawness)](https://github.com/fullymiddleaged/Clawness/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/downloads/)
+
 **Install once. Your coding agent gets the right rules for every task, without you having to mention them.**
 
 Clawness is a Claude Code plugin. It puts relevant rules into context on every prompt, whether you're shipping code, doing research, or both. What's in the box:
