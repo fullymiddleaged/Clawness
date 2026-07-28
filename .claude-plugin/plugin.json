@@ -1,9 +1,11 @@
 {
   "name": "clawness",
-  "version": "1.5.0",
-  "description": "A Claude Code plugin that puts the right rules in context on every prompt, automatically. 165 rules across 23 domains — coding, plus scientific computing, research method, and building with LLMs — with per-prompt rule injection (BM25 + TF-IDF + RRF + concept expansion, pure Python), a per-codebase lessons-learned memory retrieved per prompt, a context-pressure warning before your window fills up, a session handoff the next session picks up automatically, Bash-output compression, adversarial review sub-agents, slash commands, a default-on (opt-out) plan-approval gate, and session security hardening (an access guard that forces a prompt on likely exfiltration/destructive tool calls, and a trust ledger that flags changed skills/agents). No Docker, no services, no ML models. Requires Python 3.10+ on PATH; on first session a background hook installs PyYAML (the only dependency) into your environment.",
+  "displayName": "Clawness",
+  "version": "1.5.1",
+  "description": "Puts the right rules in context on every prompt, automatically — built for full-stack developers moving across frontend, backend, and SQL in one session, researchers working in bare or LaTeX-only directories, and teams who want adversarial review (security red/blue team, code critic) before merge. 165 rules across 23 domains, retrieved by relevance rather than dumped into CLAUDE.md, plus a plan-approval gate, session security hardening, and per-codebase lessons memory. Requires Python 3.10+ on PATH.",
   "author": {
-    "name": "fullymiddleaged"
+    "name": "Pete Salmond (fullymiddleaged)",
+    "url": "https://github.com/fullymiddleaged"
   },
   "homepage": "https://github.com/fullymiddleaged/clawness",
   "repository": "https://github.com/fullymiddleaged/clawness",
@@ -12,12 +14,16 @@
     "rules",
     "retrieval",
     "rag",
-    "hooks",
-    "coding-standards",
     "security",
     "code-review",
+    "testing",
+    "performance",
+    "multi-agent",
     "plan-mode",
-    "multi-agent"
+    "best-practices",
+    "science",
+    "research",
+    "llm"
   ],
   "hooks": {
     "SessionStart": [

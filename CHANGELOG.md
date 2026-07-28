@@ -5,6 +5,28 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-07-28
+
+Marketplace-listing polish ahead of submitting to the community marketplace.
+No behavior change; 165 rules / 23 domains, 349 tests unchanged.
+
+### Changed
+
+- **Trimmed the plugin description** in `plugin.json` and `marketplace.json`
+  from a ~900-1,300 char feature dump to a ~500 char pitch naming the actual
+  audiences (full-stack developers, researchers, teams wanting adversarial
+  review) instead of listing every subsystem — matches the length other
+  multi-feature plugins in the community marketplace use for a listing card,
+  rather than a changelog-length wall of text.
+- **`author`/`owner` now carry a full name alongside the GitHub handle**
+  (`"Pete Salmond (fullymiddleaged)"`), plus an `author.url`/`owner.url`
+  pointing at the GitHub profile.
+- **Added `displayName: "Clawness"`** to `plugin.json` so the `/plugin`
+  picker shows proper casing instead of the lowercase `name` used for
+  namespacing.
+- **Unified the `keywords` arrays** in `plugin.json` and `marketplace.json`,
+  which had drifted to different tag sets in each file.
+
 ## [1.5.0] - 2026-07-27
 
 Removes the plan gate's per-project off switches, and aligns headless with
