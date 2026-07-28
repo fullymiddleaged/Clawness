@@ -7,7 +7,7 @@
 
 **Install once. Your coding agent gets the right rules for every task, without you having to mention them.**
 
-Clawness is a Claude Code plugin. It puts relevant rules into context on every prompt, whether you're shipping code, doing research, or both. What's in the box:
+Clawness is a Claude Code plugin aimed at people who often work across common codebases. It dynamically puts relevant rules into context on every prompt, whether you're shipping code or carrying out research. What's in the box:
 
 - **165 rules** across 23 domains: coding, plus scientific computing, research method, and building with LLMs. Only the ones matching your task get injected.
 - **7 adversarial review sub-agents**: security red/blue team, code critic, architecture challenger.
