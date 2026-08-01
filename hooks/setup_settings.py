@@ -85,6 +85,7 @@ CLAW_HOOK_SCRIPTS = (
     "memory_init.py",
     "handoff_check.py",
     "stack_detect.py",
+    "changelog_check.py",
 )
 
 
@@ -321,6 +322,20 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
                 "hooks": [build_hook_entry(stack_script, timeout=10)],
             })
             results.append("stack-detect: added")
+
+    # --- SessionStart: changelog check (reminds, or asks once if there's none) ---
+    changelog_script = hook_script.resolve().parent / "changelog_check.py"
+    if changelog_script.exists():
+        if "SessionStart" not in data["hooks"]:
+            data["hooks"]["SessionStart"] = []
+        start_events = data["hooks"]["SessionStart"]
+        if hook_already_present(start_events, changelog_script):
+            results.append("changelog-check: already configured")
+        else:
+            start_events.append({
+                "hooks": [build_hook_entry(changelog_script, timeout=10)],
+            })
+            results.append("changelog-check: added")
 
     # --- SessionStart: trust ledger (TOFU fingerprints of skills/agents/MCP) ---
     trust_script = hook_script.resolve().parent / "trust_ledger.py"

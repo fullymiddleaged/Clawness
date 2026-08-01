@@ -1,0 +1,18 @@
+id: ML-FIGURE-001
+domain: matlab
+severity: warning
+tags: [matlab, figures, plotting, export, handles, gcf, rng, publication]
+triggers: [matlab plot, saveas, exportgraphics, print figure, gcf, gca, figure handle, rng shuffle, matlab random seed]
+when: Producing figures or random numbers from MATLAB code.
+rule: >
+  Script the figure end to end so it regenerates from data without hand-editing:
+  capture explicit handles (fig = figure; ax = axes(fig)) and pass them, rather than
+  relying on gcf and gca, which act on whatever window the user last clicked. Export
+  with exportgraphics at a stated resolution and vector format for anything going
+  into a paper - saveas of a screen-sized figure is what produces the blurry
+  subplot in a submission. Set the random seed explicitly with rng(seed) at the top
+  of any run whose numbers get reported, and never rng('shuffle') there: it makes
+  the result different every time by design, which is the opposite of what a
+  reported figure needs.
+violation: "plot(x, y); saveas(gcf, 'fig1.png')  after rng('shuffle')"
+correct: "rng(42); fig = figure; ax = axes(fig); plot(ax, x, y); exportgraphics(ax, 'fig1.pdf', 'Resolution', 300)"

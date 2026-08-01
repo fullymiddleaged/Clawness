@@ -1,0 +1,21 @@
+id: CFD-BC-001
+domain: cfd
+severity: error
+tags: [boundary-conditions, inlet, outlet, domain, blockage, symmetry, initialisation, backflow]
+triggers: [boundary condition, inlet, outlet, far field, domain size, blockage ratio, symmetry plane, backflow, reverse flow at outlet, initial conditions, pressure outlet]
+when: Setting up the domain, boundaries, or initial field of a simulation.
+rule: >
+  Boundary conditions and domain extent are part of the physics, not setup detail.
+  Place boundaries where the flow is actually uniform: an outlet inside the wake, or
+  a far field close enough that the body feels it, silently changes the answer, and
+  the symptom - persistent reverse flow at the outlet, a drag that shifts when the
+  domain grows - reads like a solver problem. Verify by enlarging the domain and
+  confirming the reported quantity does not move, and keep blockage low for
+  confined external flows. Use a symmetry plane only when the FLOW is symmetric,
+  not merely the geometry: shedding, swirl and buoyancy break symmetry that the
+  shape has. Specify the turbulence quantities at inlets deliberately rather than
+  accepting defaults, since inlet intensity and length scale propagate straight
+  into the solution. Initialise from a physically sensible field; a bad
+  initialisation costs iterations at best and converges to nonsense at worst.
+violation: "Outlet one chord behind the body, half-domain symmetry on a shedding wake, default inlet turbulence"
+correct: "Outlet far downstream of reattachment, full domain for the shedding case, measured inlet intensity, and a domain-size check"

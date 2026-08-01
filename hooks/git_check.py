@@ -12,25 +12,17 @@ Silent when git is present, when git isn't installed, in non-project locations
 (home dir / filesystem root), or when disabled via CLAW_NO_GIT_CHECK. Fails open.
 """
 
-import io
-import json
 import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-# The payload (incl. the project cwd) arrives as UTF-8 on stdin; on Windows stdio
-# defaults to cp1252 and would mangle a non-ASCII project path on the way in, or
-# fail to encode the note on the way out. Pin UTF-8 both ways. The isinstance check
-# narrows to the class that actually defines reconfigure() — sys.stdin is typed
-# TextIO, which doesn't — and skips an already-replaced stream (e.g. pytest capture).
-for _stream in (sys.stdin, sys.stdout):
-    if isinstance(_stream, io.TextIOWrapper):
-        try:
-            _stream.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Pins UTF-8 stdio at import and puts the repo on sys.path. This hook keeps its own
+# tree scan: it answers "is git used ANYWHERE relevant?", which `git_root` (upward
+# only) can't, and the downward scan is the whole reason this check is reliable.
+from _hookutil import read_payload, session_cwd  # noqa: E402
 
 # Directories never worth descending into when scanning for nested repos —
 # heavy/vendored trees that won't be a project's own .git and would slow the scan.
@@ -103,26 +95,17 @@ NOTE = (
 
 
 def main() -> None:
-    try:
-        payload = json.load(sys.stdin)
-    except Exception:
+    payload = read_payload()
+    if payload is None:
         sys.exit(0)
 
     if os.environ.get("CLAW_NO_GIT_CHECK"):
         sys.exit(0)
 
-    cwd = payload.get("cwd") or os.getcwd()
-    try:
-        cwd_path = Path(cwd).resolve()
-    except Exception:
-        sys.exit(0)
-
     # Don't nag in non-project locations (home directory or filesystem root).
-    try:
-        if cwd_path == Path.home().resolve() or cwd_path.parent == cwd_path:
-            sys.exit(0)
-    except Exception:
-        pass
+    cwd_path = session_cwd(payload)
+    if cwd_path is None:
+        sys.exit(0)
 
     # Per-project opt-out marker.
     if (cwd_path / ".clawness" / "git-check-off").exists():

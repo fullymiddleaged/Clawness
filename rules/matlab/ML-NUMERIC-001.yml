@@ -1,0 +1,19 @@
+id: ML-NUMERIC-001
+domain: matlab
+severity: error
+tags: [matlab, linear-algebra, backslash, inv, indexing, integer-division, precision]
+triggers: [inv matlab, matlab backslash, solve linear system matlab, matlab indexing, one-based, matlab integer division, idivide, single precision matlab]
+when: Doing linear algebra or numeric conversion in MATLAB.
+rule: >
+  Solve with the backslash operator, x = A\b, rather than inv(A)*b: backslash picks
+  a factorisation suited to the matrix, is more accurate, and is faster, while
+  forming an explicit inverse amplifies conditioning error for no benefit. Check
+  cond(A) before trusting a solve, and use pinv or a regularised solve deliberately
+  when the system is rank-deficient rather than accepting a warning. Remember
+  MATLAB's own conventions when porting: indices are 1-based and index 0 is an
+  error, arithmetic between an integer type and a double SATURATES and rounds
+  rather than truncating or wrapping, and the default numeric type is double, so a
+  single-precision input silently promotes. Keep operations on integer-typed data
+  explicit with idivide when the rounding behaviour matters.
+violation: "x = inv(A) * b;  on an ill-conditioned A, ignoring the near-singular warning"
+correct: "if cond(A) > 1e12, warning(...); end;  x = A \\ b;"

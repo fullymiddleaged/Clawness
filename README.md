@@ -9,12 +9,12 @@
 
 Clawness is a Claude Code plugin aimed at people who often work across common codebases. It dynamically puts relevant rules into context on every prompt, whether you're shipping code or carrying out research. What's in the box:
 
-- **165 rules** across 23 domains: coding, plus scientific computing, research method, and building with LLMs. Only the ones matching your task get injected.
+- **193 rules** across 28 domains: coding, plus scientific computing, research method, and building with LLMs. Only the ones matching your task get injected.
 - **7 adversarial review sub-agents**: security red/blue team, code critic, architecture challenger.
 - **A plan-approval gate** before the first edit of a session, on by default.
 - **Session security**: an access guard on dangerous tool calls, plus a trust ledger for skills, agents and MCP servers.
 - **Session continuity**: a per-project lessons memory, a warning when your context window is filling up, and a handoff the next session picks up on its own.
-- **Low token cost.** Putting all 165 rules in CLAUDE.md would cost about 24,900 tokens *every turn*. Clawness injects roughly 755 fixed plus only what matches, re-states the always-on block in full on just 1 prompt in 5, and compresses long command output. The per-project memory file is searched the same way the rules are, so a log of 200 lessons costs about what a log of 4 costs.
+- **Low token cost.** Putting all 193 rules in CLAUDE.md would cost about 32,600 tokens *every turn*. Clawness injects roughly 845 fixed plus only what matches, re-states the always-on block in full on just 1 prompt in 5, and compresses long command output. The per-project memory file is searched the same way the rules are, so a log of 200 lessons costs about what a log of 4 costs.
 
 Install it once and it works across every project on your machine. Under 1 MB, no services, no models, about 2 ms per prompt.
 
@@ -57,7 +57,7 @@ None of that is built in. Vanilla Claude Code forgets your conventions between t
 
 Take coding rules: *"parameterized SQL only," "async I/O end-to-end," "API responses use the envelope format."* Without Clawness you either dump them all into CLAUDE.md (wastes tokens, dilutes attention every turn) or mention them by hand (you forget, Claude forgets). With Clawness:
 
-- **The right rules, every prompt.** 165 rules in YAML; a hook injects only the ones relevant to your task, plus an always-on mandatory set (security, testing, lessons-memory) — handy for full-stack developers moving between frontend, backend, and SQL in the same session. Nothing to remember, no context bloat.
+- **The right rules, every prompt.** 193 rules in YAML; a hook injects only the ones relevant to your task, plus an always-on mandatory set (security, testing, lessons-memory) — handy for full-stack developers moving between frontend, backend, and SQL in the same session. Nothing to remember, no context bloat.
 - **A plan-first gate.** The first edit of a session asks before it happens, working through Claude Code's own plan mode, so the agent can't rewrite half your repo before you've looked. One click, at most once per session, and never a hard block.
 - **Session security.** An access guard asks you to confirm a tool call that looks like it's sending your data somewhere, or deleting something it shouldn't, *even when you've already allowed that tool*. That's the point: once you've allowed something, you stop reading the prompts. A trust ledger flags a skill, agent or MCP server that changed since last session.
 - **Cleaner context.** Long bash output is compressed to the lines that matter, and a per-project memory file recalls hard-won lessons, retrieving only the ones relevant to your prompt.
@@ -65,7 +65,7 @@ Take coding rules: *"parameterized SQL only," "async I/O end-to-end," "API respo
 - **Adversarial review on tap.** Security red/blue team, code critic, architecture challenger, and more, one ask away. The judgment agents **run on whatever model you chose** (they inherit your session's tier, so Clawness never downgrades a security review behind your back), while the mechanical ones stay on a cheaper tier. They return findings tagged CONFIRMED/PLAUSIBLE; your main session spot-checks the high-stakes ones against the cited lines, or a quick repro, before acting. Vetted rather than rubber-stamped, and without re-reading everything the agent read.
 - **A second opinion on your model tier.** On the first prompt of a session, if the task looks far deeper (or far more routine) than the model you're running, Clawness says so once. It suggests; it never switches anything.
 
-**Make them *your* standards.** The 165 built-in rules are a starting point. Add your own in seconds: run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/` and your whole team shares the same rules. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
+**Make them *your* standards.** The 193 built-in rules are a starting point. Add your own in seconds: run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/` and your whole team shares the same rules. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
 
 > **Tripwire, not a sandbox.** The guard works by pattern-matching the agent's own tool calls. It catches honest mistakes, copy-pasted `curl … | sh`, reads of secrets outside your project, and data sent to a server that appears nowhere in your code, and it breaks the habit of approving everything without reading it. Someone determined can still disguise a command to get past it. The real protection is a container with a list of servers it's allowed to reach. It stays out of normal work: reading your own `.env`, plain API GETs, and traffic to your own machine aren't prompted. A call to an outside server that carries data or a token asks once per server. Disable with `CLAW_NO_ACCESS_GUARD=1`.
 
@@ -184,7 +184,7 @@ Pure Python, one dependency (PyYAML). No ML models, no embeddings, no services, 
 
 **Measured quality.** Run `clawness eval`: against 59 test questions with known right answers, **MRR@5 = 0.983** and **hit-rate = 1.000**, meaning every question found its expected rule, usually as the first result. CI enforces minimums on both, so search quality can't get worse unnoticed as rules are added.
 
-**Cost.** About **2 ms per prompt**, and roughly 755 tokens of always-on mandatory rules, plus the few matched rules. The mandatory ones are written out in full on the first prompt and every fifth prompt after that; in between they're shortened to a single line listing their ids, since they haven't changed. Run `clawness stats` for your exact per-turn estimate.
+**Cost.** About **2 ms per prompt**, and roughly 845 tokens of always-on mandatory rules, plus the few matched rules. The mandatory ones are written out in full on the first prompt and every fifth prompt after that; in between they're shortened to a single line listing their ids, since they haven't changed. Run `clawness stats` for your exact per-turn estimate.
 
 ---
 
@@ -315,13 +315,15 @@ When you type *"implement the user registration endpoint"*, Claude receives this
 ```
 --- CLAWNESS RULES ---
 
-# MANDATORY (6)
+# MANDATORY (9)
 [ENF-CURRENT-001] (general/error)
   RULE: Always use current best practices for the present month and year...
 [ENF-SEC-001] (security/error)
   RULE: All secrets must come from environment variables...
 [ENF-SEC-004] (security/error)
   RULE: Use a proven auth library...
+[ENF-VOICE-001] (general/error)
+  RULE: Apply these rules silently. Never tell the user that a rule...
 ...
 
 # RELEVANT (2)
@@ -340,9 +342,9 @@ The mandatory rules always appear. The ranked rules change based on your prompt.
 which would defeat prompt caching for no benefit to the model. Set
 `CLAW_VERBOSE=1` to see them, or run `clawness query` directly.)
 
-**Token cost.** A typical turn injects about **1,700 tokens**: roughly 755 fixed for the always-on mandatory block (rendered compactly, directive only, with no repeated examples) plus the selected ranked rules. `clawness stats` shows your exact estimate; tune with `CLAW_TOP_K` / `CLAW_BUDGET` / `CLAW_VERBOSE` / `CLAW_COMPACT`.
+**Token cost.** A typical turn injects about **1,700 tokens**: roughly 845 fixed for the always-on mandatory block (rendered compactly, directive only, with no repeated examples) plus the selected ranked rules. `clawness stats` shows your exact estimate; tune with `CLAW_TOP_K` / `CLAW_BUDGET` / `CLAW_VERBOSE` / `CLAW_COMPACT`.
 
-**Minimum match score, and awareness of your project.** Matched rules appear only when the prompt genuinely matches. Anything scoring below a minimum is treated as coincidence and dropped, and the `relevance=…` shown next to each rule *is* that score. Rules for languages and frameworks your project doesn't use have to score higher to get in, so a vague prompt in a Python repo won't pull in SQL or React noise, while a genuinely strong match from another language still gets through. `science` and `research` sit in between: they're never held back by project type, so a researcher in a bare or LaTeX-only directory still gets them, but they have to really match rather than drift into ordinary coding results. Mandatory rules are always injected. Tune via `CLAW_MIN_RELEVANCE` / `CLAW_TOPICAL_MIN_RELEVANCE` / `CLAW_OFFSTACK_MIN_RELEVANCE` / `CLAW_NO_STACK_FILTER` (see [Configuration](#environment-variables)).
+**Minimum match score, and awareness of your project.** Matched rules appear only when the prompt genuinely matches. Anything scoring below a minimum is treated as coincidence and dropped, and the `relevance=…` shown next to each rule *is* that score. Rules for languages and frameworks your project doesn't use have to score higher to get in, so a vague prompt in a Python repo won't pull in SQL or React noise, while a genuinely strong match from another language still gets through. `science` and `research` sit in between: they're never held back by project type, so a researcher in a bare or LaTeX-only directory still gets them, but they have to really match rather than drift into ordinary coding results. The CFD, Julia, Fortran, MATLAB and R rules sit at the opposite end — their words (solver, converge, residual, vectorize) are also everyday programming words, so outside a project that actually uses them they need a distinctly strong match before they appear, and "the solver isn't converging" in a Python repo gets you Python answers. Mandatory rules are always injected. Tune via `CLAW_MIN_RELEVANCE` / `CLAW_TOPICAL_MIN_RELEVANCE` / `CLAW_OFFSTACK_MIN_RELEVANCE` / `CLAW_NARROW_MIN_RELEVANCE` / `CLAW_NO_STACK_FILTER` (see [Configuration](#environment-variables)).
 
 ### Verify It's Working
 
@@ -404,6 +406,13 @@ You don't have to remember the file exists, know its path, or ask for it. A
 SessionStart hook finds it at the project root (from any subdirectory) and injects the
 content, so Claude opens with where you left off instead of a blank stare.
 
+- **Say "carry on" and Claude carries on.** If your first message asks to continue,
+  it goes straight to the handoff's next step and starts — no interview, no re-planning
+  work you already scoped. That's the whole reason you wrote one. If you open with
+  something else instead, it just tells you where things stood and waits.
+- **Genuine blockers go under `## Open questions`.** That section is what makes "don't
+  ask" safe: if a decision really is yours to make, it's written down and Claude asks
+  that and only that. Usually it says "none".
 - **The file being there is what marks it outstanding.** No age cutoff, no "done"
   flag, no guessing. It stays until something supersedes it.
 - **One handoff at a time, and nothing is deleted.** Writing a new one moves the old
@@ -438,7 +447,9 @@ There is no way to switch the gate off for a single project, and that's on purpo
 
 **Version control:** the plan gate stops *unplanned* edits, but recovering from a *bad* edit is git's job, and Clawness doesn't reimplement checkpoints. If you open a project that isn't a git repo, a SessionStart check nudges Claude to ask whether you'd like to `git init`. It never initializes without your say-so. The check looks upward (cwd and its parents) *and* a few levels down, so opening a workspace or monorepo parent whose repos live in subfolders won't trigger a false "no git" nudge. Silence it with `CLAW_NO_GIT_CHECK=1`.
 
-**Stack awareness:** at session start Clawness detects your project's stack from its files (the same detection as `clawness init`) and injects a one-line note, e.g. *"Detected project stack: Python, FastAPI, SQL"*, so Claude starts already knowing the ecosystem instead of inferring it. It's a heuristic, stated as such, and it complements the per-prompt rule retrieval. Silence it with `CLAW_NO_STACK_NOTE=1`.
+**Stack awareness:** at session start Clawness detects your project's stack from its files (the same detection as `clawness init`) and injects a one-line note, e.g. *"Detected project stack: Next.js 14.2, React 18.3, TypeScript 5.4"*, so Claude starts already knowing the ecosystem — and which MAJOR VERSIONS of it — instead of inferring it or writing for whatever release it last read about. Versions it can't read from your manifest are left off rather than guessed. It's a heuristic, stated as such, and it complements the per-prompt rule retrieval. Silence it with `CLAW_NO_STACK_NOTE=1`.
+
+**Changelog upkeep:** a changelog written at release time is a commit list; the entry has to be written while the change is fresh. If your project has a `CHANGELOG.md`, a session-start note reminds Claude to add the line as part of the work rather than batching it up. If it doesn't, Claude offers **once — ever** to create one, and only creates it if you say yes; plenty of projects deliberately don't have one, so the question is asked once per project and then never again. Silence it with `CLAW_NO_CHANGELOG_CHECK=1`, or drop a `.clawness/changelog-check-off` marker in a project that should never be asked.
 
 **Model-tier check:** you pick a model once and rarely revisit it. On the **first prompt of a session only**, Clawness compares the tier you're running against what the opening task looks like, and mentions a mismatch once:
 
@@ -761,7 +772,7 @@ clawness --rules-dir /path/to/rules stats
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Rules** | 165 across 23 domains | Coding, science, research and LLM standards, injected per-prompt |
+| **Rules** | 193 across 28 domains | Coding, science, research and LLM standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 6 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status` |
 | **Hooks** | 10 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory bootstrap, handoff pickup, stack detection, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
@@ -821,6 +832,7 @@ silence them exactly there.
 | `CLAW_MIN_RELEVANCE` | `0.06` | Minimum match score for a rule. Below it, a rule counts as coincidence and isn't injected. Raise it for fewer, more on-topic rules; set `0` to turn the minimum off |
 | `CLAW_TOPICAL_MIN_RELEVANCE` | `0.12` | The middle bar, for `science` and `research`. These are never held back by project type, so a bare or LaTeX-only directory still gets them, and this is what keeps them out of ordinary coding results. Set to `0.06` to turn off. Never goes below `CLAW_MIN_RELEVANCE` |
 | `CLAW_OFFSTACK_MIN_RELEVANCE` | `0.15` | The higher bar, for language and framework rules your project doesn't use (SQL or React rules in a Python repo, say). Keeps vague prompts on-topic while letting a genuinely strong match from elsewhere through. Never goes below `CLAW_MIN_RELEVANCE` |
+| `CLAW_NARROW_MIN_RELEVANCE` | `0.22` | The highest bar, for the CFD, Julia, Fortran, MATLAB and R rules when your project isn't one of those. Their vocabulary (solver, converge, residual, vectorize) overlaps everyday programming, so off-project they need a distinctly strong match. No effect inside a project that does use them. Never goes below `CLAW_OFFSTACK_MIN_RELEVANCE` |
 | `CLAW_NO_STACK_FILTER` | (unset) | Stop taking the project's languages into account; treat every domain the same |
 | `CLAW_NO_MEMORY` | (unset) | Don't auto-create `.clawness/memory.md` on first session |
 | `CLAW_MEMORY_BUDGET` | `1200` | Hard character limit on the whole project-memory block |
@@ -844,6 +856,7 @@ silence them exactly there.
 | `CLAW_NO_ACCESS_GUARD` | (unset) | Turn off the access guard, so data-sending and destructive commands are no longer questioned |
 | `CLAW_NO_TRUST_LEDGER` | (unset) | Don't fingerprint skills/agents/MCP or warn when they change |
 | `CLAW_NO_GIT_CHECK` | (unset) | Stop offering to `git init` when a project isn't under version control |
+| `CLAW_NO_CHANGELOG_CHECK` | (unset) | Stop the session-start changelog reminder, and the one-time offer to create one |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code's config dir. The installer and uninstaller follow it if you've relocated it |
 | `CLAUDE_CODE_SUBAGENT_MODEL` | (none) | Override model for ALL sub-agents |
 

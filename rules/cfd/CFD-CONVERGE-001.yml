@@ -1,0 +1,20 @@
+id: CFD-CONVERGE-001
+domain: cfd
+severity: error
+tags: [convergence, residuals, grid-independence, gci, richardson, verification, mesh-study]
+triggers: [residuals, converged, convergence, grid independence, mesh independence, grid convergence, gci, richardson extrapolation, is my solution converged, residuals have dropped]
+when: Judging whether a CFD solution is converged, or reporting a CFD result.
+rule: >
+  Falling residuals mean the solver stopped changing the answer; they say nothing
+  about whether the answer is right. Judge iterative convergence on the quantity
+  you care about - drag, lift, mass imbalance, a probe value - reaching a steady
+  plateau, and check global conservation closes, not on residuals alone. Then judge
+  DISCRETISATION convergence separately: run at least three systematically refined
+  meshes, confirm the quantity trends monotonically toward a limit, and report the
+  numerical uncertainty (Richardson extrapolation / grid convergence index) with
+  the result. A single-mesh number has an unknown error bar, so it cannot be
+  compared with an experiment or another code. State the mesh study alongside the
+  answer; if it wasn't run, say the result is un-verified rather than implying it
+  isn't.
+violation: "Residuals hit 1e-6, so the drag coefficient is 0.31 — on one mesh, with no refinement study"
+correct: "Cd plateaus at 0.31 on the fine mesh; three-mesh GCI gives 0.31 +/- 0.006, mass imbalance under 0.1%"

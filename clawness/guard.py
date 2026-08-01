@@ -658,8 +658,15 @@ _CLAWNESS_CONTROL_JSON = {
 _GUARD_HOOK_FILES = {
     "access_guard.py", "plan_gate.py", "trust_ledger.py", "claude_hook.py", "git_check.py",
     "memory_init.py", "stack_detect.py", "compress_output.py", "ensure_deps.py",
-    "handoff_check.py",
+    "handoff_check.py", "changelog_check.py",
+    # Not a hook itself, but every SessionStart hook imports it — an edit here can
+    # neuter all five at once, which makes it the highest-leverage file of the set.
+    "_hookutil.py",
 }
+# NOTE on ledgers: the one-shot nag ledgers (model_advice.json, changelog.json) are
+# deliberately NOT control files. Forging one suppresses a question, not a guard —
+# the same reason .clawness/memory.md is writable. Keep them out, or every routine
+# write in .clawness/ starts asking.
 
 
 def _is_global_plan_config(p: Path) -> bool:

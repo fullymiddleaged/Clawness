@@ -1,0 +1,19 @@
+id: FT-PRECISION-001
+domain: fortran
+severity: error
+tags: [fortran, precision, kind, real, double, literals, portability, iso-fortran-env]
+triggers: [double precision, real kind, selected_real_kind, fortran precision, r8, single precision, literal constants fortran, -fdefault-real-8]
+when: Declaring real variables or writing floating-point literals in Fortran.
+rule: >
+  Set precision through a named kind parameter used everywhere - real64 from
+  iso_fortran_env, or selected_real_kind - never through bare real, DOUBLE
+  PRECISION, or a compiler flag such as -fdefault-real-8. A flag makes the source
+  lie about itself and the program's answer depend on the build command, so it
+  changes silently when someone else compiles it. Suffix every floating-point
+  literal with the kind: 0.1 is a single-precision constant even when assigned to a
+  double, so an expression like x*0.1 quietly truncates the constant to about seven
+  digits, and the resulting error is small enough to look like physics. Use the
+  same parameter in interfaces, MPI type arguments and I/O so a precision change is
+  one edit.
+violation: "real(8) :: x  ... x = 1.0 / 3.0   — a non-portable kind and a single-precision constant"
+correct: "use iso_fortran_env, only: wp => real64  ...  real(wp) :: x ; x = 1.0_wp / 3.0_wp"

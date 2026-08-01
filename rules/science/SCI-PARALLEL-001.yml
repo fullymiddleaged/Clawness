@@ -1,0 +1,21 @@
+id: SCI-PARALLEL-001
+domain: science
+severity: warning
+tags: [parallel, hpc, mpi, openmp, gpu, cluster, scaling, profile, slurm, threads]
+triggers: [parallelize, parallelise, mpi, openmp, gpu, cuda, cluster, slurm, hpc, speed up the simulation, scaling, multiprocessing, distribute the work]
+when: Making numerical or scientific code run in parallel, or on a cluster or GPU.
+rule: >
+  Profile before parallelising. The usual answer is that one serial hotspot, a bad
+  algorithm, or an I/O pattern dominates, and parallelising around it multiplies the
+  machines needed without touching the wall clock. When you do parallelise, expect
+  the answer to CHANGE: floating-point addition is not associative, so a reduction
+  over a different number of ranks or threads gives a different last-digit result,
+  and any code that treated bitwise-identical output as the correctness test will
+  now report a false failure — compare against a tolerance, and pin rank count when
+  a result must be exactly reproducible. Seed each worker deterministically from a
+  parent seed rather than letting every process reseed from the clock. Measure
+  strong and weak scaling on the real problem size before requesting an allocation;
+  request the resources the job actually uses, since an over-request queues longer
+  and idles cores others need.
+violation: "Requesting 256 ranks because the code 'supports MPI', having never profiled the serial run"
+correct: "Profile, fix the O(N^2) neighbour search, then measure scaling to the knee at 32 ranks and request that"

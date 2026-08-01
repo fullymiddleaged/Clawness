@@ -1,0 +1,20 @@
+id: GEN-INSTALLED-VER-001
+domain: general
+severity: error
+tags: [version, installed, major, api, framework, manifest, lockfile, migration]
+triggers: [upgrade, migrate, which version, what version, app router, pages router, pydantic v2, breaking change, deprecated api, v1, v2]
+when: Writing or changing code against a framework or library already present in the project.
+rule: >
+  Read the version this project actually installs before writing against a library's
+  API — the manifest first (package.json, pyproject.toml, requirements.txt, go.mod,
+  Cargo.toml), the lockfile when the manifest gives a range. Write for THAT major,
+  not the newest one you know: your sense of "current" is a fact about someone else's
+  project. The majors that silently produce wrong code are Next.js App vs Pages
+  Router, Pydantic v1 vs v2, SQLAlchemy 1.4 vs 2.0, Tailwind 3 vs 4, React pre- and
+  post-19 — code for the wrong one imports symbols that don't exist or, worse, calls
+  ones that still exist and behave differently. If the right approach needs a newer
+  major, say so and let the user decide to upgrade; never write post-upgrade code
+  against a pre-upgrade dependency. This is separate from choosing a version for a
+  NEW dependency, which is GEN-DEPS-001 and ENF-SEC-005.
+violation: "Writing app/page.tsx server actions into a project whose package.json pins next@13.4 with a pages/ directory"
+correct: "Reading package.json, seeing next@14.2, and writing App Router code for 14 — flagging that the streaming API wanted here landed in 15"

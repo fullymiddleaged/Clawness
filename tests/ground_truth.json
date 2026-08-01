@@ -939,6 +939,330 @@
       "expect": [
         "GEN-ABSTRACTION-001"
       ]
+    },
+    {
+      "q": "which version of next is this project on before i write this component",
+      "expect": [
+        "GEN-INSTALLED-VER-001"
+      ]
+    },
+    {
+      "q": "should i use the pydantic v2 api here or v1",
+      "expect": [
+        "GEN-INSTALLED-VER-001"
+      ]
+    },
+    {
+      "q": "do i need to add a changelog entry for this fix",
+      "expect": [
+        "GEN-CHANGELOG-001"
+      ]
+    },
+    {
+      "q": "write the release notes for what changed",
+      "expect": [
+        "GEN-CHANGELOG-001"
+      ]
+    },
+    {
+      "q": "my jupyter notebook cells were run out of order",
+      "expect": [
+        "SCI-NOTEBOOK-001"
+      ]
+    },
+    {
+      "q": "should i commit this ipynb with its outputs",
+      "expect": [
+        "SCI-NOTEBOOK-001"
+      ]
+    },
+    {
+      "q": "this pandas dataframe column became NaN after the merge",
+      "expect": [
+        "SCI-ARRAY-001"
+      ]
+    },
+    {
+      "q": "is this numpy slice a copy or a view",
+      "expect": [
+        "SCI-ARRAY-001"
+      ]
+    },
+    {
+      "q": "parallelize this simulation with mpi across the cluster",
+      "expect": [
+        "SCI-PARALLEL-001"
+      ]
+    },
+    {
+      "q": "the answer changes when i run on more ranks",
+      "expect": [
+        "SCI-PARALLEL-001"
+      ]
+    },
+    {
+      "q": "should i store this dataset as hdf5 or csv",
+      "expect": [
+        "SCI-DATA-001"
+      ]
+    },
+    {
+      "q": "how should i chunk this netcdf file for reading",
+      "expect": [
+        "SCI-DATA-001"
+      ]
+    },
+    {
+      "q": "check my mesh quality and y plus before running",
+      "expect": [
+        "CFD-MESH-001"
+      ]
+    },
+    {
+      "q": "how fine does the boundary layer mesh need to be",
+      "expect": [
+        "CFD-MESH-001"
+      ]
+    },
+    {
+      "q": "my residuals have dropped is the solution converged",
+      "expect": [
+        "CFD-CONVERGE-001"
+      ]
+    },
+    {
+      "q": "do i need a grid independence study for this result",
+      "expect": [
+        "CFD-CONVERGE-001"
+      ]
+    },
+    {
+      "q": "what courant number should i use for this transient run",
+      "expect": [
+        "CFD-CFL-001"
+      ]
+    },
+    {
+      "q": "the steady solver will not converge on this shedding wake",
+      "expect": [
+        "CFD-CFL-001"
+      ]
+    },
+    {
+      "q": "which turbulence model should i use k epsilon or sst",
+      "expect": [
+        "CFD-TURB-001"
+      ]
+    },
+    {
+      "q": "is rans good enough or do i need les here",
+      "expect": [
+        "CFD-TURB-001"
+      ]
+    },
+    {
+      "q": "i am getting reverse flow at the outlet boundary",
+      "expect": [
+        "CFD-BC-001"
+      ]
+    },
+    {
+      "q": "how big should the far field domain be around the body",
+      "expect": [
+        "CFD-BC-001"
+      ]
+    },
+    {
+      "q": "my julia function is slow check code_warntype",
+      "expect": [
+        "JL-TYPE-001"
+      ]
+    },
+    {
+      "q": "how do i fix type instability in this julia struct",
+      "expect": [
+        "JL-TYPE-001"
+      ]
+    },
+    {
+      "q": "this julia loop allocates on every iteration",
+      "expect": [
+        "JL-ALLOC-001"
+      ]
+    },
+    {
+      "q": "should i use views or broadcasting in julia here",
+      "expect": [
+        "JL-ALLOC-001"
+      ]
+    },
+    {
+      "q": "is adding this method to Base type piracy in julia",
+      "expect": [
+        "JL-DISPATCH-001"
+      ]
+    },
+    {
+      "q": "use multiple dispatch instead of this isa branch",
+      "expect": [
+        "JL-DISPATCH-001"
+      ]
+    },
+    {
+      "q": "should i commit Manifest.toml for this julia project",
+      "expect": [
+        "JL-ENV-001"
+      ]
+    },
+    {
+      "q": "set up a reproducible julia environment with pkg",
+      "expect": [
+        "JL-ENV-001"
+      ]
+    },
+    {
+      "q": "modernise this f77 code with implicit none and modules",
+      "expect": [
+        "FT-IMPLICIT-001"
+      ]
+    },
+    {
+      "q": "should i move these fortran subroutines into a module",
+      "expect": [
+        "FT-IMPLICIT-001"
+      ]
+    },
+    {
+      "q": "what loop order is fastest for this fortran array",
+      "expect": [
+        "FT-ARRAY-001"
+      ]
+    },
+    {
+      "q": "allocatable or pointer for this fortran array",
+      "expect": [
+        "FT-ARRAY-001"
+      ]
+    },
+    {
+      "q": "do i need intent on these fortran dummy arguments",
+      "expect": [
+        "FT-INTENT-001"
+      ]
+    },
+    {
+      "q": "this fortran local variable keeps its value between calls",
+      "expect": [
+        "FT-INTENT-001"
+      ]
+    },
+    {
+      "q": "how do i declare double precision reals portably in fortran",
+      "expect": [
+        "FT-PRECISION-001"
+      ]
+    },
+    {
+      "q": "my fortran literal constants are losing precision",
+      "expect": [
+        "FT-PRECISION-001"
+      ]
+    },
+    {
+      "q": "my matlab loop is slow because the array grows",
+      "expect": [
+        "ML-VECTOR-001"
+      ]
+    },
+    {
+      "q": "preallocate and vectorize this matlab code",
+      "expect": [
+        "ML-VECTOR-001"
+      ]
+    },
+    {
+      "q": "should this matlab script be a function instead",
+      "expect": [
+        "ML-SCRIPT-001"
+      ]
+    },
+    {
+      "q": "stop using clear all and global variables in matlab",
+      "expect": [
+        "ML-SCRIPT-001"
+      ]
+    },
+    {
+      "q": "use inv or backslash to solve this system in matlab",
+      "expect": [
+        "ML-NUMERIC-001"
+      ]
+    },
+    {
+      "q": "matlab integer division is rounding unexpectedly",
+      "expect": [
+        "ML-NUMERIC-001"
+      ]
+    },
+    {
+      "q": "export this matlab figure for a paper",
+      "expect": [
+        "ML-FIGURE-001"
+      ]
+    },
+    {
+      "q": "set the matlab random seed so the figure reproduces",
+      "expect": [
+        "ML-FIGURE-001"
+      ]
+    },
+    {
+      "q": "this r loop uses rbind and takes forever",
+      "expect": [
+        "R-VECTOR-001"
+      ]
+    },
+    {
+      "q": "vectorize this r code instead of sapply in a loop",
+      "expect": [
+        "R-VECTOR-001"
+      ]
+    },
+    {
+      "q": "why is my r comparison against NA returning nothing",
+      "expect": [
+        "R-NA-001"
+      ]
+    },
+    {
+      "q": "should i use na.rm in this r mean",
+      "expect": [
+        "R-NA-001"
+      ]
+    },
+    {
+      "q": "as.numeric on this r factor gave me level codes",
+      "expect": [
+        "R-TYPES-001"
+      ]
+    },
+    {
+      "q": "my r dataframe dropped to a vector when i subset one column",
+      "expect": [
+        "R-TYPES-001"
+      ]
+    },
+    {
+      "q": "replace setwd with something portable in this r script",
+      "expect": [
+        "R-ENV-001"
+      ]
+    },
+    {
+      "q": "use renv to pin the packages for this r analysis",
+      "expect": [
+        "R-ENV-001"
+      ]
     }
   ]
 }

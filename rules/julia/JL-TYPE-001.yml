@@ -1,0 +1,19 @@
+id: JL-TYPE-001
+domain: julia
+severity: error
+tags: [julia, type-stability, performance, inference, code-warntype, any, global]
+triggers: [type stable, type instability, code_warntype, julia slow, julia performance, abstract type, global variable julia]
+when: Writing or optimising a Julia function that matters for performance.
+rule: >
+  Type instability is the cause of almost every "Julia is slow as Python" report.
+  A function whose return type the compiler cannot infer falls back to dynamic
+  dispatch and boxed allocation in the inner loop. Check with @code_warntype (or
+  JET.jl) and treat red Any or a Union in the output as a bug, not a style note.
+  The usual sources: a non-constant global (mark it const or pass it as an
+  argument), a container declared with an abstract element type such as
+  Vector{Real} or an untyped Dict, a variable whose type changes across a branch,
+  and struct fields left untyped or typed abstractly - use concrete fields or a
+  type parameter. Annotate for correctness and dispatch, not in the hope of speed:
+  argument annotations do not make code faster, inferability does.
+violation: "mutable struct P; x; end   with   const-less global dt   summed in the hot loop"
+correct: "struct P{T<:AbstractFloat}; x::T; end, dt passed as an argument, @code_warntype clean"

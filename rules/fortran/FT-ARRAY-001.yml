@@ -1,0 +1,19 @@
+id: FT-ARRAY-001
+domain: fortran
+severity: warning
+tags: [fortran, arrays, column-major, loop-order, bounds, allocatable, cache, temporaries]
+triggers: [column major, loop order, array bounds, allocatable, fortran array, deallocate, array temporaries, out of bounds fortran]
+when: Writing loops over, or allocating, Fortran arrays.
+rule: >
+  Fortran arrays are COLUMN-major: the leftmost index varies fastest, so the
+  innermost loop must run over the first index. Getting the nesting backwards is a
+  correct program that runs many times slower on a large array, and it is the most
+  common porting bug from C or NumPy. Use allocatable rather than pointer arrays -
+  they deallocate automatically at scope exit, cannot alias, and let the compiler
+  optimise more. Declare assumed-shape dummy arguments (a(:,:)) with an explicit
+  interface so bounds travel with the array. Enable bounds checking in debug
+  builds: an out-of-range index in an optimised Fortran build does not trap, it
+  reads or writes whatever is adjacent. Prefer whole-array and intrinsic
+  operations, but watch for the array temporaries they create in hot code.
+violation: "do i = 1, n;  do j = 1, m;  a(i,j) = ... — striding across memory on every step"
+correct: "do j = 1, m;  do i = 1, n;  a(i,j) = ... — contiguous inner loop, bounds checking on in debug"

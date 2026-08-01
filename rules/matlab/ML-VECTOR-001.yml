@@ -1,0 +1,19 @@
+id: ML-VECTOR-001
+domain: matlab
+severity: warning
+tags: [matlab, vectorize, preallocate, loops, growth, performance, logical-indexing]
+triggers: [matlab loop, preallocate, vectorize matlab, matlab slow, array grows, zeros(), logical indexing, arrayfun]
+when: Writing MATLAB code that loops over or builds an array.
+rule: >
+  Preallocate before a loop that fills an array - x(end+1) = v reallocates and
+  copies the whole array on every iteration, turning linear work quadratic, and it
+  is the single most common reason MATLAB code is called slow. Size it once with
+  zeros/nan of the final dimensions, and prefer nan when a leftover entry should be
+  visible rather than silently reading as zero. Replace element loops with
+  vectorised expressions and logical indexing (x(x>0) = 0) where the operation is
+  elementwise; reach for arrayfun or cellfun for clarity, not speed, since neither
+  is faster than a preallocated loop. Keep the loop when the body is genuinely
+  sequential - a contorted vectorisation that nobody can read is a worse outcome
+  than the loop.
+violation: "for k = 1:n;  results(end+1) = f(k);  end"
+correct: "results = nan(1, n);  for k = 1:n;  results(k) = f(k);  end   — or results = f(1:n) if f vectorises"

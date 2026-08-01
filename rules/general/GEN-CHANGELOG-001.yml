@@ -1,0 +1,18 @@
+id: GEN-CHANGELOG-001
+domain: general
+severity: warning
+tags: [changelog, unreleased, documentation, history, users, release-notes]
+triggers: [changelog, release notes, what changed, unreleased, keep a changelog, document the change]
+when: Landing a user-visible change in a project that keeps a changelog.
+rule: >
+  Add the changelog entry in the same change that makes it true, under an
+  Unreleased heading — not at release time, when the reason for a decision is
+  already gone. Write it for someone using the project: what changed and what they
+  must do about it, in their vocabulary, not the commit subject or the file you
+  touched. One line per change, grouped Added / Changed / Fixed / Removed, with
+  breaking changes called out and the migration named. Leave out what no user can
+  observe — refactors, test-only edits, formatting, dependency bumps with no
+  behaviour change. A changelog reconstructed from git log at release time is a
+  commit list wearing a changelog's name.
+violation: "Cutting 2.0 and then reading back through 60 commits to work out what to tell users"
+correct: "Under ## [Unreleased] → ### Changed: 'retry() now caps at 5 attempts; pass max_attempts to restore the old behaviour'"

@@ -1,0 +1,19 @@
+id: R-TYPES-001
+domain: r
+severity: warning
+tags: [r-lang, factor, coercion, types, dataframe, drop, recycling, stringsasfactors]
+triggers: [factor, stringsasfactors, as.numeric, coercion r, drop = false, r data types, recycling, character to number]
+when: Reading data into R, or subsetting and combining columns.
+rule: >
+  R coerces types silently and the result is usually a plausible wrong answer.
+  Converting a factor with as.numeric returns the integer level CODES, not the
+  labels, so a column of years becomes 1, 2, 3 - go through
+  as.numeric(as.character(x)), or read it as character in the first place. A single
+  non-numeric cell turns an entire column to character on import, so check the
+  parsed types after reading rather than assuming. Bracket-subsetting a data frame
+  down to one column drops it to a vector unless you pass drop = FALSE, which
+  breaks code that expected a frame. Vectors of unequal length RECYCLE instead of
+  erroring, so a length mismatch in an arithmetic expression is a warning at most.
+  Assert the shape and types after any load or join.
+violation: "as.numeric(df$year)  on a factor, then treating the 1, 2, 3 as years"
+correct: "readr::read_csv with an explicit col_types spec, then stopifnot(is.numeric(df$year))"

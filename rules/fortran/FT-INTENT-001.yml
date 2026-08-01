@@ -1,0 +1,19 @@
+id: FT-INTENT-001
+domain: fortran
+severity: warning
+tags: [fortran, intent, pure, save, side-effects, arguments, state]
+triggers: [intent in, intent out, intent inout, fortran subroutine, pure function, save attribute, side effects fortran]
+when: Declaring the arguments or state of a Fortran procedure.
+rule: >
+  Declare intent(in), intent(out) or intent(inout) on every dummy argument. It
+  documents the data flow and lets the compiler catch a write to something the
+  caller considers read-only - a class of bug that otherwise appears as a variable
+  changing across a call nobody expected to modify it. Prefer functions with
+  intent(in) arguments and no side effects, marked pure or elemental where they
+  qualify, since that is also what lets the compiler parallelise them. Beware SAVE
+  and initialised local variables: an initialiser in a declaration implies SAVE, so
+  the variable persists between calls and is shared across threads - the classic
+  source of a routine that gives a different answer on its second call, and of race
+  conditions under OpenMP.
+violation: "real :: counter = 0.0  inside a subroutine, expecting it to reset on each call"
+correct: "subroutine step(x, dt)  with  real, intent(inout) :: x  /  real, intent(in) :: dt  and no hidden SAVE"

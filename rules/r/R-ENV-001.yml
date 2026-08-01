@@ -1,0 +1,19 @@
+id: R-ENV-001
+domain: r
+severity: error
+tags: [r-lang, renv, setwd, rm-list, workspace, rstudio, project, reproducibility]
+triggers: [setwd, rm(list=ls()), renv, r project, rstudio project, save workspace, rdata, here package, r environment]
+when: Setting up an R analysis so someone else (or you, later) can run it.
+rule: >
+  Do not put setwd() in a script - it hardcodes one machine's directory layout and
+  fails for every other reader. Use an RStudio project or the here package so paths
+  resolve from the project root. Do not rely on rm(list = ls()) to get a clean
+  state: it leaves loaded packages, options and S4 state behind, so it gives the
+  appearance of a fresh session without the substance - restart R instead, and turn
+  OFF saving and restoring .RData so a stale workspace can never make a broken
+  script appear to work. Record dependencies with renv (renv.lock committed) rather
+  than a list of library() calls, so the package versions that produced a result
+  can be restored. Load every package at the top of the script; a library() call
+  buried mid-file makes the dependency invisible.
+violation: "setwd('C:/Users/me/analysis'); rm(list=ls())  at the top, with .RData restored on startup"
+correct: "An .Rproj + here::here('data','raw.csv'), renv.lock committed, and 'restore .RData' disabled"

@@ -1,0 +1,19 @@
+id: R-NA-001
+domain: r
+severity: error
+tags: [r-lang, na, missing, na.rm, is.na, coercion, comparison, silent]
+triggers: [na values, na.rm, is.na, missing values r, r comparison na, na in mean, complete.cases, drop_na]
+when: Comparing, summarising, or filtering data that may contain NA in R.
+rule: >
+  NA is not a value, it is the absence of one, and it propagates. x == NA is NA
+  rather than TRUE or FALSE, so test with is.na(x); a filter written with == will
+  silently drop every NA row instead of keeping or flagging it. Aggregates return
+  NA unless told otherwise, and na.rm = TRUE is a claim about the data - that the
+  missing entries are ignorable - so make it deliberately and say how many were
+  dropped rather than pasting it in to make a warning go away. Distinguish NA from
+  NaN and from NULL, which behave differently in comparisons and in lists.
+  Sentinel values from other tools (-999, empty string, "N/A") must be converted to
+  NA at load, otherwise they enter the arithmetic as real numbers and shift the
+  mean without any warning at all.
+violation: "df[df$score != NA, ]  and later mean(df$score, na.rm = TRUE) with -999 still in the column"
+correct: "df <- df |> mutate(score = na_if(score, -999)) |> filter(!is.na(score))  — and report the count dropped"

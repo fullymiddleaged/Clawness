@@ -1,0 +1,19 @@
+id: JL-DISPATCH-001
+domain: julia
+severity: warning
+tags: [julia, dispatch, multiple-dispatch, type-piracy, interfaces, traits, generic]
+triggers: [multiple dispatch, type piracy, extend base, method for, generic function julia, abstract type julia, traits]
+when: Designing Julia types, or adding methods to a function you did not define.
+rule: >
+  Dispatch on types instead of branching on them - replace an if isa(x, ...) chain
+  with one method per type, so a new type extends the code from outside rather than
+  by editing it. Do not commit type piracy: adding a method whose function AND all
+  of whose argument types belong to other packages changes behaviour globally for
+  every package in the session, and produces action-at-a-distance bugs nobody can
+  trace to your code. Own at least one of the two - wrap the type, or define your
+  own function. Write functions against the abstract interface (AbstractArray,
+  AbstractString, the iteration protocol) rather than concrete types, so they work
+  on GPU arrays, views and dual numbers you never anticipated; that generality is
+  the reason to be here.
+violation: "Base.:+(a::Date, b::Date) = ...  in your analysis package"
+correct: "Wrap it — struct MyDate; d::Date; end — or define your own combine(a, b), leaving Base alone"

@@ -1,0 +1,20 @@
+id: R-VECTOR-001
+domain: r
+severity: warning
+tags: [r-lang, vectorize, apply, growth, preallocate, loops, performance, purrr]
+triggers: [r loop, rbind in a loop, vectorize r, sapply, lapply, purrr map, r slow, grow a vector, seq_along]
+when: Writing R code that iterates over or accumulates data.
+rule: >
+  Never grow an object inside a loop - c(x, new) or rbind(df, row) copies the whole
+  object every iteration, which is why an R loop that should take seconds takes
+  minutes. Build a list and combine once at the end (do.call(rbind, parts),
+  dplyr::bind_rows, purrr::map_dfr), or preallocate with vector("list", n) and index
+  into it. Prefer the vectorised expression to the loop where the operation is
+  elementwise, since R's arithmetic, comparison and ifelse all work on whole
+  vectors. When you do loop, iterate with seq_along(x) rather than 1:length(x):
+  1:length(x) on an empty vector counts down from 1 to 0 and silently runs the body
+  twice on the wrong elements. sapply's return type depends on the data, so use
+  vapply with an explicit template, or purrr's typed map variants, in anything that
+  must not change shape on a different input.
+violation: "out <- c();  for (i in 1:length(files)) out <- rbind(out, read_one(files[i]))"
+correct: "parts <- lapply(files, read_one);  out <- do.call(rbind, parts)   — loop with seq_along if you must"

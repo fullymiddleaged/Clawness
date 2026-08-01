@@ -31,7 +31,21 @@ dependency**. No ML models, no services, no Docker.
    routine dev prompts surfaced one; the stack filter makes this WORSE, not better,
    since suppressing off-stack rules frees top-k slots these then fill. That is also
    why `clawness query` (no stack) cannot see this class of bug — drive the real hook
-   against a project fixture instead. Passing no
+   against a project fixture instead.
+   **`cfd`/`julia`/`fortran`/`matlab`/`r` are the mirror case** (`_NARROW_STACK_DOMAINS`,
+   1.6.0): stack-gated AND vocabulary-colliding, so off-stack they take a *fourth* floor
+   ABOVE the ordinary one (`CLAW_NARROW_MIN_RELEVANCE`, default 0.22). Their core words
+   are ordinary dev words — measured against the real hook in a Python repo, "the solver
+   is not converging, fix the residual bug" scored CFD-CONVERGE-001 at **0.190** and
+   "vectorize this dataframe loop" pulled in MATLAB (0.193) and R (0.163), all clearing
+   the 0.15 off-stack floor. Routine dev prompts top out at 0.193; an explicit ask
+   ("which turbulence model for this openfoam case") starts at 0.264, so 0.22 sits in the
+   gap. **The high bar costs them nothing where they matter** — in their OWN project they
+   are on-stack and the floor never applies. Don't fold them back into the plain off-stack
+   tier: unlike sql/docker (a Python service really does talk to Postgres) there is no
+   such thing as needing Fortran conventions while writing TypeScript. Note `_floor_for`
+   must test the narrow set BEFORE returning the off-stack floor — these domains are in
+   `_STACK_DOMAINS` too, so the reverse order makes the tier dead code. Passing no
    stack (CLI/eval) disables the penalty, so eval is unaffected. ~2ms/prompt + ~3ms scan
    (retrieval is <1% of the ~400ms hook, which is dominated by interpreter startup).
    **Session-aware re-injection** (`clawness/session_state.py`): the mandatory block
@@ -116,10 +130,45 @@ dependency**. No ML models, no services, no Docker.
      the user says it's finished), which clears the live slot and keeps history.
      Nothing is ever deleted; an over-eager archive then costs nothing. Age IS shown in
      the note, but only as information — it never branches the instruction.
+   - **"Carry on" means START, not summarize-and-wait (1.6.0).** The instruction used
+     to end *"then wait for them. Don't start the work unless they ask"*, which threw
+     away the reason the handoff exists — the user wrote it so the next session wouldn't
+     need an interview. It is now **conditional, and must stay conditional**: SessionStart
+     fires before the user's first message, so the note cannot know whether they will say
+     "carry on" or open a fresh task, and it has to carry both branches. What makes the
+     continue branch safe is the template's **`## Open questions`** section — the note
+     bounds questions to what is listed there, so "don't ask" can't mean "guess". If you
+     ever drop that section, restore the interview.
    - Truncation keeps the **head** (budget `CLAW_HANDOFF_BUDGET`, default 2000) —
      opposite of the lessons log, because a handoff's summary and state are written at
-     the top. Opt-out `CLAW_NO_HANDOFF`.
-6. **Model-tier advisor** (`clawness/model_advisor.py`, stashed by `stack_detect`,
+     the top. `## Open questions` is last and therefore the first thing truncated away;
+     that's the right trade (it usually says "none") and `tests/test_handoff.py` pins it
+     rather than leaving it undefined. Opt-out `CLAW_NO_HANDOFF`.
+6. **Framework-version awareness** (`VERSION_WATCH_*` in `clawness/init.py`, surfaced by
+   `stack_detect`): `scan_project` returns a `versions` dict alongside `domains`, and the
+   SessionStart note reads "Next.js 14.2, React 18.3" rather than bare labels.
+   - **Parsed at SessionStart ONLY.** `detect_stack` (per-prompt) still reads `domains`
+     and ignores `versions`, so the hot path is untouched. `scan_project` re-runs on
+     *every prompt* uncached — don't move version parsing onto that path without a TTL
+     cache first (the `guard_provenance_cache.json` pattern).
+   - **Unparseable means omitted, never guessed.** `*`, `latest`, a git URL or a
+     workspace protocol yield "" and the framework falls back to its bare label. A wrong
+     version is worse than none: it gets acted on.
+   - The watch list is deliberately short — only frameworks whose majors change the code
+     you write (App Router vs Pages, Pydantic v1 vs v2, SQLAlchemy 1.4 vs 2.0). It is not
+     an inventory; the manifest is right there. `GEN-INSTALLED-VER-001` is the durable
+     half, and it is distinct from `GEN-DEPS-001`/`ENF-SEC-005`, which are about
+     *choosing* a version for a NEW dependency rather than *matching* an existing one.
+7. **Changelog check** (`hooks/changelog_check.py`, SessionStart): reminds when a
+   changelog exists, and asks **once per project, ever** when one doesn't — ledger at
+   `.clawness/changelog.json`, `should_ask` called LAST so a session that would have
+   stayed quiet doesn't burn the one shot. Never creates the file itself; same consent
+   shape as `git_check`'s `git init`. Opt-outs: `CLAW_NO_CHANGELOG_CHECK`, or a
+   `.clawness/changelog-check-off` marker. **The nag ledgers (`changelog.json`,
+   `model_advice.json`) are deliberately NOT guard control files** — forging one
+   suppresses a question, not a guard, and listing them would make routine `.clawness/`
+   writes start asking.
+8. **Model-tier advisor** (`clawness/model_advisor.py`, stashed by `stack_detect`,
    surfaced by `claude_hook` on prompt 1): compares the session's model tier against
    what the opening task looks like and injects a note when they look mismatched.
    - **The model must be carried across two hook events.** ONLY `SessionStart`
@@ -145,7 +194,7 @@ dependency**. No ML models, no services, no Docker.
    - `tests/model_advisor_cases.json` is its eval set, and the CI floor is **zero
      false positives** on routine prompts. Grow that file when tuning signals.
 
-7. **Session security** (defense, not retrieval — independent of the engine):
+9. **Session security** (defense, not retrieval — independent of the engine):
    - `hooks/access_guard.py` (PreToolUse; logic in `clawness/guard.py`) classifies each
      Bash/Write/Edit/Read call → `allow`/`ask`/`deny`. A hook decision overrides the
      user's permission allowlist, so `ask` fires *even on "always-allowed" tools* — the
@@ -221,13 +270,20 @@ dependency**. No ML models, no services, no Docker.
 - `clawness/handoff.py` — session handoff (`find_handoff`, `render_handoff_note`,
   `describe_age`, `HANDOFF_TEMPLATE`).
 - `hooks/` — runtime hooks (`claude_hook`, `compress_output`, `plan_gate`, `access_guard`,
-  `trust_ledger`, `git_check`, `memory_init`, `handoff_check`, `stack_detect`, `ensure_deps`) + setup helpers (`setup_settings/agents/skills` — manual install only).
-- `rules/<domain>/*.yml` — the corpus (165 rules / 23 domains; `_mandatory/` = always-on).
+  `trust_ledger`, `git_check`, `memory_init`, `handoff_check`, `stack_detect`,
+  `changelog_check`, `ensure_deps`) + setup helpers (`setup_settings/agents/skills` —
+  manual install only). `hooks/_hookutil.py` is shared plumbing (UTF-8 stdio pinned at
+  import, `read_payload`, `session_cwd`, `git_root`, `project_root`) — imported, never
+  registered. Every SessionStart note hook uses it; `git_check` keeps its own *downward*
+  tree scan because "is git used anywhere relevant?" is a different question from
+  `git_root`'s upward walk.
+- `rules/<domain>/*.yml` — the corpus (193 rules / 28 domains; `_mandatory/` = always-on).
   Beyond the language domains: `llm/` (building with models — stack-gated, detected from
   anthropic/openai/langchain deps), `science/` and `research/` (physics/maths/engineering
   practice and research method — **cross-cutting on purpose**, since a researcher often
   works in a bare or LaTeX-only directory where gating would silence them), plus
-  `reliability/`, `testing/` and `ci/`.
+  `reliability/`, `testing/` and `ci/`. `cfd/`, `julia/`, `fortran/`, `matlab/` and `r/`
+  are stack-gated AND take the narrow floor — see `_NARROW_STACK_DOMAINS` below.
 - `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin.
 - `.claude-plugin/{plugin.json,marketplace.json}` — plugin + marketplace manifests.
 - `tests/ground_truth.json` — labeled eval queries (grow it when adding rule areas).
@@ -350,7 +406,7 @@ dependency**. No ML models, no services, no Docker.
   on Windows and mangle them into mojibake (`—` → `â€"`) *at load time*. `clawness
   lint` now flags non-UTF-8 / U+FFFD rule files; keep new reads/writes UTF-8.
 - **Keep retrieval a couple of ms** — no heavy imports or model loads in
-  `claude_hook.py`/`core.py`. It was ~0.8ms at 121 rules and is ~1.6ms at 165; the
+  `claude_hook.py`/`core.py`. It was ~0.8ms at 121 rules and is ~1.3ms at 193; the
   concept-expansion pass scales with both corpus size and `_CONCEPT_GROUPS`, so measure
   with `clawness bench` when adding either.
 - **Version lives in 4 places** — bump `pyproject.toml`, `.claude-plugin/plugin.json`,

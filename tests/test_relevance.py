@@ -235,6 +235,57 @@ def test_topical_floor_is_between_base_and_off_stack():
     assert wl._floor_for("meta") == wl.min_relevance
 
 
+def test_narrow_floor_sits_above_the_ordinary_off_stack_floor():
+    """cfd/julia/fortran/matlab/r are in _STACK_DOMAINS too, so the narrow tier has
+    to be tested BEFORE the ordinary off-stack return or it's dead code."""
+    wl = Clawness(RULES_DIR, stack_domains={"python", "general"})
+    assert wl.off_stack_min_relevance < wl.narrow_min_relevance
+    for domain in ("cfd", "julia", "fortran", "matlab", "r"):
+        assert wl._floor_for(domain) == wl.narrow_min_relevance, domain
+    # A merely off-stack domain keeps the ordinary floor...
+    assert wl._floor_for("react") == wl.off_stack_min_relevance
+    # ...and in its OWN project a narrow domain is not penalised at all.
+    own = Clawness(RULES_DIR, stack_domains={"julia", "cfd", "general"})
+    assert own._floor_for("julia") == own.min_relevance
+    assert own._floor_for("cfd") == own.min_relevance
+
+
+def test_colliding_vocabulary_does_not_drag_narrow_domains_into_dev_work():
+    """The reason the narrow tier exists. Every one of these is ordinary dev
+    language that also happens to be CFD/MATLAB/R/Fortran vocabulary — at the
+    0.15 off-stack floor they surfaced (CFD-CONVERGE-001 scored 0.190 on the
+    first one, MATLAB and R 0.193/0.163 on the second)."""
+    wl = Clawness(RULES_DIR, stack_domains={"python", "bash", "general", "workflows"})
+    by_id = {r.id: r for r in wl._ranked_rules}
+    narrow = {"cfd", "julia", "fortran", "matlab", "r"}
+    for prompt in (
+        "the solver is not converging, fix the residual bug",
+        "vectorize this dataframe loop",
+        "the build is failing",
+        "write a test for this function",
+        "why is this function so slow",
+    ):
+        leaked = {by_id[i].domain for i in wl.rank_ids(prompt, top_k=5)} & narrow
+        assert not leaked, f"{prompt!r} leaked {leaked}"
+
+
+def test_an_explicit_narrow_ask_still_gets_through_off_stack():
+    """The floor is high, not a gate: someone in a Python repo who explicitly asks
+    a CFD or Julia question still gets the rule."""
+    wl = Clawness(RULES_DIR, stack_domains={"python", "general"})
+    assert "CFD-TURB-001" in wl.rank_ids(
+        "which turbulence model for this openfoam case", top_k=5)
+    assert "JL-TYPE-001" in wl.rank_ids(
+        "fix the type instability in my julia function", top_k=5)
+
+
+def test_narrow_floor_env_var_and_never_below_off_stack(monkeypatch):
+    monkeypatch.setenv("CLAW_NARROW_MIN_RELEVANCE", "0.4")
+    assert Clawness(RULES_DIR).narrow_min_relevance == 0.4
+    wl = Clawness(RULES_DIR, off_stack_min_relevance=0.3, narrow_min_relevance=0.1)
+    assert wl.narrow_min_relevance == 0.3
+
+
 def test_strong_off_stack_match_still_surfaces():
     """A genuinely strong cross-domain match must clear the off-stack floor, so a
     React question in a Python repo still gets React rules (mid-session deps)."""

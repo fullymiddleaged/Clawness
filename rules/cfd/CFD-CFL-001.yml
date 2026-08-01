@@ -1,0 +1,21 @@
+id: CFD-CFL-001
+domain: cfd
+severity: warning
+tags: [cfl, courant, timestep, transient, steady, relaxation, stability, unsteady]
+triggers: [courant, cfl, time step, timestep, transient, unsteady, steady state, under-relaxation, diverging, blowing up, adjustable timestep]
+when: Choosing a timestep, a steady/transient formulation, or relaxation settings.
+rule: >
+  Decide first whether the physics is steady. Forcing a steady solver onto a
+  genuinely unsteady flow - vortex shedding, separation, buoyant plumes - produces
+  residuals that never settle, and the fix is a transient run, not more iterations
+  or heavier relaxation. For a transient run, size the timestep from the physics
+  you must resolve, not from what the solver tolerates: an implicit scheme runs
+  stably at Courant numbers far above 1 while smearing the very unsteadiness you
+  ran transient to capture, so resolve the shedding period or the acoustic scale
+  with enough steps and verify by halving the timestep and confirming the answer
+  does not move. Keep the maximum Courant number near 1 for explicit schemes and
+  for any LES/DES region. Under-relaxation buys stability, never accuracy - a
+  diverging run usually means a mesh, boundary-condition or initialisation problem
+  that lowering the factors only hides.
+violation: "Cranking relaxation down to 0.1 to force a steady solution onto a shedding cylinder wake"
+correct: "Switch to transient, set dt to resolve the shedding period in ~50 steps, then confirm with dt/2"

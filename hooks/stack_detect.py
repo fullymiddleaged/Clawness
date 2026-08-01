@@ -12,27 +12,13 @@ nothing recognizable is found, in non-project locations (home dir / filesystem
 root), or when disabled via CLAW_NO_STACK_NOTE. Fails open on any error.
 """
 
-import io
-import json
 import os
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
-# The payload (incl. the project cwd) arrives as UTF-8 on stdin; on Windows stdio
-# defaults to cp1252 and would mangle a non-ASCII project path on the way in, or
-# fail to encode the note on the way out. Pin UTF-8 both ways. The isinstance check
-# narrows to the class that actually defines reconfigure() — sys.stdin is typed
-# TextIO, which doesn't — and skips an already-replaced stream (e.g. pytest capture).
-for _stream in (sys.stdin, sys.stdout):
-    if isinstance(_stream, io.TextIOWrapper):
-        try:
-            _stream.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Pins UTF-8 stdio at import and puts the repo on sys.path.
+from _hookutil import git_root, read_payload, session_cwd  # noqa: E402
 
 # Stack domains → human labels, in the order we present them (languages, then
 # frameworks, then infra). 'general'/'workflows' are always-on, not stack signals.
@@ -42,29 +28,26 @@ _LABELS = [
     ("fastapi", "FastAPI"), ("nextjs", "Next.js"), ("react", "React"),
     ("capacitor", "Capacitor"), ("css", "CSS"),
     ("sql", "SQL"), ("docker", "Docker"),
+    # Scientific computing. Listed after the web stack so a mixed repo reads
+    # "Python, Fortran" rather than leading with the minority language.
+    ("julia", "Julia"), ("fortran", "Fortran"), ("matlab", "MATLAB"), ("r", "R"),
+    ("cfd", "CFD"),
 ]
 
 
 def _project_root(cwd_path: Path) -> Path:
     """The git work-tree root if there is one, else cwd — so we scan the project
-    top, not whatever subfolder the session happened to open in."""
-    if shutil.which("git"):
-        try:
-            r = subprocess.run(
-                ["git", "-C", str(cwd_path), "rev-parse", "--show-toplevel"],
-                capture_output=True, text=True, timeout=5,
-            )
-            if r.returncode == 0 and r.stdout.strip():
-                return Path(r.stdout.strip()).resolve()
-        except Exception:
-            pass
-    return cwd_path
+    top, not whatever subfolder the session happened to open in.
+
+    Unlike the other note hooks this falls back to cwd rather than going silent:
+    a stack is worth reporting for a directory that isn't a git repo yet.
+    """
+    return git_root(cwd_path) or cwd_path
 
 
 def main() -> None:
-    try:
-        payload = json.load(sys.stdin)
-    except Exception:
+    payload = read_payload()
+    if payload is None:
         sys.exit(0)
 
     # Stash the active model for the model-tier advisor. ONLY SessionStart carries
@@ -86,36 +69,47 @@ def main() -> None:
     if os.environ.get("CLAW_NO_STACK_NOTE"):
         sys.exit(0)
 
-    cwd = payload.get("cwd") or os.getcwd()
-    try:
-        cwd_path = Path(cwd).resolve()
-    except Exception:
-        sys.exit(0)
-
     # Don't scan non-project locations (home directory or filesystem root).
-    try:
-        if cwd_path == Path.home().resolve() or cwd_path.parent == cwd_path:
-            sys.exit(0)
-    except Exception:
-        pass
+    cwd_path = session_cwd(payload)
+    if cwd_path is None:
+        sys.exit(0)
 
     try:
         from clawness.init import scan_project
-        domains = set(scan_project(_project_root(cwd_path)).get("domains", []))
+        scan = scan_project(_project_root(cwd_path))
+        domains = set(scan.get("domains", []))
+        versions = scan.get("versions", {}) or {}
     except Exception:
         sys.exit(0)
 
-    labels = [label for key, label in _LABELS if key in domains]
+    # A detected framework carries its declared major where we have one: "Next.js 14"
+    # says far more than "Next.js", and it is the difference between App Router advice
+    # and Pages Router advice. Versions we couldn't read are simply omitted — a guessed
+    # version would be worse than none, since it would be acted on.
+    labels = [
+        f"{label} {versions[label]}" if label in versions else label
+        for key, label in _LABELS if key in domains
+    ]
+    # Frameworks worth versioning that aren't stack labels in their own right
+    # (Pydantic, SQLAlchemy, Tailwind, pandas...) still matter to the code written.
+    extra = [f"{label} {v}" for label, v in sorted(versions.items())
+             if not any(label == lbl for _, lbl in _LABELS)]
     if not labels:
         sys.exit(0)  # nothing recognizable — stay silent
 
-    print(
+    note = (
         "[Clawness] Detected project stack (heuristic from project files): "
-        + ", ".join(labels)
+        + ", ".join(labels + extra)
         + ". Apply these ecosystems' current conventions and idioms by default, "
-        "and prefer their up-to-date best practices. Correct this if the codebase "
-        "says otherwise. Silence with CLAW_NO_STACK_NOTE=1."
+        "and prefer their up-to-date best practices."
     )
+    if versions:
+        note += (
+            " Write code for the MAJOR VERSIONS shown, not the newest release you "
+            "know of — check the manifest before using an API you believe is current."
+        )
+    note += " Correct this if the codebase says otherwise. Silence with CLAW_NO_STACK_NOTE=1."
+    print(note)
     sys.exit(0)
 
 

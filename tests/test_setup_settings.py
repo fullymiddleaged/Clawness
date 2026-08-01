@@ -67,7 +67,7 @@ def test_all_expected_hooks_present(tmp_path):
     assert _scripts_on(data, "UserPromptSubmit") == {"claude_hook.py"}
     assert _scripts_on(data, "SessionStart") == {
         "git_check.py", "memory_init.py", "handoff_check.py", "stack_detect.py",
-        "trust_ledger.py",
+        "trust_ledger.py", "changelog_check.py",
     }
     assert "compress_output.py" in _scripts_on(data, "PostToolUse")
     assert "plan_gate.py" in _scripts_on(data, "PreToolUse")

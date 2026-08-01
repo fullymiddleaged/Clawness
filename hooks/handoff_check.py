@@ -12,61 +12,21 @@ root, silent when there's nothing to say, and fails open on every error. Opt out
 CLAW_NO_HANDOFF=1.
 """
 
-import io
-import json
 import os
-import shutil
-import subprocess
 import sys
 from pathlib import Path
 
-# The payload (incl. the project cwd) arrives as UTF-8 on stdin; on Windows stdin
-# defaults to cp1252 and would mangle a non-ASCII project path. Pin UTF-8 both ways —
-# the handoff text itself is user prose and will contain non-ASCII sooner or later.
-# The isinstance check narrows to the class that actually defines reconfigure() —
-# sys.stdin is typed TextIO, which doesn't — and skips an already-replaced stream.
-for _stream in (sys.stdin, sys.stdout):
-    if isinstance(_stream, io.TextIOWrapper):
-        try:
-            _stream.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-
-def project_root(cwd: str) -> Path | None:
-    """The git work-tree root, so the handoff is found from any subdirectory."""
-    try:
-        cwd_path = Path(cwd).resolve()
-    except Exception:
-        return None
-    try:
-        if cwd_path == Path.home().resolve() or cwd_path.parent == cwd_path:
-            return None
-    except Exception:
-        pass
-    if not shutil.which("git"):
-        return None
-    try:
-        r = subprocess.run(
-            ["git", "-C", str(cwd_path), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, timeout=5,
-        )
-    except Exception:
-        return None
-    if r.returncode != 0 or not r.stdout.strip():
-        return None
-    try:
-        return Path(r.stdout.strip()).resolve()
-    except Exception:
-        return None
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Pins UTF-8 stdio at import (the handoff text is user prose and will contain
+# non-ASCII sooner or later) and puts the repo on sys.path. The git work-tree root
+# comes from here too, so the handoff is found from any subdirectory —
+# tests/test_handoff.py imports `project_root` from this module.
+from _hookutil import project_root, read_payload  # noqa: E402
 
 
 def main() -> None:
-    try:
-        payload = json.load(sys.stdin)
-    except Exception:
+    payload = read_payload()
+    if payload is None:
         sys.exit(0)
 
     if os.environ.get("CLAW_NO_HANDOFF"):

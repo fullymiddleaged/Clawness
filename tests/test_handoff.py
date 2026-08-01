@@ -100,6 +100,47 @@ def test_the_note_asks_claude_to_open_with_it():
     assert "instead of deleting it" in note
 
 
+def test_carry_on_means_start_the_work_not_interview_the_user():
+    # The whole point of writing a handoff is that the next session doesn't need an
+    # interview. SessionStart fires before the user's first message, so the note can't
+    # know which case it's in — it has to carry BOTH branches, and the continue branch
+    # has to say "start", not "summarize and wait".
+    note = render_handoff_note(find_handoff(_project(SAMPLE)))
+    assert "carry on" in note
+    assert "go straight to Next steps and start work" in note
+    assert "without an interview" in note
+    # ...and the other branch survives, for a user who opens with something else.
+    assert "Otherwise open the session by telling" in note
+
+
+def test_the_note_bounds_questions_to_the_open_questions_section():
+    # "Don't ask" is only safe because genuine blockers have somewhere to live.
+    note = render_handoff_note(find_handoff(_project(SAMPLE)))
+    assert "asking only what the handoff lists under Open questions" in note
+
+
+def test_open_questions_survives_render_but_is_the_first_thing_truncated():
+    # Truncation keeps the HEAD, and Open questions is deliberately last — so a
+    # handoff long enough to be cut loses it. Pinned rather than left undefined:
+    # the section is for the rare blocker, and a 2000-char handoff has bigger
+    # problems than a lost question line.
+    body = HANDOFF_TEMPLATE.format(date="2026-07-26").replace(
+        "<none — or the decisions genuinely blocked on the user, one line each>",
+        "Deploy to staging or prod first?",
+    )
+    short = render_handoff_note(find_handoff(_project(body)), budget=4000)
+    assert "Open questions" in short
+    assert "Deploy to staging or prod first?" in short
+
+    padded = body.replace("## Open questions",
+                          "\n".join(f"- filler {i}" for i in range(400))
+                          + "\n\n## Open questions")
+    long_note = render_handoff_note(find_handoff(_project(padded)), budget=300)
+    assert "Where we left off" in long_note
+    assert "Deploy to staging or prod first?" not in long_note
+    assert "truncated" in long_note
+
+
 def test_age_is_reported_but_never_changes_the_instruction():
     # The file's existence is the state; age is information, not a branch. An old
     # handoff that nobody archived is still an outstanding handoff.
@@ -128,9 +169,9 @@ def test_empty_or_missing_file_renders_nothing():
     assert render_handoff_note(root / ".clawness" / "absent.md") == ""
 
 
-def test_template_has_the_three_sections():
+def test_template_has_the_four_sections():
     filled = HANDOFF_TEMPLATE.format(date="2026-07-26")
-    for heading in ("Where we left off", "State", "Next steps"):
+    for heading in ("Where we left off", "State", "Next steps", "Open questions"):
         assert heading in filled
 
 

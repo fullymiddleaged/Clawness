@@ -10,7 +10,10 @@ rule: >
   and read operations (UserCreate, UserUpdate, UserRead). Set
   model_config with from_attributes=True for ORM integration. Use
   Field() for validation constraints (min_length, ge, le, regex).
-  Pydantic v2 is current — do not use v1 patterns like .dict() or
-  class Config.
+  Check the pinned Pydantic major first: v2 is current, and its
+  model_config / from_attributes / model_dump have no equivalent in v1,
+  so writing v2 code against a v1 pin fails at import. On v2, drop the v1
+  patterns (.dict(), class Config, @validator); on a project still pinned
+  to v1, write v1 and say that upgrading is the real fix.
 violation: "@app.post('/users') async def create(data: dict)"
 correct: "@app.post('/users', response_model=UserRead) async def create(data: UserCreate)"

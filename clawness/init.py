@@ -63,8 +63,27 @@ DETECTORS: list[tuple[str, list[str], str]] = [
     # language domains — a numpy+LaTeX repo detects {science, python, general}.
     ("*.tex",                  ["science"],                         "LaTeX manuscript"),
     ("*.ipynb",                ["science", "python"],               "Jupyter notebook"),
-    ("Project.toml",           ["science"],                         "Julia project"),
-    ("DESCRIPTION",            ["science"],                         "R package"),
+    ("Project.toml",           ["julia", "science"],                "Julia project"),
+    ("*.jl",                   ["julia", "science"],                "Julia source"),
+    ("DESCRIPTION",            ["r", "science"],                    "R package"),
+    ("*.R",                    ["r", "science"],                    "R scripts"),
+    ("*.Rproj",                ["r", "science"],                    "RStudio project"),
+    ("*.f90",                  ["fortran", "science"],              "Fortran source"),
+    ("*.F90",                  ["fortran", "science"],              "Fortran source"),
+    ("*.f",                    ["fortran", "science"],              "Fortran (fixed form)"),
+    # MATLAB detects on its UNAMBIGUOUS extensions only. `*.m` is deliberately
+    # absent: it is also Objective-C, and mislabelling an iOS project as MATLAB
+    # would suppress its real rules via the off-stack floor. Missing a plain-.m
+    # MATLAB project costs a note; a wrong detection costs correct advice.
+    ("*.mlx",                  ["matlab", "science"],               "MATLAB live script"),
+    ("*.slx",                  ["matlab", "science"],               "Simulink model"),
+    # CFD cases. OpenFOAM's layout is the reliable tell (a case directory holds
+    # system/controlDict); the mesh/case extensions cover the commercial codes.
+    ("system/controlDict",     ["cfd", "science"],                  "OpenFOAM case"),
+    ("*.foam",                 ["cfd", "science"],                  "OpenFOAM case"),
+    ("Allrun",                 ["cfd", "science"],                  "OpenFOAM run script"),
+    ("*.msh",                  ["cfd", "science"],                  "Mesh file"),
+    ("*.cas",                  ["cfd", "science"],                  "Fluent case"),
 ]
 
 # Deep scan: look inside package.json for specific dependencies
@@ -117,10 +136,69 @@ PYTHON_DEPS: list[tuple[str, list[str], str]] = [
 ]
 
 
+# Frameworks whose major version changes the code you should write. Deliberately
+# short: the point is not an inventory (the manifest is right there) but the handful
+# where writing for the wrong major produces confidently wrong code — App Router vs
+# Pages, Pydantic v1 vs v2, SQLAlchemy 1.4 vs 2.0, Tailwind 3 vs 4. Adding a package
+# here costs a line in the SessionStart note, so add one only when the majors differ
+# enough to matter. Display label first, so the note reads in the ecosystem's own
+# spelling rather than the package name.
+VERSION_WATCH_JS: list[tuple[str, str]] = [
+    ("next", "Next.js"),
+    ("react", "React"),
+    ("vue", "Vue"),
+    ("svelte", "Svelte"),
+    ("typescript", "TypeScript"),
+    ("tailwindcss", "Tailwind"),
+    ("express", "Express"),
+    ("@capacitor/core", "Capacitor"),
+]
+
+VERSION_WATCH_PY: list[tuple[str, str]] = [
+    ("django", "Django"),
+    ("fastapi", "FastAPI"),
+    ("pydantic", "Pydantic"),
+    ("sqlalchemy", "SQLAlchemy"),
+    ("numpy", "NumPy"),
+    ("pandas", "pandas"),
+]
+
+# "^14.2.0" / ">=2.0,<3" / "~1.4.52" -> "14" / "2" / "1.4". Two components at most:
+# a major alone is what matters for most, but SQLAlchemy 1.4-vs-2.0 and Tailwind
+# 3.4-vs-4 are minor-sensitive, and a bare major would erase that.
+_VERSION_LEAD = re.compile(r"(\d+(?:\.\d+)?)")
+
+
+def _clean_version(spec: str) -> str:
+    """Leading numeric version out of a range spec, or "" if there isn't one.
+
+    Best-effort by design: a git URL, a workspace protocol, `*` or `latest` yields
+    "" and the package is simply omitted from the note. A wrong version is worse
+    than no version — it would have Claude writing for an API that isn't there.
+    """
+    m = _VERSION_LEAD.search(spec or "")
+    return m.group(1) if m else ""
+
+
+def _python_version(content: str, dep: str) -> str:
+    """Pinned version of `dep` from requirements/pyproject text, or ""."""
+    # Anchored on the dependency name at a word boundary so "openai" doesn't match
+    # inside "langchain-openai". Accepts ==, >=, ~=, and PEP 621 quoted specs.
+    m = re.search(
+        r"(?<![\w.-])" + re.escape(dep) + r"\s*(?:\[[^\]]*\])?\s*[<>=~!^]{1,2}\s*v?(\d+(?:\.\d+)?)",
+        content,
+    )
+    return m.group(1) if m else ""
+
+
 def scan_project(project_dir: Path) -> dict:
     """Scan a project directory and return detection results."""
     detected: list[tuple[str, list[str]]] = []
     domains: set[str] = set()
+    # Label -> version major, for the frameworks in VERSION_WATCH_*. Only ever
+    # populated from what the project actually declares; an unreadable or absent
+    # manifest leaves it empty and every consumer treats that as "say nothing".
+    versions: dict[str, str] = {}
 
     # Always include mandatory and general
     domains.add("general")
@@ -144,7 +222,11 @@ def scan_project(project_dir: Path) -> dict:
                 if dep_name in all_deps:
                     detected.append((f"{desc} (package.json)", rule_domains))
                     domains.update(rule_domains)
-        except (json.JSONDecodeError, IOError):
+            for dep_name, label in VERSION_WATCH_JS:
+                v = _clean_version(str(all_deps.get(dep_name, "")))
+                if v:
+                    versions[label] = v
+        except (json.JSONDecodeError, IOError, AttributeError):
             pass
 
     # Deep scan Python deps
@@ -157,7 +239,15 @@ def scan_project(project_dir: Path) -> dict:
                     if dep_name in content:
                         detected.append((f"{desc} ({req_file})", rule_domains))
                         domains.update(rule_domains)
-            except IOError:
+                for dep_name, label in VERSION_WATCH_PY:
+                    # First file that pins it wins — requirements.txt is scanned
+                    # before pyproject.toml, which is the right precedence when a
+                    # project has both (the lockfile-ish one is the truth).
+                    if label not in versions:
+                        v = _python_version(content, dep_name)
+                        if v:
+                            versions[label] = v
+            except (IOError, UnicodeError):
                 pass
 
     # Always include workflows if agents exist
@@ -166,6 +256,7 @@ def scan_project(project_dir: Path) -> dict:
     return {
         "detected": detected,
         "domains": sorted(domains),
+        "versions": versions,
         "project_dir": str(project_dir),
     }
 
@@ -241,6 +332,14 @@ def main() -> None:
     else:
         print("  No known frameworks detected.")
         print("  (Run this from your project root, not the clawness directory)")
+
+    # Same versions the SessionStart stack note reports — shown here so `init` is a
+    # way to check what Clawness thinks you're on without starting a session.
+    if results.get("versions"):
+        print()
+        print("Declared versions:")
+        for label, version in sorted(results["versions"].items()):
+            print(f"  {label} {version}")
 
     print()
     print(f"Recommended rule domains: {', '.join(results['domains'])}")

@@ -5,6 +5,66 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-08-02
+
+Quieter output, version-aware coding, handoffs that resume in one move, changelog
+upkeep, and a scientific/engineering corpus. 193 rules / 28 domains, 373 tests.
+
+### Added
+
+- **`ENF-VOICE-001` (mandatory)** — stops Claude narrating the rules system
+  ("I'm doing this because Clawness told me") and re-stating the request back.
+  Mandatory rather than ranked because it has to bind on turns whose prompt
+  carries no signal, which is exactly when a retrieval-gated rule would be silent.
+- **Framework-version awareness.** `scan_project` now extracts declared majors for
+  high-churn frameworks (Next.js, React, TypeScript, Tailwind, Vue, Svelte,
+  Express, Capacitor, Django, FastAPI, Pydantic, SQLAlchemy, NumPy, pandas) and the
+  SessionStart stack note reports them: *"Detected project stack: Next.js 14.2,
+  React 18.3, TypeScript 5.4"*. Versions that can't be parsed (`*`, a git URL) are
+  omitted rather than guessed. Parsing runs only at SessionStart, so the per-prompt
+  hot path is unchanged. Paired with the new `GEN-INSTALLED-VER-001`: read the
+  version this project installs before writing against a library's API.
+- **`GEN-CHANGELOG-001` + `hooks/changelog_check.py` (SessionStart).** A project
+  with a changelog gets a per-session reminder to write the entry with the change;
+  a project without one is asked **once, ever** (ledger in
+  `.clawness/changelog.json`) whether it wants one, and the file is only created on
+  the user's agreement. `CLAW_NO_CHANGELOG_CHECK=1`, or a
+  `.clawness/changelog-check-off` marker.
+- **28 new rules.** `science/` +4 (notebook hygiene, numpy/pandas correctness,
+  HPC/parallel determinism, scientific data formats); a new stack-gated **`cfd/`**
+  domain (mesh quality and y+, residual vs grid convergence with GCI, Courant and
+  steady-vs-transient, turbulence model choice, boundary conditions and domain
+  extent); and new **`julia/`**, **`fortran/`**, **`matlab/`** and **`r/`** domains,
+  4 rules each. `Project.toml` and `DESCRIPTION` were already detected but mapped
+  to generic `science` — they now have real homes.
+- **A fourth relevance tier, `_NARROW_STACK_DOMAINS`** (`CLAW_NARROW_MIN_RELEVANCE`,
+  default 0.22). The new language/CFD domains use ordinary dev vocabulary: measured
+  against the real hook, *"the solver is not converging, fix the residual bug"* in a
+  Python repo scored `CFD-CONVERGE-001` at 0.190 and *"vectorize this dataframe
+  loop"* pulled in MATLAB and R — all clearing the 0.15 off-stack floor. Routine
+  prompts top out at 0.193 while an explicit ask starts at 0.264, so 0.22 sits in
+  the gap. It costs these domains nothing in their own projects, where they are
+  on-stack and use the base floor.
+
+### Changed
+
+- **A handoff now resumes on "carry on" instead of triggering an interview.** The
+  SessionStart note used to say *"then wait for them. Don't start the work unless
+  they ask"*, which discarded the reason the handoff was written. It is now
+  conditional: if the user's first message asks to continue, go straight to Next
+  steps and start, asking only what the handoff lists under **`## Open questions`** —
+  a new template section for genuinely blocked decisions, which is what makes
+  "don't ask" safe. `WF-HANDOFF-001` updated to match: the next step must be written
+  as an executable instruction, not a topic.
+- **`NX-PARAMS-001` and `FA-PYDANTIC-001` no longer assert an era without checking.**
+  Both now say to read the pinned major first — `params` is a Promise in Next 15+
+  but a plain object in 14, and Pydantic v2's `model_config`/`from_attributes` fail
+  at import on a v1 pin.
+- **Extracted `hooks/_hookutil.py`.** Four SessionStart hooks each carried their own
+  copy of the UTF-8 stdio preamble, the payload read, and the git-root/home-dir
+  guard; the changelog hook would have been a fifth. `git_check` keeps its own
+  downward tree scan, which answers a different question than `git_root`.
+
 ## [1.5.1] - 2026-07-28
 
 Marketplace-listing polish ahead of submitting to the community marketplace.

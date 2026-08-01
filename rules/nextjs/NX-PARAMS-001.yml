@@ -5,8 +5,11 @@ tags: [params, searchParams, dynamic-routes, async, promise, slug]
 triggers: [params, searchParams, slug, id, "[", dynamic, route, page, await]
 when: Accessing route params or search params in page or layout components.
 rule: >
-  In Next.js 15+, params and searchParams are Promises — you must
-  await them. This change enables better streaming and parallel data
-  fetching. Update all dynamic route pages when migrating.
+  Read the Next.js major from package.json before writing the signature — this
+  one changed shape. In Next.js 15+, params and searchParams are Promises and
+  must be awaited, which is what enables streaming and parallel data fetching;
+  in 14 and earlier they are plain objects, and typing them as Promise<...>
+  there is a type error. Match the version installed, and when migrating,
+  update every dynamic route page in the same pass.
 violation: "function Page({ params }: { params: { slug: string } }) { return params.slug }"
 correct: "async function Page({ params }: { params: Promise<{ slug: string }> }) { const { slug } = await params }"

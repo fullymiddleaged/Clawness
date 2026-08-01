@@ -1,0 +1,20 @@
+id: CFD-MESH-001
+domain: cfd
+severity: error
+tags: [mesh, grid, skewness, yplus, boundary-layer, prism, refinement, quality]
+triggers: [mesh, meshing, grid quality, skewness, aspect ratio, y plus, yplus, boundary layer mesh, inflation layer, checkmesh, snappyhexmesh, refine the mesh]
+when: Generating or accepting a mesh for a CFD case.
+rule: >
+  Check mesh quality before the first run, not after the solution looks wrong -
+  maximum non-orthogonality, skewness and aspect ratio, and that no cells are
+  negative-volume (checkMesh or the solver's equivalent). Resolve the near-wall
+  region to match the wall treatment you chose, not the other way round: a
+  low-Reynolds model needs y+ of order 1 with enough layers to capture the
+  gradient, while a wall function needs y+ in its valid range and is simply invalid
+  below it. Confirm the achieved y+ from the converged solution rather than
+  trusting the pre-run estimate, which depends on the velocity field you did not
+  have yet. Refine where the gradients are - walls, shear layers, wakes,
+  shocks - not uniformly, and grade smoothly: an abrupt cell-size jump generates
+  numerical error exactly where the refinement was meant to reduce it.
+violation: "Running with a first-cell y+ of 30 against a low-Re k-omega SST setup and reporting the drag"
+correct: "checkMesh clean, y+ verified from the solution against the wall treatment, refinement graded into the wake"

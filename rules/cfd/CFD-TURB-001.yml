@@ -1,0 +1,22 @@
+id: CFD-TURB-001
+domain: cfd
+severity: warning
+tags: [turbulence, rans, les, k-epsilon, k-omega, sst, wall-function, model, des]
+triggers: [turbulence model, rans, les, des, k-epsilon, k epsilon, k-omega, sst, spalart, wall function, laminar or turbulent, reynolds number]
+when: Choosing or defending a turbulence model for a simulation.
+rule: >
+  Choose the turbulence model from the flow physics and from what the result must
+  answer, then state the choice and its known limits alongside the result. Check
+  the Reynolds number first - a laminar or transitional flow modelled as fully
+  turbulent is wrong before the model choice matters. RANS gives time-averaged
+  quantities and is the right tool for attached flows and design sweeps; it is
+  known to predict separation onset and reattachment poorly, and standard
+  k-epsilon in particular handles adverse pressure gradients and near-wall regions
+  badly, which is why k-omega SST is the usual default for wall-bounded external
+  aerodynamics. Anything needing the unsteady spectrum - noise, mixing, combustion
+  instability - needs a scale-resolving method (LES/DES) with the mesh and timestep
+  that implies, not a RANS run reported as if it resolved eddies. The model, the
+  wall treatment and the mesh are one decision: changing any one invalidates the
+  other two.
+violation: "Standard k-epsilon with wall functions on a separating diffuser, reporting the separation point"
+correct: "k-omega SST with a resolved boundary layer, and the note that RANS under-predicts reattachment length"

@@ -1,0 +1,19 @@
+id: SCI-NOTEBOOK-001
+domain: science
+severity: warning
+tags: [notebook, jupyter, ipynb, cells, kernel, exploration, review, outputs]
+triggers: [notebook, jupyter, ipynb, cell, kernel, run all cells, colab, out of order]
+when: Working in or committing a Jupyter/Colab notebook.
+rule: >
+  A notebook's output proves nothing until it survives Restart & Run All — the
+  visible numbers come from whatever order the cells happened to be executed in,
+  including cells since edited or deleted. Re-run top to bottom before trusting or
+  sharing a result. Move any code that has stabilised into an imported module and
+  call it from the notebook: functions there get tested, diffed and reused, while
+  the same code in a cell gets copy-pasted between notebooks and drifts. Strip
+  outputs before committing (nbstripout or a clean-cell hook) so review sees the
+  code change rather than a re-rendered figure, and so a data-bearing plot doesn't
+  enter git history. Keep the notebook for exploration and narrative; keep the
+  pipeline in files.
+violation: "Reporting a number from cell 12 after editing cell 4, without re-running"
+correct: "Restart & Run All, the shared logic imported from analysis/fit.py, outputs stripped on commit"

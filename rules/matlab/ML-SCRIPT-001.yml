@@ -1,0 +1,18 @@
+id: ML-SCRIPT-001
+domain: matlab
+severity: error
+tags: [matlab, functions, scripts, workspace, global, path, clear-all, state]
+triggers: [clear all, matlab script, base workspace, global variable matlab, addpath, matlab function, close all, startup.m]
+when: Structuring MATLAB code, or code that depends on the workspace or path.
+rule: >
+  Put logic in functions with explicit inputs and outputs, not in scripts that read
+  and write the base workspace. A script depends on invisible state, so it works
+  for the author and fails for everyone else, and nothing about it can be unit
+  tested. Do not use global variables to pass data - thread it through arguments,
+  or hold it in a struct or class. Avoid clear all at the top of a file: it clears
+  the caller's workspace and the compiled function cache, which is slow and hides
+  the stale-state bug rather than fixing it. Do not scatter addpath or cd calls
+  through code either; declare the path once in a project setup or startup file, so
+  the same code runs from any working directory.
+violation: "clear all; close all; addpath('../utils'); run_analysis   — as the entry point of a study"
+correct: "results = run_analysis(config)  in a function file, with the path set once by the project's startup"

@@ -392,6 +392,28 @@ _CONCEPT_GROUPS: dict[str, tuple[str, ...]] = {
         "numerics", "simulation", "solver", "uncertainty", "sigma", "significance",
         "statistical", "arxiv", "paper", "papers", "manuscript", "preprint",
         "reproducible", "reproducibility", "benchmark", "calibration",
+        # Numerics and scientific data vocabulary. Retrieval is lexical, so a rule
+        # about array dtypes is unreachable from "dataframe" without this bridge.
+        # Deliberately EXCLUDES "convergence", "residual", "boundary" and "grid":
+        # those read as ordinary dev words (a converging estimate, a residual bug,
+        # a boundary case, a CSS grid) and would drag science/cfd rules onto
+        # routine prompts — exactly the 1.3.0 noise the topical floor exists for.
+        "quadrature", "interpolation", "ode", "pde", "tensor", "vectorize",
+        "vectorise", "vectorized", "vectorised", "dataframe", "notebook",
+        "notebooks", "jupyter", "ipynb", "numpy", "scipy", "pandas", "matlab",
+        "julia", "fortran", "hdf5", "netcdf", "parquet", "dtype", "nan",
+        "mpi", "openmp", "hpc", "cluster", "parallelize", "parallelise",
+    ),
+    # CFD/engineering simulation. Its own marker rather than more __science__
+    # terms: these words are worthless outside a CFD case and the domain is
+    # stack-gated, so widening __science__ with them would raise noise on every
+    # science prompt for no gain. "mesh" is the anchor term users actually type.
+    "__cfd__": (
+        "cfd", "mesh", "meshing", "openfoam", "fluent", "ansys", "starccm",
+        "turbulence", "turbulent", "laminar", "courant", "cfl", "yplus",
+        "rans", "les", "des", "reynolds", "navier", "stokes", "aerodynamics",
+        "aerodynamic", "drag", "lift", "wake", "vortex", "shedding", "inlet",
+        "outlet", "skewness", "snappyhexmesh", "checkmesh", "gci",
     ),
     "__resilience__": (
         "timeout", "timeouts", "retry", "retries", "backoff", "jitter",
@@ -650,6 +672,16 @@ _STACK_DOMAINS = frozenset({
     # eval-set rules are noise in a repo that calls no model. Detected from
     # anthropic/openai/langchain deps (see init.py).
     "llm",
+    # Scientific-computing languages. Stack-gated for the same reason as the web
+    # ones — Fortran column-major advice on a TypeScript prompt is pure noise —
+    # and NOT topical like science/, because these have unambiguous detectors
+    # (Project.toml, *.f90, *.mlx, DESCRIPTION) so a real user of them is never
+    # in the "bare directory" case that made science/ un-gateable.
+    "julia", "fortran", "matlab", "r",
+    # cfd/ is gated hardest of all: mesh, turbulence and Courant-number advice is
+    # actively misleading anywhere else, and the vocabulary ("solver",
+    # "convergence", "residual", "boundary") collides with ordinary dev language.
+    "cfd",
 })
 
 # Cross-cutting but topically NARROW. These are never stack-gated — a researcher
@@ -662,6 +694,24 @@ _STACK_DOMAINS = frozenset({
 # match. Genuine science/research questions score 0.20-0.45, far above it, so the
 # bare-directory case is unaffected; the noise band is 0.06-0.12.
 _TOPICAL_DOMAINS = frozenset({"science", "research"})
+
+# The mirror of _TOPICAL_DOMAINS: stack-gated AND vocabulary-colliding, so they take
+# a floor ABOVE the ordinary off-stack one when the project isn't theirs.
+#
+# Their core words are ordinary dev words. "the solver is not converging, fix the
+# residual bug" in a Python repo scored CFD-CONVERGE-001 at 0.190 — clearing the 0.15
+# off-stack floor — and "vectorize this dataframe loop" pulled in MATLAB and R at
+# 0.193/0.163. Measured over routine dev prompts the collision band tops out at 0.193,
+# while an explicit ask ("which turbulence model for this openfoam case", "fix the
+# type instability in my julia function") starts at 0.264; 0.22 sits in that gap.
+#
+# The higher bar costs these domains nothing where they matter: in their OWN project
+# they're on-stack, so this floor never applies and they rank at the base 0.06. It only
+# governs the case where someone in a Node or Python repo says "solver" — and there,
+# Fortran array-ordering advice was never the answer. Unlike sql/docker (legitimately
+# cross-stack — a Python service does talk to Postgres), there is no such thing as
+# needing Fortran conventions while writing TypeScript.
+_NARROW_STACK_DOMAINS = frozenset({"cfd", "julia", "fortran", "matlab", "r"})
 
 
 class Clawness:
@@ -683,6 +733,7 @@ class Clawness:
         stack_domains: Optional[Iterable[str]] = None,  # project's detected stack
         off_stack_min_relevance: Optional[float] = None,  # higher floor for off-stack
         topical_min_relevance: Optional[float] = None,  # middle floor for science/research
+        narrow_min_relevance: Optional[float] = None,  # top floor for off-stack cfd/julia/...
         build_index: bool = True,       # False: caller will add_rules() then build_index()
     ) -> None:
         self.rules_dir = Path(rules_dir)
@@ -739,6 +790,20 @@ class Clawness:
             except ValueError:
                 topical_min_relevance = 0.12
         self.topical_min_relevance = max(self.min_relevance, topical_min_relevance)
+
+        # Top floor, for off-stack rules from the vocabulary-colliding domains (see
+        # _NARROW_STACK_DOMAINS). Applies only when the project's stack is known and
+        # isn't theirs; in their own project they fall through to the base floor.
+        # Never below the off-stack floor. Tunable via CLAW_NARROW_MIN_RELEVANCE.
+        if narrow_min_relevance is None:
+            try:
+                narrow_min_relevance = float(
+                    os.environ.get("CLAW_NARROW_MIN_RELEVANCE", "0.22")
+                )
+            except ValueError:
+                narrow_min_relevance = 0.22
+        self.narrow_min_relevance = max(self.off_stack_min_relevance,
+                                        narrow_min_relevance)
 
         # Rendering verbosity (token efficiency). Mandatory rules repeat on
         # every turn, so they render compact (id + RULE only) unless
@@ -906,10 +971,16 @@ class Clawness:
         """Relevance floor for a rule's domain. Language/framework rules from a
         stack the project doesn't use must clear the higher off-stack floor;
         topically-narrow cross-cutting rules must clear the topical floor;
-        everything else uses the base floor."""
+        everything else uses the base floor.
+
+        The narrow tier is checked FIRST inside the off-stack branch: cfd/julia/
+        fortran/matlab/r are also in _STACK_DOMAINS, so returning the ordinary
+        off-stack floor before testing them would make the tier dead code."""
         if (self.stack_domains is not None
                 and domain in _STACK_DOMAINS
                 and domain not in self.stack_domains):
+            if domain in _NARROW_STACK_DOMAINS:
+                return self.narrow_min_relevance
             return self.off_stack_min_relevance
         if domain in _TOPICAL_DOMAINS:
             return self.topical_min_relevance

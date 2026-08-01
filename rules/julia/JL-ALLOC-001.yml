@@ -1,0 +1,19 @@
+id: JL-ALLOC-001
+domain: julia
+severity: warning
+tags: [julia, allocation, broadcasting, views, gc, in-place, memory, fusion]
+triggers: [julia allocations, broadcast, dot syntax, views, slice copies, in-place, bang function, garbage collection julia, benchmarktools]
+when: Julia numerical code allocates more than expected, or runs inside a loop.
+rule: >
+  In Julia, array slices COPY by default and every un-fused temporary is a heap
+  allocation, so a loop that looks like plain maths can spend its time in the
+  garbage collector. Use @views (or view) when you only need to read or write a
+  slice, and fuse elementwise work with dot syntax - y .= f.(x) .+ z allocates
+  nothing where y = f(x) + z allocates twice. Prefer the in-place form (the
+  bang-suffixed function, mul! over *) inside loops, and pre-allocate buffers
+  outside them. Measure with @btime from BenchmarkTools rather than @time, which
+  includes compilation on the first call, and read the reported allocation count as
+  the number to drive down - it is a better optimisation target than the wall
+  clock, because it is stable across machines.
+violation: "for i in 1:n; total += sum(A[i, :] .* w); end   — a fresh copy and two temporaries per iteration"
+correct: "@views for i in 1:n; total += dot(A[i, :], w); end   with @btime confirming zero allocations"

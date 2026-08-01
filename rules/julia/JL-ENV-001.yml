@@ -1,0 +1,18 @@
+id: JL-ENV-001
+domain: julia
+severity: error
+tags: [julia, project, manifest, environment, pkg, reproducibility, dependencies]
+triggers: [project toml, manifest toml, julia environment, pkg activate, julia dependencies, instantiate, julia version]
+when: Setting up, sharing, or reproducing a Julia project.
+rule: >
+  Give every project its own environment - Pkg.activate the project directory
+  rather than installing into the default shared one, where packages from unrelated
+  work co-resolve and break each other. Commit BOTH Project.toml (the direct
+  dependencies and compat bounds) and Manifest.toml (the exact resolved versions):
+  the Project alone reproduces a compatible environment, the Manifest reproduces
+  THE environment, which is what a numerical result needs. Set [compat] bounds
+  including one for julia itself, so a future resolve cannot silently pull a
+  breaking major. A collaborator should get a working setup from clone plus
+  instantiate, with no instructions.
+violation: "Pkg.add-ing into the default v1.x environment and telling collaborators which packages to install"
+correct: "] activate . ; instantiate — Project.toml and Manifest.toml both committed, compat bounds set"

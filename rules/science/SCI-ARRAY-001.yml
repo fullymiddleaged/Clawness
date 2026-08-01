@@ -1,0 +1,19 @@
+id: SCI-ARRAY-001
+domain: science
+severity: error
+tags: [numpy, pandas, array, dataframe, vectorize, dtype, nan, broadcasting, view]
+triggers: [numpy, pandas, dataframe, array, vectorize, broadcast, dtype, iterrows, nan values, slice the array, copy or view]
+when: Manipulating numerical arrays or dataframes.
+rule: >
+  Three failure modes cost more time than everything else in array code. First,
+  aliasing - a basic NumPy slice and many pandas selections are VIEWS, so writing
+  through one mutates the original; call .copy() when you mean a copy, and check
+  before assuming an operation returned fresh memory. Second, dtype - integer
+  arrays silently truncate assigned floats, int64 overflows without warning, and an
+  object-dtype column means something upstream failed to parse. Third, missing data
+  - NaN is not equal to itself, propagates through arithmetic, and is dropped or
+  kept differently by mean, groupby and merge; decide explicitly per operation.
+  Vectorise rather than looping row by row: iterrows over a large frame is both
+  slower and harder to read than the array expression it replaces.
+violation: "for i, row in df.iterrows(): df.loc[i,'z'] = row.x / row.y   — then wondering where NaN came from"
+correct: "df['z'] = df.x.div(df.y).replace([np.inf,-np.inf], np.nan)   with the dtype asserted after load"

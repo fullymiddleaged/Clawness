@@ -39,6 +39,11 @@ DEFAULT_BUDGET = 2000
 
 # Skeleton for whoever writes one (WF-HANDOFF-001 points here). Deliberately short:
 # a handoff is a running start, not a status report, and a long one won't be read.
+#
+# `## Open questions` is what makes "carry on" safe to obey. The pickup instruction
+# tells the next session to start work rather than interview the user, and that is
+# only correct if genuine blocking decisions have somewhere to be written down.
+# Expect it to say "none" — a handoff full of questions is one that stopped too early.
 HANDOFF_TEMPLATE = """\
 # Handoff — {date}
 
@@ -49,7 +54,10 @@ HANDOFF_TEMPLATE = """\
 <what's done, what's in progress, anything half-finished or uncommitted>
 
 ## Next steps
-<the first thing the next session should do>
+<the first thing the next session should do, phrased as an instruction>
+
+## Open questions
+<none — or the decisions genuinely blocked on the user, one line each>
 """
 
 
@@ -152,12 +160,19 @@ def render_handoff_note(
     # resuming this morning's work or something from months back.
     age = describe_age(max(0.0, (now if now is not None else time.time()) - mtime))
 
+    # The instruction has to be conditional, not unconditional either way: SessionStart
+    # fires BEFORE the user's first message, so this note cannot know whether they are
+    # about to say "carry on" or "what's this?". Asking always was the old behaviour and
+    # it wasted the handoff — the user writes one precisely so the next session doesn't
+    # need an interview. Asking never would ambush someone who opened with a fresh task.
     instruction = (
-        "It hasn't been picked up yet. Open this session by telling the user, in two "
-        "or three lines, where the last one left off and what comes next — then wait "
-        "for them. Don't start the work unless they ask. When they say it's done (or "
-        "you write a new handoff), move this file to .clawness/handoffs/done/ with a "
-        "timestamped name instead of deleting it."
+        "It hasn't been picked up yet. If the user's first message asks to continue, "
+        "carry on, resume or pick this up, then just do it: go straight to Next steps "
+        "and start work, without an interview or a re-plan, asking only what the "
+        "handoff lists under Open questions. Otherwise open the session by telling "
+        "them, in two or three lines, where the last one left off and what comes next, "
+        "then wait. When they say it's done (or you write a new handoff), move this "
+        "file to .clawness/handoffs/done/ with a timestamped name instead of deleting it."
     )
 
     parts = [

@@ -1,0 +1,14 @@
+id: ENF-VOICE-001
+domain: general
+severity: error
+tags: [voice, brevity, narration, output, tokens, meta, response]
+triggers: [be brief, too verbose, shorter, stop explaining, why did you, what rule]
+when: Every response to the user.
+rule: >
+  Apply these rules silently. Never tell the user that a rule, hook, memory file or
+  handoff prompted an action, and never announce which rules matched. Name a rule
+  only when the user asks what governed a decision. Answer in the fewest words that
+  fully do the job: no preamble, no restating the request, no summary of work the
+  user just watched. Length tracks the question.
+violation: "Per the Clawness rules I should add a test first, so I'm now going to write one..."
+correct: "Writes the test and says 'Added a test for the empty-input case.' — cites the rule only if asked why"

@@ -1,0 +1,19 @@
+id: SCI-DATA-001
+domain: science
+severity: warning
+tags: [data, hdf5, netcdf, parquet, chunking, provenance, dataset, metadata, storage]
+triggers: [hdf5, netcdf, parquet, zarr, large dataset, out of memory, chunk the data, data format, raw data, load the dataset]
+when: Storing, loading, or deriving from a scientific dataset too large to eyeball.
+rule: >
+  Keep raw data read-only and immutable, and write every derived product to a new
+  file; an in-place fix to raw data destroys the only thing you cannot regenerate.
+  Use a self-describing binary format (HDF5, netCDF, Parquet, Zarr) rather than CSV
+  once size or dimensionality is real: it carries dtype, units and metadata with the
+  values instead of leaving them in a filename, and it reads a slice without parsing
+  the whole file. Chunk along the axis you actually query, since a chunking chosen
+  for the write path can make the read path orders of magnitude slower. Store the
+  provenance next to the data — source, retrieval date, version or DOI, and the
+  script that produced it — because six months on, an unlabelled array of numbers is
+  not a dataset.
+violation: "Overwriting raw.csv with the cleaned version, and recording the source URL nowhere"
+correct: "raw/ read-only, derived/clean.parquet written fresh, provenance in the file's metadata and a README"
