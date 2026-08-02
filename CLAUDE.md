@@ -277,7 +277,7 @@ dependency**. No ML models, no services, no Docker.
   registered. Every SessionStart note hook uses it; `git_check` keeps its own *downward*
   tree scan because "is git used anywhere relevant?" is a different question from
   `git_root`'s upward walk.
-- `rules/<domain>/*.yml` — the corpus (193 rules / 28 domains; `_mandatory/` = always-on).
+- `rules/<domain>/*.yml` — the corpus (195 rules / 28 domains; `_mandatory/` = always-on).
   Beyond the language domains: `llm/` (building with models — stack-gated, detected from
   anthropic/openai/langchain deps), `science/` and `research/` (physics/maths/engineering
   practice and research method — **cross-cutting on purpose**, since a researcher often
@@ -406,7 +406,7 @@ dependency**. No ML models, no services, no Docker.
   on Windows and mangle them into mojibake (`—` → `â€"`) *at load time*. `clawness
   lint` now flags non-UTF-8 / U+FFFD rule files; keep new reads/writes UTF-8.
 - **Keep retrieval a couple of ms** — no heavy imports or model loads in
-  `claude_hook.py`/`core.py`. It was ~0.8ms at 121 rules and is ~1.3ms at 193; the
+  `claude_hook.py`/`core.py`. It was ~0.8ms at 121 rules and is ~1.6ms at 195; the
   concept-expansion pass scales with both corpus size and `_CONCEPT_GROUPS`, so measure
   with `clawness bench` when adding either.
 - **Version lives in 4 places** — bump `pyproject.toml`, `.claude-plugin/plugin.json`,
@@ -428,3 +428,11 @@ dependency**. No ML models, no services, no Docker.
   even if a build ever fired PostToolUse for a declined call, it wouldn't settle. A
   real-session decline click-test (ask → "no" → retry → must ask again) is still a nice
   final sanity check, but defense-in-depth no longer rests on it.
+- **A guard write-test whose project root is a `mkdtemp()` dir proves nothing about the
+  root check.** `_classify_write` exempts anything under `tempfile.gettempdir()`
+  unconditionally, and `tests/test_guard.py::_project` builds its roots there — so the
+  temp clause, not `_within(p, root)`, is what allows those writes. Measured: deleting
+  `_within(p, root)` outright left all 88 guard tests green. Any test that means to
+  exercise the project-root boundary (or the plan-file exemption, same `or` chain) must
+  first point the temp exemption elsewhere — see
+  `test_in_project_write_is_allowed_by_the_root_check_not_the_temp_exemption`.

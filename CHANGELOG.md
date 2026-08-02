@@ -8,7 +8,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.6.0] - 2026-08-02
 
 Quieter output, version-aware coding, handoffs that resume in one move, changelog
-upkeep, and a scientific/engineering corpus. 193 rules / 28 domains, 373 tests.
+upkeep, and a scientific/engineering corpus. 195 rules / 28 domains, 379 tests.
 
 ### Added
 
@@ -37,6 +37,12 @@ upkeep, and a scientific/engineering corpus. 193 rules / 28 domains, 373 tests.
   extent); and new **`julia/`**, **`fortran/`**, **`matlab/`** and **`r/`** domains,
   4 rules each. `Project.toml` and `DESCRIPTION` were already detected but mapped
   to generic `science` — they now have real homes.
+- **`TST-FAILFIRST-001` and `TST-BOUNDARY-001`**, from a mutation-testing audit of
+  this repo's own suite. Fail-first: a test that has never failed has not been shown
+  to test anything — and if the path under test can be satisfied by more than one
+  condition, neutralise the others or it passes by a route it never names. Boundary:
+  test exactly *on* a threshold, since a case at 87.5% passes identically whether the
+  comparison is `>=` or `>`. Both were written against defects the audit found here.
 - **A fourth relevance tier, `_NARROW_STACK_DOMAINS`** (`CLAW_NARROW_MIN_RELEVANCE`,
   default 0.22). The new language/CFD domains use ordinary dev vocabulary: measured
   against the real hook, *"the solver is not converging, fix the residual bug"* in a
@@ -64,6 +70,16 @@ upkeep, and a scientific/engineering corpus. 193 rules / 28 domains, 373 tests.
   copy of the UTF-8 stdio preamble, the payload read, and the git-root/home-dir
   guard; the changelog hook would have been a fifth. `git_check` keeps its own
   downward tree scan, which answers a different question than `git_root`.
+- **Test-suite audit before release; four tests that could not fail were fixed.**
+  Sabotage plus a 4,056-mutant run found: `test_gate_fails_open_on_bad_state`
+  asserted only `isinstance(block, bool)` (true either way) and never reached the
+  `except` branch it named; the access guard's project-root check could be **deleted
+  outright with all 88 guard tests still green**, because the fixture roots live
+  under the OS temp dir that `_classify_write` exempts unconditionally; and the
+  context thresholds were tested near their boundaries rather than on them. Each
+  replacement was verified to fail against the mutation it targets before being
+  kept. Note for anyone extending `tests/test_guard.py`: point the temp exemption
+  elsewhere before testing the root boundary.
 
 ## [1.5.1] - 2026-07-28
 

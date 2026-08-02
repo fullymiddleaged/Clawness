@@ -1263,6 +1263,30 @@
       "expect": [
         "R-ENV-001"
       ]
+    },
+    {
+      "q": "how do i know these tests actually test anything",
+      "expect": [
+        "TST-FAILFIRST-001"
+      ]
+    },
+    {
+      "q": "the suite is all green but i never watched a test fail",
+      "expect": [
+        "TST-FAILFIRST-001"
+      ]
+    },
+    {
+      "q": "what values should i pick to test this threshold",
+      "expect": [
+        "TST-BOUNDARY-001"
+      ]
+    },
+    {
+      "q": "is this comparison off by one, should it be >= or >",
+      "expect": [
+        "TST-BOUNDARY-001"
+      ]
     }
   ]
 }

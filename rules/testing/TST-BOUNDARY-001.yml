@@ -1,0 +1,16 @@
+id: TST-BOUNDARY-001
+domain: testing
+severity: warning
+tags: [boundary-values, off-by-one, thresholds, edge-cases, test-inputs]
+triggers: [what values should i test, threshold test, off by one, edge case values, test a limit, boundary, inclusive or exclusive]
+when: Choosing the input values for a test of a threshold, limit, range, or size.
+rule: >
+  Test exactly ON each boundary, not near it. A threshold documented as "warn at
+  85%" needs a case at exactly 85% — a case at 87.5% passes identically whether the
+  comparison is >= or >, so the boundary the spec actually states goes unverified.
+  For every limit cover the value below it, the value itself, and the value above;
+  for collections cover empty, exactly one, and full. Comparison-operator slips are
+  the defect most likely to survive an otherwise green suite, because they change
+  behaviour only at the boundary and nowhere else.
+violation: "assert assess(175_000, limit=200_000).level == 'urgent'   # 87.5% — passes for >= and for >"
+correct: "assert assess(170_000, limit=200_000).level == 'urgent'   # exactly the documented 85%"

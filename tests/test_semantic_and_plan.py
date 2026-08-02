@@ -192,12 +192,28 @@ def test_global_config_only_explicit_false_disables():
         restore()
 
 
-def test_gate_fails_open_on_bad_state():
+def test_corrupt_session_state_still_gates():
+    # A corrupt sessions.json means "no approval on record", so an unapproved
+    # session must still be PROMPTED — asserting only that a bool came back
+    # would pass just as happily if the gate silently went quiet.
     root = _fresh_project()
     (root / ".clawness").mkdir()
     (root / ".clawness" / "sessions.json").write_text("{ not json")
-    block, _ = P.gate_decision(root, "Write", "x")
-    assert isinstance(block, bool)  # never raises
+    prompt, _ = P.gate_decision(root, "Write", "x")
+    assert prompt is True
+
+
+def test_gate_fails_open_on_unexpected_error(monkeypatch):
+    # The documented contract for the except branch: an unexpected error defers
+    # to the normal permission flow rather than prompting. _load_sessions
+    # swallows bad JSON on its own, so the only way to reach that branch is to
+    # make something under it actually raise.
+    def boom(*a, **kw):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(P, "session_approved", boom)
+    root = _fresh_project()
+    assert P.gate_decision(root, "Write", "x") == (False, "")
 
 
 def test_hook_fails_open_on_malformed_payloads():
