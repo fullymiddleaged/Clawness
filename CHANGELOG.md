@@ -5,6 +5,36 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2026-08-02
+
+Rule wording and README copy — no behaviour change, no new or removed rules.
+195 rules / 28 domains, 443 tests, all unchanged from 1.6.1.
+
+### Changed
+
+- **`TST-FAILFIRST-001` is shorter without losing anything.** Its directive ran to
+  165 words against a corpus median of 54 — the longest testing rule and near the
+  longest rule shipped — so it spent more of the per-turn budget than any single
+  rule should. Now 119 words. What went was restatement, not substance: the
+  consequence clause ("the clause it claims to cover can be deleted with nothing
+  going red") only re-said the sentence before it, and "or before a release"
+  duplicated the WHEN. The or-chain caveat that the rule exists for — neutralise the
+  other satisfying conditions, or the test passes by a route it never names — is
+  intact. Retrieval improved as a side effect, since the shorter text concentrates
+  term weight: *"all tests pass, is this ready to ship"* 0.180 → 0.194, *"is this
+  suite worth trusting"* 0.190 → 0.203, *"wrote some tests"* 0.219 → 0.226.
+- **The README leads with the product instead of a feature list.** *What Problem
+  Does This Solve?* opened with five things at equal weight — standards, the plan
+  gate, the tripwire, cleaner context, review agents — which billed the plan gate as
+  a headline and buried the actual pitch. It now leads with rules in context on every
+  prompt without paying for the ones that don't apply, and the gate, access guard and
+  review agents are named as riding the same per-prompt hook.
+- **Project memory is its own bullet.** It was a half-clause inside *Cleaner
+  context*, so the feature that keeps a lessons log cheap as it grows was the least
+  visible thing on the page. It now gets its own entry explaining that the log is
+  searched rather than dumped, and *Cleaner context* is about output compression.
+  The GitHub repo description was refreshed to match.
+
 ## [1.6.1] - 2026-08-02
 
 Documentation only — no behaviour change, no rule changes. 195 rules / 28 domains,

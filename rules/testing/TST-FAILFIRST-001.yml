@@ -5,16 +5,13 @@ tags: [test-quality, false-green, red-green, mutation-testing, verification]
 triggers: [wrote some tests, do these tests actually test anything, all tests pass, suite is green, trust the test suite, mutation testing, test quality, never failed]
 when: You have just written or generated tests, or are judging whether an existing suite is worth trusting.
 rule: >
-  Watch a new test fail before you trust it passing. Break the code it covers —
-  invert the condition, return the wrong constant, delete the branch — confirm the
-  test goes red, then restore. A test that has never failed has not been shown to
-  test anything: a green run over an assertion that cannot fail, a subject that was
-  mocked away, or a test never collected looks exactly like a working one. If the
-  path under test can be satisfied by more than one condition — an or-chain, or a
-  fixture that happens to sit in an exempt location — neutralise the others first,
-  or the test passes by a route it never names and the clause it claims to cover can
-  be deleted with nothing going red. When judging a suite you did not watch fail, or
-  before a release, sabotage its load-bearing functions one at a time and count which
-  tests notice; report the count that failed, not the count that passed.
+  Watch a new test fail before you trust it green. Break the code it covers — invert
+  the condition, return a wrong constant, delete the branch — confirm red, restore.
+  A test that has never failed proves nothing: an assertion that cannot fail, a
+  mocked-away subject and a test never collected all look like a working one. If more
+  than one condition satisfies the path under test — an or-chain, a fixture sitting in
+  an exempt location — neutralise the others first, or the test passes by a route it
+  never names. To judge a suite you did not watch fail, sabotage its load-bearing
+  functions one at a time and report how many tests noticed, not how many passed.
 violation: "Generating test_auth.py, running pytest, seeing '12 passed', and reporting the module as covered"
 correct: "Flip `if user.is_admin` to `if not user.is_admin`, watch test_admin_only go red, restore it — now the green means something"
