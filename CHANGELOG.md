@@ -5,6 +5,33 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2026-08-02
+
+Documentation only — no behaviour change, no rule changes. 195 rules / 28 domains,
+443 tests, all unchanged from 1.6.0.
+
+### Fixed
+
+- **The README's "Rule Domains" table was still the 1.5.1 table.** It listed 23 rows
+  summing to 165 rules, directly beneath a "195 rules across 28 domains" headline the
+  page states twice — so anyone who added the column up got a different answer from
+  the one they were given. The five domains added in 1.6.0 (`cfd`, `julia`, `fortran`,
+  `matlab`, `r` — 21 rules) were absent from it entirely. The table now has 28 rows
+  summing to exactly 195, checked against `rules/` rather than written by hand, and
+  `science` (10 → 14), `testing` (5 → 7) and `general` (20 → 23) are corrected along
+  with their "Covers" text.
+- **"The 8 mandatory rules" → 9.** `ENF-VOICE-001` shipped in 1.6.0 and was never
+  added to the count or the list.
+- **The engineering domains are now discoverable.** *For Researchers and Scientists*
+  never named CFD, Julia, Fortran, MATLAB or R — they appeared only in the
+  environment-variable reference, as an aside about relevance floors. That section now
+  says what they cover and why they sit at the highest floor (their vocabulary —
+  solver, converge, residual, vectorize — is also everyday programming vocabulary), and
+  the "You ask / You get" table gains rows for `CFD-MESH-001`, `CFD-CONVERGE-001` and
+  `ML-VECTOR-001`. Its "19 rules across `science/` and `research/`" is now 23.
+- **"What Ships" hook count 10 → 11**, and the list now includes the changelog check
+  added in 1.6.0. The always-on token figure is 850, matching `clawness stats`.
+
 ## [1.6.0] - 2026-08-02
 
 Quieter output, version-aware coding, handoffs that resume in one move, changelog

@@ -14,7 +14,7 @@ Clawness is a Claude Code plugin aimed at people who often work across common co
 - **A plan-approval gate** before the first edit of a session, on by default.
 - **Session security**: an access guard on dangerous tool calls, plus a trust ledger for skills, agents and MCP servers.
 - **Session continuity**: a per-project lessons memory, a warning when your context window is filling up, and a handoff the next session picks up on its own.
-- **Low token cost.** Putting all 195 rules in CLAUDE.md would cost about 32,600 tokens *every turn*. Clawness injects roughly 845 fixed plus only what matches, re-states the always-on block in full on just 1 prompt in 5, and compresses long command output. The per-project memory file is searched the same way the rules are, so a log of 200 lessons costs about what a log of 4 costs.
+- **Low token cost.** Putting all 195 rules in CLAUDE.md would cost about 32,600 tokens *every turn*. Clawness injects roughly 850 fixed plus only what matches, re-states the always-on block in full on just 1 prompt in 5, and compresses long command output. The per-project memory file is searched the same way the rules are, so a log of 200 lessons costs about what a log of 4 costs.
 
 Install it once and it works across every project on your machine. Under 1 MB, no services, no models, about 2 ms per prompt.
 
@@ -76,8 +76,10 @@ Take coding rules: *"parameterized SQL only," "async I/O end-to-end," "API respo
 ## For Researchers and Scientists
 
 Clawness isn't only for shipping software. Physics, maths, and engineering work has its own
-ways to go wrong, and 19 rules across `science/` and `research/` cover them, the same way
-the coding rules work: injected automatically, with no command to remember.
+ways to go wrong, and 23 rules across `science/` and `research/` cover them, the same way
+the coding rules work: injected automatically, with no command to remember. A further 21 cover
+simulation and the languages that work is actually written in — CFD, Julia, Fortran, MATLAB
+and R.
 
 **Catching the errors that survive review.** A dimensionally inconsistent equation is wrong no
 matter how reasonable the number looks. A float compared with `==` fails on the one input you
@@ -92,6 +94,9 @@ about how well the quantity is known. Ask a question and the relevant rule arriv
 | *"make my numerical results reproducible"* | `SCI-REPRO-001`: pin seed, versions, data revision; record the command |
 | *"is this idea actually novel"* | `RES-NOVELTY-001`: run the negative search; most reinvention is a vocabulary mismatch |
 | *"find the frontier of this field"* | `RES-FRONTIER-001`: take it from what the field says is open, not from what you failed to find |
+| *"is this mesh good enough"* | `CFD-MESH-001`: mesh quality and y+ decide whether the wall model you picked is even valid |
+| *"the solver isn't converging"* | `CFD-CONVERGE-001`: falling residuals are not a converged answer; show grid convergence |
+| *"speed up this MATLAB loop"* | `ML-VECTOR-001`: preallocate — `x(end+1)` copies the whole array every iteration |
 
 **Doing the research, not just the code.** `research/` covers method: state a falsifiable
 question before gathering, cite the primary source you actually opened rather than a summary of
@@ -99,6 +104,20 @@ it, keep what a source says separate from what you inferred, bound a literature 
 present and state the cutoff, report disagreement instead of picking a side without saying so,
 and produce a structured synthesis (established / contested / open) rather than forty per-paper
 summaries.
+
+**Simulation and the scientific languages.** Research doesn't get written in TypeScript. `cfd/`
+covers the failure modes of a simulation you'll defend in a viva or a design review — mesh
+quality and y+, residual convergence mistaken for grid convergence, Courant number and the
+steady-vs-transient choice, and picking a turbulence model on grounds you can state. Alongside
+it, `julia/`, `fortran/`, `matlab/` and `r/` carry four rules each on the traps specific to
+those languages: type stability and allocation, `intent` and explicit precision, preallocation
+and vectorised indexing, `NA` semantics and silent type coercion.
+
+These five domains sit at the **highest** relevance bar, and deliberately so. Their vocabulary —
+*solver, converge, residual, vectorize* — is also everyday programming vocabulary, so in a
+Python web service "the solver isn't converging" gets you Python answers, not CFD ones. Inside a
+project that actually is one of these (an OpenFOAM case directory, a `Project.toml`, a
+`DESCRIPTION`), they're on-stack and the higher bar never applies.
 
 **Prior art before you commit the effort.** Two rules fire on a build- or derive-shaped request
 before the work starts: `GEN-PRIORART-001` for "is there already a library for this", and
@@ -184,7 +203,7 @@ Pure Python, one dependency (PyYAML). No ML models, no embeddings, no services, 
 
 **Measured quality.** Run `clawness eval`: against 59 test questions with known right answers, **MRR@5 = 0.983** and **hit-rate = 1.000**, meaning every question found its expected rule, usually as the first result. CI enforces minimums on both, so search quality can't get worse unnoticed as rules are added.
 
-**Cost.** About **2 ms per prompt**, and roughly 845 tokens of always-on mandatory rules, plus the few matched rules. The mandatory ones are written out in full on the first prompt and every fifth prompt after that; in between they're shortened to a single line listing their ids, since they haven't changed. Run `clawness stats` for your exact per-turn estimate.
+**Cost.** About **2 ms per prompt**, and roughly 850 tokens of always-on mandatory rules, plus the few matched rules. The mandatory ones are written out in full on the first prompt and every fifth prompt after that; in between they're shortened to a single line listing their ids, since they haven't changed. Run `clawness stats` for your exact per-turn estimate.
 
 ---
 
@@ -342,7 +361,7 @@ The mandatory rules always appear. The ranked rules change based on your prompt.
 which would defeat prompt caching for no benefit to the model. Set
 `CLAW_VERBOSE=1` to see them, or run `clawness query` directly.)
 
-**Token cost.** A typical turn injects about **1,700 tokens**: roughly 845 fixed for the always-on mandatory block (rendered compactly, directive only, with no repeated examples) plus the selected ranked rules. `clawness stats` shows your exact estimate; tune with `CLAW_TOP_K` / `CLAW_BUDGET` / `CLAW_VERBOSE` / `CLAW_COMPACT`.
+**Token cost.** A typical turn injects about **1,700 tokens**: roughly 850 fixed for the always-on mandatory block (rendered compactly, directive only, with no repeated examples) plus the selected ranked rules. `clawness stats` shows your exact estimate; tune with `CLAW_TOP_K` / `CLAW_BUDGET` / `CLAW_VERBOSE` / `CLAW_COMPACT`.
 
 **Minimum match score, and awareness of your project.** Matched rules appear only when the prompt genuinely matches. Anything scoring below a minimum is treated as coincidence and dropped, and the `relevance=…` shown next to each rule *is* that score. Rules for languages and frameworks your project doesn't use have to score higher to get in, so a vague prompt in a Python repo won't pull in SQL or React noise, while a genuinely strong match from another language still gets through. `science` and `research` sit in between: they're never held back by project type, so a researcher in a bare or LaTeX-only directory still gets them, but they have to really match rather than drift into ordinary coding results. The CFD, Julia, Fortran, MATLAB and R rules sit at the opposite end — their words (solver, converge, residual, vectorize) are also everyday programming words, so outside a project that actually uses them they need a distinctly strong match before they appear, and "the solver isn't converging" in a Python repo gets you Python answers. Mandatory rules are always injected. Tune via `CLAW_MIN_RELEVANCE` / `CLAW_TOPICAL_MIN_RELEVANCE` / `CLAW_OFFSTACK_MIN_RELEVANCE` / `CLAW_NARROW_MIN_RELEVANCE` / `CLAW_NO_STACK_FILTER` (see [Configuration](#environment-variables)).
 
@@ -775,7 +794,7 @@ clawness --rules-dir /path/to/rules stats
 | **Rules** | 195 across 28 domains | Coding, science, research and LLM standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 6 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status` |
-| **Hooks** | 10 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory bootstrap, handoff pickup, stack detection, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
+| **Hooks** | 11 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory bootstrap, handoff pickup, stack & version detection, changelog check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
 | **CLI** | 9 commands | query, init, stats, lint, bench, eval, plan, agents-md, audit-skills |
 | **Installers** | bash + PowerShell (with matching uninstallers) | 7-step setup for Windows, macOS, Linux |
 | **Plugin manifest** | marketplace + plugin | For `claude plugin install` |
@@ -784,33 +803,39 @@ clawness --rules-dir /path/to/rules stats
 
 | Domain | Rules | Covers |
 |--------|-------|--------|
-| `general` | 20 | Cross-cutting: prior art before building, abstraction/YAGNI, comments, memory, nesting, magic numbers, immutability, dependency selection, versioning/lockfiles, release & version numbering, linting, naming, validation, logging, env config, accessibility, git, performance *(2 mandatory)* |
+| `general` | 23 | Cross-cutting: prior art before building, abstraction/YAGNI, comments, memory, nesting, magic numbers, immutability, dependency selection, versioning/lockfiles, matching the version a project already installs, changelog upkeep, release & version numbering, linting, naming, validation, logging, env config, accessibility, git, performance *(3 mandatory)* |
+| `science` | 14 | Physics/maths/engineering practice: prior art, dimensional consistency, numerical stability, uncertainty propagation, statistical discipline, derivation checking, solver validation, reproducibility, paper claims, figure standards, array/dataframe correctness (views, dtype, NaN), notebook hygiene, parallel and GPU determinism, scientific data formats |
 | `security` | 11 | Auth, secrets, deps, untrusted-content/exfil *(4 mandatory)*; SQLi, XSS, package supply-chain, SSRF, path traversal, object-level authz/IDOR, password hashing & crypto *(ranked)* |
 | `workflows` | 11 | Multi-agent orchestration (security audit, code review, testing, perf, refactoring, architecture, parallel research), session handoff, sub-agent cost/vetting, and lessons-memory upkeep *(1 mandatory)* |
 | `nextjs` | 10 | Server/Client components, data fetching, caching, layouts, metadata, Server Actions |
-| `science` | 10 | Physics/maths/engineering practice: prior art, dimensional consistency, numerical stability, uncertainty propagation, statistical discipline, derivation checking, solver validation, reproducibility, paper claims, figure standards |
 | `research` | 9 | Source hygiene (primary sources, inference vs claim, date-bounded sweeps, reporting disagreement) and the research programme (falsifiable questions, mapping a frontier, novelty negative-search, cross-domain mapping, structured synthesis) |
 | `fastapi` | 8 | Pydantic v2, dependency injection, async, error handling, CORS, DB sessions |
 | `meta` | 8 | Rationalization counters — rebuttals to common AI shortcuts ("too simple to test", hardcode "temporarily", "I'll refactor later", trusting input) |
 | `llm` | 7 | Building with models: eval sets for prompt changes, prompt injection into tool-using agents, schema-constrained output, token cost & caching, testing non-determinism, model-id pinning, retrieval over context-stuffing |
 | `python` | 7 | Async I/O, imports, error handling, type hints, mutable defaults, context managers, pathlib |
+| `testing` | 7 | Coverage for new code *(1 mandatory)*; watching a test fail before trusting it green, testing on the boundary rather than near it, determinism, mocking at the boundary, assertion specificity, test isolation *(ranked)* |
 | `capacitor` | 6 | Platform detection, permissions, lifecycle, WebView, sync, App Store |
 | `css` | 6 | `!important`, relative units, flex/grid layout, custom properties, responsive, focus states |
 | `docker` | 6 | Layer caching, multi-stage builds, non-root, secrets, tag pinning, slim images |
 | `java` | 6 | Null safety, equals/hashCode, try-with-resources, exceptions, immutability, collections |
+| `cfd` | 5 | Mesh quality and y+, residual convergence vs grid convergence (GCI), Courant number and steady-vs-transient, turbulence model choice, boundary conditions and domain extent |
 | `go` | 5 | Error handling, nil maps, context, goroutine lifecycle, data races |
 | `reliability` | 5 | Network timeouts, bounded retry with backoff/jitter, idempotency keys, rate limiting, graceful degradation |
 | `rust` | 5 | unwrap/expect, error handling, clone, unsafe, iterators |
 | `sql` | 5 | N+1 queries, indexes, transactions, `SELECT *`, migrations |
-| `testing` | 5 | Coverage for new code *(mandatory)*; determinism, mocking at the boundary, assertion specificity, test isolation *(ranked)* |
 | `bash` | 4 | Strict mode, quoting, error checking, shellcheck |
+| `fortran` | 4 | `implicit none` and modern source form, `intent` on every argument, explicit `real64` precision, column-major array order and allocation |
+| `julia` | 4 | Type stability in hot functions, allocation and views, multiple dispatch and type piracy, `Project.toml`/`Manifest.toml` environments |
+| `matlab` | 4 | Preallocation and vectorised indexing, numeric conversion and `\` over `inv`, functions over workspace-dependent scripts, reproducible figures and seeds |
+| `r` | 4 | `NA` semantics in comparisons and summaries, type coercion on read and subset, vectorised over accumulating loops, `renv`/session reproducibility |
 | `react` | 4 | Hooks, state management, list keys, forms |
 | `typescript` | 4 | Null safety, async errors, strict mode, Zod |
 | `ci` | 3 | SHA-pinned third-party actions, OIDC over long-lived secrets, never running fork-PR code with secrets |
 
-The 8 **mandatory** rules (always injected, never ranked) are the 4 `security` rules, the
-1 `testing` rule, the lessons-memory rule (counted under `workflows`), and 2 counted under
-`general`: current-practices and verification/confidence.
+The 9 **mandatory** rules (always injected, never ranked) are the 4 `security` rules, the
+1 `testing` rule, the lessons-memory rule (counted under `workflows`), and 3 counted under
+`general`: current-practices, verification/confidence, and output voice — the last one
+keeps Claude from narrating the rules system at you or restating your request back.
 
 `llm` rules are **held back by project type**. Like the language domains, they have to match
 more strongly in a project with no LLM library installed, so prompt-caching advice stays out
