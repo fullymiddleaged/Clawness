@@ -8,7 +8,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.6.0] - 2026-08-02
 
 Quieter output, version-aware coding, handoffs that resume in one move, changelog
-upkeep, and a scientific/engineering corpus. 195 rules / 28 domains, 379 tests.
+upkeep, and a scientific/engineering corpus. 195 rules / 28 domains, 443 tests.
 
 ### Added
 
@@ -80,6 +80,32 @@ upkeep, and a scientific/engineering corpus. 195 rules / 28 domains, 379 tests.
   replacement was verified to fail against the mutation it targets before being
   kept. Note for anyone extending `tests/test_guard.py`: point the temp exemption
   elsewhere before testing the root boundary.
+- **The audit's second half: +64 tests over `cli.py`, `memory.py` and the render
+  budget** (379 → 443), all written against surviving mutants and verified red
+  before being kept.
+  - **`tests/test_cli.py` is new** — `cli.py` had 933 mutants and no tests at all,
+    despite `lint` and `eval` being the CI gates. It drives the real entry point as
+    a subprocess and proves those two *fail* (a rule missing `rule:` → exit 1; a
+    score below `--floor-mrr` → exit 1; a missing ground-truth file → exit 2), that
+    all nine subcommands still dispatch, and that `--stack` reaches the narrow
+    off-stack tier — the one place that tier is observable outside a live hook.
+  - **`memory.py`'s thresholds and env knobs.** The `CLAW_MEMORY_TOP_K` /
+    `_MIN_RELEVANCE` / `_MAX_ENTRIES` / `_PIN_BUDGET` names had no test that could
+    fail on a typo, and the 0.20 floor was only ever tested well clear of the line.
+    Now pinned on the line: a lesson scoring *exactly* the floor ships, a hair above
+    it does not, and the `max_entries` window is checked to come from the newest end.
+  - **The context budget in `core.retrieve`.** A rule landing precisely on
+    `CLAW_BUDGET` still ships, the cost accumulates across rules rather than
+    resetting, and the mandatory block is charged against the same budget.
+  - Two mutants are recorded as equivalent rather than chased: `top_k <= 0` in
+    `rank_lessons` (the downstream slices empty out at 0 anyway) and
+    `tfidf_map.get(i, 0.0)`'s default (BM25 and TF-IDF share a tokenization, so a
+    fused index is never absent from the TF-IDF map).
+  - Method note for the next audit: run the mutation harness with
+    `PYTHONDONTWRITEBYTECODE=1`. Two same-sized mutations in a row can land in one
+    coarse mtime bucket, and CPython's `.pyc` check is (mtime, source size) — so the
+    second run imports the first one's bytecode and reports a **false survivor**.
+    Four of this batch looked uncaught for exactly that reason.
 
 ## [1.5.1] - 2026-07-28
 

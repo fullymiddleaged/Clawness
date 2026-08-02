@@ -41,6 +41,58 @@ def test_clean_corpus_passes(tmp_path):
     assert "pass lint" in r.stdout
 
 
+def test_missing_rule_text_flagged(tmp_path):
+    # The one field the whole corpus exists to carry. A rule with no `rule:` still
+    # loads (load_rules is forgiving so one bad file can't crash the hook), so lint
+    # is the only thing standing between it and a silently empty injection.
+    content = _MINIMAL.format(id="GEN-X-001", domain="general").replace(
+        "rule: Do the specific thing.\n", "")
+    _write(tmp_path / "general" / "GEN-X-001.yml", content)
+    r = _lint(tmp_path)
+    assert r.returncode == 1
+    assert "missing 'rule'" in r.stdout
+
+
+def test_missing_when_flagged(tmp_path):
+    content = _MINIMAL.format(id="GEN-X-001", domain="general").replace(
+        "when: When something happens.\n", "")
+    _write(tmp_path / "general" / "GEN-X-001.yml", content)
+    r = _lint(tmp_path)
+    assert r.returncode == 1
+    assert "missing 'when'" in r.stdout
+
+
+def test_invalid_severity_flagged(tmp_path):
+    content = _MINIMAL.format(id="GEN-X-001", domain="general").replace(
+        "severity: warning", "severity: critical")
+    _write(tmp_path / "general" / "GEN-X-001.yml", content)
+    r = _lint(tmp_path)
+    assert r.returncode == 1
+    assert "invalid severity 'critical'" in r.stdout
+
+
+def test_unparseable_yaml_flagged_not_silently_dropped(tmp_path):
+    # load_rules skips a file that won't parse, so `stats` just shows one fewer
+    # rule than the author wrote — no error anywhere. Lint has to be loud.
+    _write(tmp_path / "general" / "GEN-OK-001.yml", _MINIMAL.format(id="GEN-OK-001", domain="general"))
+    _write(tmp_path / "general" / "GEN-BAD-001.yml", 'id: GEN-BAD-001\nrule: "bad \\d escape"\n[\n')
+    r = _lint(tmp_path)
+    assert r.returncode == 1
+    assert "does not parse as YAML" in r.stdout
+    assert "silently dropped" in r.stdout
+
+
+def test_replacement_char_flagged_as_encoding_corruption(tmp_path):
+    # An em-dash that went through cp1252 and back leaves U+FFFD baked into the
+    # file; it renders into every prompt from then on.
+    content = _MINIMAL.format(id="GEN-X-001", domain="general").replace(
+        "Do the specific thing.", "Do the specific thing � not the vague one.")
+    _write(tmp_path / "general" / "GEN-X-001.yml", content)
+    r = _lint(tmp_path)
+    assert r.returncode == 1
+    assert "U+FFFD" in r.stdout
+
+
 def test_duplicate_id_flagged(tmp_path):
     _write(tmp_path / "general" / "GEN-X-001.yml", _MINIMAL.format(id="DUP-001", domain="general"))
     _write(tmp_path / "python" / "PY-X-001.yml", _MINIMAL.format(id="DUP-001", domain="python"))

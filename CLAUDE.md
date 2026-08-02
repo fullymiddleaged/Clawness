@@ -287,6 +287,11 @@ dependency**. No ML models, no services, no Docker.
 - `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin.
 - `.claude-plugin/{plugin.json,marketplace.json}` — plugin + marketplace manifests.
 - `tests/ground_truth.json` — labeled eval queries (grow it when adding rule areas).
+- `tests/test_cli.py` — drives the `clawness` CLI as a subprocess. It exists because
+  `lint` and `eval` gate CI, so what matters is that they exit **non-zero** on bad
+  input, which is invisible when you call `cmd_lint`/`cmd_eval` directly. It's also
+  the only test that reaches the narrow off-stack tier without a live hook, via
+  `query --stack`.
 
 ## Design decisions (don't undo without reading these)
 - **Lexical + concept retrieval only.** model2vec/semantic was removed in 0.3.0:
@@ -436,3 +441,25 @@ dependency**. No ML models, no services, no Docker.
   exercise the project-root boundary (or the plan-file exemption, same `or` chain) must
   first point the temp exemption elsewhere — see
   `test_in_project_write_is_allowed_by_the_root_check_not_the_temp_exemption`.
+- **Run any mutation/sabotage harness with `PYTHONDONTWRITEBYTECODE=1`.** The usual
+  shape is: write a mutant into the real source → run pytest in a subprocess →
+  restore. Two same-sized mutations in a row (renaming an env-var string, flipping a
+  comparison) can land in one coarse mtime bucket, and CPython's `.pyc` validity check
+  is (mtime, source size) — so the second run silently imports the *first* mutant's
+  bytecode and the mutation is reported as **surviving**. Four mutants in the 1.6.0
+  audit looked uncaught for exactly this reason and were killed on a clean re-run.
+  This is a different failure from the false survivors mutmut itself reports (weak
+  test selection); both mean the same thing — **apply the mutant by hand and confirm
+  green before writing a test for it**.
+- **Two mutants in the 1.6.0 audit are equivalent, not gaps. Don't re-chase them.**
+  `rank_lessons`' `if top_k <= 0` (a `< 0` variant is unobservable — the downstream
+  `[: top_k * 2]` and `[:top_k]` slices empty out at 0 anyway), and
+  `tfidf_map.get(i, 0.0)`'s default (BM25 and TF-IDF run over the *same* tokenization
+  and both slice to `top_k * 2`, so an index BM25 ranks is never absent from the
+  TF-IDF map; the default is unreachable). Both were probed against real corpora
+  before being classified.
+- **When a source file carries two byte-identical guards, a positional
+  `str.replace(old, new, 1)` mutates only the first.** `core.py`'s
+  "build_index() must be called" check appears in both `_rank` and `retrieve`; a
+  harness that mutates one and tests the other reports a false survivor. Mutate every
+  copy, or anchor on surrounding context.
