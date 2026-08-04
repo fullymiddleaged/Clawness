@@ -583,7 +583,9 @@ the home directory or non-git folders, and goes silent once the file exists.)
 
 Claude also maintains it on its own: mandatory rule `ENF-MEM-001` tells it to
 record a lesson when you ask or when a correction repeats, one line of 120
-characters or less, merging near-duplicates and trimming the file as it grows.
+characters or less, merging near-duplicates and trimming the file as it grows —
+and to put it **here rather than in `CLAUDE.md`**, which is re-read in full on
+every turn instead of being ranked. More on that split [below](#claudemd-vs-project-rules-vs-memorymd).
 
 **The log is searched, not dumped.** This is the part that keeps it cheap. A
 memory file is the obvious thing to paste into context wholesale, and that's
@@ -631,6 +633,40 @@ Two cases show entries regardless of match: the first prompt of a session, and
 any turn right after the file changed, so a lesson written mid-session is never
 invisible on the next turn. **Commit the file** so the whole team shares the same
 hard-won knowledge.
+
+### CLAUDE.md vs project rules vs memory.md
+
+Claude Code already has a place to put project knowledge — `CLAUDE.md` — and it works
+differently from everything above. **CLAUDE.md is loaded by Claude Code itself, in
+full, on every single turn, before any hook runs.** Nothing Clawness does can budget
+it or trim it. That's fine for a page of orientation, and expensive for the file it
+tends to become after a year of "just add a note about this".
+
+So there are three homes, and one question tells you which:
+
+| | Loaded | Cost per turn | Put here |
+|---|---|---|---|
+| `CLAUDE.md` | every turn, in full | the whole file, uncapped | what must fire **even when nothing in your prompt hints at it** — what the project is, key files, workflow, and the one-line form of every "don't change this without reading why" |
+| `.clawness/rules/` | when it matches your prompt | inside `CLAW_BUDGET` | long rationale attached to specific code — the *why* behind a design, in full, surfaced when you're actually in that file |
+| `.clawness/memory.md` | top 3 matches | ≤1200 characters | one-line traps that already bit you |
+
+The question is the first column: **does it need to fire when the prompt gives no hint
+that it applies?** If yes, it has to be in CLAUDE.md, because retrieval can't be relied
+on to guess. If no, retrieval is strictly cheaper — you pay for it on the turns it
+matters instead of all of them.
+
+**Clawness will mention this once if your CLAUDE.md gets large.** Over roughly 6,000
+tokens (`CLAW_CLAUDE_MD_LIMIT`) — at which point the file outweighs everything Clawness
+injects, on every turn of every session — a session-start check tells Claude to give you
+the number and offer the split. It never edits CLAUDE.md, and it asks once per project,
+returning only if the file grows by half again. Off with `CLAW_NO_CLAUDE_MD_CHECK=1`, or
+a `.clawness/claude-md-check-off` file in a project that should never be asked.
+
+**One gap worth knowing about.** When Claude records a lesson, mandatory rule
+`ENF-MEM-001` sends it to `.clawness/memory.md`. But when **you** use Claude Code's own
+`#` shortcut, that writes to `CLAUDE.md` directly — no hook or rule sits in that path, so
+Clawness can't route it. If you want a note ranked rather than re-read every turn, say
+"remember this: …" instead of using `#`.
 
 ---
 
@@ -795,7 +831,7 @@ clawness --rules-dir /path/to/rules stats
 | **Rules** | 195 across 28 domains | Coding, science, research and LLM standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 6 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status` |
-| **Hooks** | 11 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory bootstrap, handoff pickup, stack & version detection, changelog check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
+| **Hooks** | 12 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory bootstrap, handoff pickup, stack & version detection, changelog check, CLAUDE.md size check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
 | **CLI** | 9 commands | query, init, stats, lint, bench, eval, plan, agents-md, audit-skills |
 | **Installers** | bash + PowerShell (with matching uninstallers) | 7-step setup for Windows, macOS, Linux |
 | **Plugin manifest** | marketplace + plugin | For `claude plugin install` |
@@ -883,6 +919,8 @@ silence them exactly there.
 | `CLAW_NO_TRUST_LEDGER` | (unset) | Don't fingerprint skills/agents/MCP or warn when they change |
 | `CLAW_NO_GIT_CHECK` | (unset) | Stop offering to `git init` when a project isn't under version control |
 | `CLAW_NO_CHANGELOG_CHECK` | (unset) | Stop the session-start changelog reminder, and the one-time offer to create one |
+| `CLAW_NO_CLAUDE_MD_CHECK` | (unset) | Stop the one-time note about an oversized `CLAUDE.md` |
+| `CLAW_CLAUDE_MD_LIMIT` | `6000` | Estimated tokens of `CLAUDE.md` above which that note fires. Below it, nothing is said |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code's config dir. The installer and uninstaller follow it if you've relocated it |
 | `CLAUDE_CODE_SUBAGENT_MODEL` | (none) | Override model for ALL sub-agents |
 
@@ -929,13 +967,18 @@ Against [Writ](https://github.com/infinri/Writ) (the hybrid-RAG project that ins
 | Token cost / turn | selected rules (5k budget) | ~1,300 (mandatory + selected) | all of CLAUDE.md, every turn |
 | Infrastructure | Docker + Neo4j + ONNX + daemon (~2 GB) | PyYAML (~200 KB) | none |
 | Install | ~5 min (containers) | ~5 sec | built-in |
-| Always-on mandatory rules | Yes (30) | Yes (8) | manual discipline |
-| Per-project rules | No | Yes (`.clawness/rules/`) | per-dir CLAUDE.md |
+| Always-on mandatory rules | Yes (30) | Yes (9) | manual discipline |
+| Per-project rules | Yes (`(id, project)` keys, with a `_shared` scope) | Yes (`.clawness/rules/`) | per-dir CLAUDE.md |
 | Plan-first gate | Yes (token approval) | Yes (uses built-in plan mode) | built-in plan mode (opt-in, not enforced) |
 | Output compression | No | Yes | No |
-| Adversarial sub-agents | No | 7 (red/blue team, critic, …) | general subagents, not preconfigured |
+| Adversarial sub-agents | 1 — the review agent, during Work mode's review phase | 7 (red/blue team, critic, …) | general subagents, not preconfigured |
 | Guard on data-sending / destructive commands | No | Yes, and it **overrides what you've already allowed** | permission prompts you learn to click through |
 | Skill/agent/MCP trust ledger | No | Yes, alerts when one changes | No |
+
+Two notes on the Writ column, from its author. Its sub-agents all run **isolated** —
+they get none of the main agent's reasoning — and the adversarial character of the
+review agent comes from the **rules it's given**, not from how the agent itself is
+written. So the count is one adversarial agent, not none, and not seven.
 
 ---
 

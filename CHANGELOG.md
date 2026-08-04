@@ -5,6 +5,41 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-08-04
+
+Deconflicts Clawness's lessons memory with Claude Code's own `CLAUDE.md`. They both
+answer "remember this", they have opposite economics, and until now nothing routed
+between them. 195 rules / 28 domains, unchanged.
+
+### Added
+
+- **A session-start check for an oversized `CLAUDE.md`.** `CLAUDE.md` is loaded by
+  Claude Code itself, in full, on every turn, before any hook runs — the one context
+  cost Clawness cannot budget, unlike the rules block and the lessons log. Above
+  roughly 6,000 estimated tokens (`CLAW_CLAUDE_MD_LIMIT`), where the file outweighs
+  everything Clawness injects at full stretch, Claude now opens the session by telling
+  you the actual number and offering a three-way split: durable orientation stays in
+  `CLAUDE.md`, long rationale attached to specific code moves to `.clawness/rules/`
+  where it's ranked and injected only when relevant, and one-line traps go to
+  `.clawness/memory.md`. It never edits `CLAUDE.md` — it asks, and acts only if you
+  agree. Asked once per project, returning only if the file grows by half again. Off
+  with `CLAW_NO_CLAUDE_MD_CHECK=1`, or a `.clawness/claude-md-check-off` file.
+- **README section on `CLAUDE.md` vs project rules vs `memory.md`** — which of the
+  three a given note belongs in, decided by one question: does it need to fire when
+  your prompt gives no hint that it applies? It also names the gap Clawness can't
+  close: Claude Code's `#` shortcut writes to `CLAUDE.md` directly, with no hook in
+  the path, so say "remember this: …" if you want a note ranked rather than re-read.
+
+### Changed
+
+- **`ENF-MEM-001` now says where a lesson goes**, not just what one is: lessons go to
+  `.clawness/memory.md`, never `CLAUDE.md`. Previously the rule stopped Claude copying
+  *out of* `CLAUDE.md` but said nothing about where a new lesson should land, so a
+  lesson could end up in the file that's re-read in full every turn forever instead of
+  the one that's retrieval-ranked. Its "don't duplicate" clause now also covers project
+  rules, which become the likeliest duplication source once a project has done the
+  split.
+
 ## [1.6.2] - 2026-08-02
 
 Rule wording and README copy — no behaviour change, no new or removed rules.

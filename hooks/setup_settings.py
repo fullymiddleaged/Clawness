@@ -86,6 +86,7 @@ CLAW_HOOK_SCRIPTS = (
     "handoff_check.py",
     "stack_detect.py",
     "changelog_check.py",
+    "claude_md_check.py",
 )
 
 
@@ -144,7 +145,8 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
       - PostToolUse on Bash: output compression (compress_output.py)
       - PreToolUse + PostToolUse: plan gate (plan_gate.py)
       - PreToolUse + PostToolUse: access guard (access_guard.py)
-      - SessionStart: git check, memory init, stack detect, trust ledger
+      - SessionStart: git check, memory init, stack detect, trust ledger,
+        changelog check, CLAUDE.md size check
 
     Kept in sync with .claude-plugin/plugin.json (the plugin-install path) — the
     two install methods must wire the same hooks. (ensure_deps.py is plugin-only:
@@ -336,6 +338,20 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
                 "hooks": [build_hook_entry(changelog_script, timeout=10)],
             })
             results.append("changelog-check: added")
+
+    # --- SessionStart: CLAUDE.md size check (asks once when it gets expensive) ---
+    claude_md_script = hook_script.resolve().parent / "claude_md_check.py"
+    if claude_md_script.exists():
+        if "SessionStart" not in data["hooks"]:
+            data["hooks"]["SessionStart"] = []
+        start_events = data["hooks"]["SessionStart"]
+        if hook_already_present(start_events, claude_md_script):
+            results.append("claude-md-check: already configured")
+        else:
+            start_events.append({
+                "hooks": [build_hook_entry(claude_md_script, timeout=10)],
+            })
+            results.append("claude-md-check: added")
 
     # --- SessionStart: trust ledger (TOFU fingerprints of skills/agents/MCP) ---
     trust_script = hook_script.resolve().parent / "trust_ledger.py"

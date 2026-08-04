@@ -165,10 +165,48 @@ dependency**. No ML models, no services, no Docker.
    stayed quiet doesn't burn the one shot. Never creates the file itself; same consent
    shape as `git_check`'s `git init`. Opt-outs: `CLAW_NO_CHANGELOG_CHECK`, or a
    `.clawness/changelog-check-off` marker. **The nag ledgers (`changelog.json`,
-   `model_advice.json`) are deliberately NOT guard control files** — forging one
-   suppresses a question, not a guard, and listing them would make routine `.clawness/`
-   writes start asking.
-8. **Model-tier advisor** (`clawness/model_advisor.py`, stashed by `stack_detect`,
+   `model_advice.json`, `claude_md.json`) are deliberately NOT guard control files** —
+   forging one suppresses a question, not a guard, and listing them would make routine
+   `.clawness/` writes start asking.
+8. **CLAUDE.md size check** (`hooks/claude_md_check.py`, SessionStart) + the routing
+   clause in `ENF-MEM-001`: the two halves of keeping CLAUDE.md and `.clawness/memory.md`
+   from fighting over "remember this".
+   - **The economics are the whole argument.** CLAUDE.md is loaded by the harness, in
+     full, on every turn, *before any hook runs* — the one context cost nothing here can
+     cap, while the rules block is budgeted and the lessons log is ranked and budgeted.
+     Default threshold 6000 estimated tokens (`CLAW_CLAUDE_MD_LIMIT`): above that the
+     file outweighs Clawness's entire injection at full stretch (~851 mandatory + ~3,149
+     ranked), forever. This repo's own is ~9,151.
+   - **The split is THREE-way and the bulk goes to `.clawness/rules/`, not memory.md.**
+     memory.md is sized for a lessons log (top-3, ~1200 chars, 120/entry, merge past 40)
+     — a 36k-char CLAUDE.md is 300+ entries to surface three lines, with the line cap
+     shredding the rationale that was the payload. Project rules take the same ranking
+     engine with no line cap and the full rule format. One-line traps only go to memory.
+   - **Anything shaped like "don't undo this" STAYS in CLAUDE.md.** Retrieval is lossy,
+     and that content is load-bearing exactly when the prompt gives no hint it applies.
+     A missed rule is a slightly worse answer; a missed "don't undo this" is the
+     regression it existed to prevent — see the plan gate sitting off for a month.
+   - **Indexing CLAUDE.md like memory.md was rejected, don't rebuild it.** The harness
+     has already loaded it by hook time and UserPromptSubmit can only append, so ranked
+     chunks duplicate the full copy. The corollary: making CLAUDE.md cheaper is
+     necessarily *destructive*, which is why the note asks and why it insists on
+     confirming a moved section still surfaces before its copy is deleted.
+   - **The ledger stores the SIZE, not a boolean** (unlike `changelog.json`, which
+     answers a yes/no question once). Re-arms at 1.5x growth: "asked at 6k, silent
+     forever at 30k" is the same absent-prompt failure as the old plan-gate off switch.
+     A ledger that says `asked` but carries no size counts as answered.
+   - Tokens are estimated at chars/4, never tokenized (PyYAML stays the only dependency),
+     so the note says "roughly". `@path` imports are deliberately not followed — that
+     needs the harness's import semantics verified first, and under-reporting a
+     split-up CLAUDE.md is a false negative, which costs nothing.
+   - `ENF-MEM-001` carries the routing half: lessons go to memory.md, never CLAUDE.md.
+     It governs everything *Claude* writes but cannot touch the user typing `#`, which
+     writes straight to CLAUDE.md with no hook in the path — say so in the README rather
+     than pretending the routing is total. The rule sits at 485 of the 500-char mandatory
+     ceiling, so anything added to it has to be paid for by trimming.
+   - Opt-outs `CLAW_NO_CLAUDE_MD_CHECK`, `.clawness/claude-md-check-off`. `should_ask`
+     called LAST, fails silent.
+9. **Model-tier advisor** (`clawness/model_advisor.py`, stashed by `stack_detect`,
    surfaced by `claude_hook` on prompt 1): compares the session's model tier against
    what the opening task looks like and injects a note when they look mismatched.
    - **The model must be carried across two hook events.** ONLY `SessionStart`
@@ -194,7 +232,7 @@ dependency**. No ML models, no services, no Docker.
    - `tests/model_advisor_cases.json` is its eval set, and the CI floor is **zero
      false positives** on routine prompts. Grow that file when tuning signals.
 
-9. **Session security** (defense, not retrieval — independent of the engine):
+10. **Session security** (defense, not retrieval — independent of the engine):
    - `hooks/access_guard.py` (PreToolUse; logic in `clawness/guard.py`) classifies each
      Bash/Write/Edit/Read call → `allow`/`ask`/`deny`. A hook decision overrides the
      user's permission allowlist, so `ask` fires *even on "always-allowed" tools* — the
@@ -271,7 +309,8 @@ dependency**. No ML models, no services, no Docker.
   `describe_age`, `HANDOFF_TEMPLATE`).
 - `hooks/` — runtime hooks (`claude_hook`, `compress_output`, `plan_gate`, `access_guard`,
   `trust_ledger`, `git_check`, `memory_init`, `handoff_check`, `stack_detect`,
-  `changelog_check`, `ensure_deps`) + setup helpers (`setup_settings/agents/skills` —
+  `changelog_check`, `claude_md_check`, `ensure_deps`) + setup helpers
+  (`setup_settings/agents/skills` —
   manual install only). `hooks/_hookutil.py` is shared plumbing (UTF-8 stdio pinned at
   import, `read_payload`, `session_cwd`, `git_root`, `project_root`) — imported, never
   registered. Every SessionStart note hook uses it; `git_check` keeps its own *downward*
