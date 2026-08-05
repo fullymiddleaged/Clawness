@@ -35,6 +35,10 @@ HANDOFF_NAME = "handoff.md"
 # Superseded handoffs land here. Kept rather than deleted: it costs nothing, and a
 # handoff archived by mistake is otherwise unrecoverable work-in-progress notes.
 DONE_DIR = ("handoffs", "done")
+# Generous for what a handoff should be. WF-HANDOFF-001 asks for a short pointer —
+# where we stopped, the next action, what's uncommitted — which lands well under this.
+# A file that truncates here isn't being cut off, it's a status report that should
+# have been a handoff; fix the writing, not this number.
 DEFAULT_BUDGET = 2000
 
 # Skeleton for whoever writes one (WF-HANDOFF-001 points here). Deliberately short:
@@ -47,17 +51,13 @@ DEFAULT_BUDGET = 2000
 HANDOFF_TEMPLATE = """\
 # Handoff — {date}
 
-## Where we left off
-<one or two sentences: the task, and how far it got>
+<a short paragraph: what we were doing, why, and exactly where it stopped>
 
-## State
-<what's done, what's in progress, anything half-finished or uncommitted>
+**Next:** <the first thing to do — the command to run, or the file and change to make>
 
-## Next steps
-<the first thing the next session should do, phrased as an instruction>
+**Uncommitted:** <files left dirty or half-finished, or 'nothing'>
 
-## Open questions
-<none — or the decisions genuinely blocked on the user, one line each>
+**Open questions:** <none — or the decisions genuinely blocked on the user, one line each>
 """
 
 

@@ -132,13 +132,33 @@ def test_open_questions_survives_render_but_is_the_first_thing_truncated():
     assert "Open questions" in short
     assert "Deploy to staging or prod first?" in short
 
-    padded = body.replace("## Open questions",
+    padded = body.replace("**Open questions:**",
                           "\n".join(f"- filler {i}" for i in range(400))
-                          + "\n\n## Open questions")
+                          + "\n\n**Open questions:**")
     long_note = render_handoff_note(find_handoff(_project(padded)), budget=300)
-    assert "Where we left off" in long_note
+    assert "what we were doing" in long_note  # the head survives
     assert "Deploy to staging or prod first?" not in long_note
     assert "truncated" in long_note
+
+
+def test_a_handoff_written_the_way_wf_handoff_001_asks_fits_the_default_budget():
+    # Every other truncation test passes an explicit budget, leaving DEFAULT_BUDGET
+    # unpinned. The rule asks for a short pointer — where we stopped, the next action,
+    # what's uncommitted — not a status report, and one written that way must survive
+    # the default render intact, including the open question that makes "carry on"
+    # safe to obey.
+    body = (
+        "# Handoff — auth refactor\n\n"
+        "We split the session store out of auth.py and got as far as step 6a of the\n"
+        "plan; tokens still validate against the old table.\n\n"
+        "**Next:** point `verify_token` at `sessions_v2` in clawness/auth.py, then\n"
+        "`pytest tests/test_auth.py`.\n\n"
+        "**Uncommitted:** auth.py, tests/test_auth.py.\n\n"
+        "**Open questions:** drop the old table now or after the deploy?\n"
+    )
+    note = render_handoff_note(find_handoff(_project(body)))  # no explicit budget
+    assert "truncated" not in note
+    assert "drop the old table now or after the deploy?" in note
 
 
 def test_age_is_reported_but_never_changes_the_instruction():
@@ -169,10 +189,15 @@ def test_empty_or_missing_file_renders_nothing():
     assert render_handoff_note(root / ".clawness" / "absent.md") == ""
 
 
-def test_template_has_the_four_sections():
+def test_template_prompts_for_a_short_pointer_not_a_status_report():
+    # The template used to prescribe four headed sections, which is what produced
+    # 30-line session recaps. It now asks for prose plus three labelled facts; Open
+    # questions stays because it is what makes "carry on" safe to obey.
     filled = HANDOFF_TEMPLATE.format(date="2026-07-26")
-    for heading in ("Where we left off", "State", "Next steps", "Open questions"):
-        assert heading in filled
+    for label in ("Next:", "Uncommitted:", "Open questions:"):
+        assert label in filled
+    assert "## Where we left off" not in filled
+    assert len(filled.splitlines()) <= 12
 
 
 def test_non_ascii_handoff_survives_the_round_trip():

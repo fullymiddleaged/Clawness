@@ -94,28 +94,45 @@ def test_every_project_instruction_file_counts_toward_the_total():
 
 
 @needs_git
-def test_the_note_tells_claude_to_announce_it_before_anything_else():
+def test_the_note_tells_claude_to_mention_the_size_to_the_user():
     # Hooks can't prompt the user; if Claude doesn't say it, nobody hears it.
     out = _run(_repo({"CLAUDE.md": BIG}))
-    assert "Before doing anything else this session, tell the user" in out
+    assert "Mention this to the user" in out
 
 
 @needs_git
-def test_the_note_names_all_three_destinations_and_what_stays():
+def test_the_note_recommends_a_trim_and_never_performs_one():
+    # 1.7.0 offered to relocate sections into .clawness/rules/ and memory.md.
+    # Dogfooding that cost most of a session: a SessionStart note fires before the
+    # user has said what they came for, so it cannot start a long destructive
+    # refactor. Diagnosis stays here; the remedy moved behind a slash command.
     out = _run(_repo({"CLAUDE.md": BIG}))
-    assert ".clawness/rules/" in out       # long rationale attached to code
-    assert ".clawness/memory.md" in out    # one-line traps
-    assert "STAYS in CLAUDE.md" in out     # anything needed unprompted
-    # The bulk goes to rules, not the lessons log — that ordering is the whole point.
-    assert out.index(".clawness/rules/") < out.index(".clawness/memory.md")
+    assert "revision pass" in out
+    assert ".clawness/rules/" not in out        # the note names no destinations
+    assert ".clawness/memory.md" not in out
+    assert "split" not in out.lower()
+
+
+@needs_git
+def test_the_note_points_at_both_remedies_and_they_exist():
+    # The note's whole value once it has reported the number is telling the user
+    # where the fix lives. A pointer to a skill that isn't installed is worse than
+    # no pointer, so pin the name against the directory it resolves from.
+    out = _run(_repo({"CLAUDE.md": BIG}))
+    assert "/doctor" in out                     # the harness's native trim
+    assert "/clawness:claude-md" in out         # ours, for the Clawness destinations
+    assert (REPO / "skills" / "claude-md" / "SKILL.md").is_file()
+    skill = (REPO / "skills" / "claude-md" / "SKILL.md").read_text(encoding="utf-8")
+    assert "name: claude-md" in skill
 
 
 @needs_git
 def test_the_note_never_licenses_editing_claude_md_uninvited():
     out = _run(_repo({"CLAUDE.md": BIG}))
-    assert "act only if they agree" in out
-    assert "Never edit CLAUDE.md uninvited" in out
-    assert "before deleting its copy" in out
+    assert "Do NOT start that work now" in out
+    assert "do not reorganise the file yourself" in out
+    assert "never edit CLAUDE.md uninvited" in out
+    assert "the user's call" in out
 
 
 @needs_git

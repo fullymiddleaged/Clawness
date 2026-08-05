@@ -5,11 +5,11 @@ tags: [memory, lessons, gotcha, correction, retrospective, journal, claude.md]
 triggers: [remember, lesson, again, every time, same mistake, gotcha, note for next time]
 when: A trap already cost real time, a non-obvious constraint surfaced, or the user says to remember something.
 rule: >
-  Record only what would cost real rework if forgotten: a trap that bit, a non-obvious
-  constraint — never what the code, git history, CLAUDE.md or a project rule already
-  says, nor session narration. Lessons go in .clawness/memory.md, never CLAUDE.md, read
-  whole every turn. One line under '## Lessons' (newest last), 120 chars max, naming the
-  file or flag so it retrieves. Merge near-duplicates. '## Always' holds 3 max; past 40,
-  merge the weakest.
+  Record only what would cost real rework if forgotten: a trap that bit, a hidden
+  constraint — never what code, git log or CLAUDE.md already says, nor narration.
+  Lessons go in .clawness/memory.md, never CLAUDE.md — it loads whole every turn, so
+  keep it lean: durable orientation only. One line under '## Lessons' (newest last),
+  <=120 chars, naming the file or flag so it retrieves. Merge dupes. '## Always' holds
+  3; past 40 merge the weakest.
 violation: "Appending 'refactored core.py and fixed the tests today' — a session narration already in the git log"
 correct: "- eval fails unless CLAW_NO_PLAN_GATE is unset — the gate tests assert it is on"

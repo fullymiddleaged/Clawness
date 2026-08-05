@@ -10,14 +10,17 @@ rule: >
   codebase. If one is already there, move it to .clawness/handoffs/done/ named by
   timestamp (e.g. 2026-07-26-143000.md) before writing the new one; that file's
   presence is what marks a handoff as outstanding, so archive it rather than delete
-  it. Four short sections: where we left off, current state (including anything
-  uncommitted or half-finished), the single next step, and open questions. Write the
-  next step as an instruction someone can act on immediately — the command to run or
-  the file and change to make, not a topic. The next session is told to start work
-  when the user says to carry on, so anything genuinely blocked on the user must be
-  written under open questions; that section says 'none' unless a real decision is
-  outstanding. Name files and branches explicitly; the next session has none of this
-  context. Keep it under 30 lines. Put durable lessons in .clawness/memory.md
-  instead — a handoff is transient.
-violation: "A next step reading 'continue the refactor', leaving the next session to re-derive what that means"
-correct: "Archiving the old handoff to .clawness/handoffs/done/2026-07-26-143000.md, then writing 'Next: fix tail truncation in render_memory_block (clawness/core.py), then pytest tests/test_memory_rank.py. Open questions: none'"
+  it. Keep it SHORT — a running start, not a status report. Carry enough context
+  that the next action makes sense on its own and no more; ten to fifteen lines is
+  usually plenty. Cover what we were doing and where it stopped, the single next
+  action, anything uncommitted or half-finished, and open questions. Write the next
+  action as
+  something someone can do immediately — the command to run or the file and change
+  to make, not a topic. Name files and branches explicitly; the next session has
+  none of this context. The next session is told to begin work when the user says
+  to carry on, so any genuine blocker must appear under open questions; write
+  'none' when there is none. Don't restate what the git log, the plan file or the
+  code already says, and don't summarise the session. Durable lessons go in
+  .clawness/memory.md — a handoff is transient.
+violation: "A 30-line report recapping everything the session did, or a next action reading 'continue the refactor'"
+correct: "'Split the session store out of auth.py, got to step 6a. Next: point verify_token at sessions_v2 in auth.py, then pytest tests/test_auth.py. Uncommitted: auth.py. Open questions: none.'"

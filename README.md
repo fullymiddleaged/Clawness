@@ -66,7 +66,7 @@ Take coding rules: *"parameterized SQL only," "async I/O end-to-end," "API respo
 - **Adversarial review on tap.** Security red/blue team, code critic, architecture challenger, and more, one ask away. The judgment agents **run on whatever model you chose** (they inherit your session's tier, so Clawness never downgrades a security review behind your back), while the mechanical ones stay on a cheaper tier. They return findings tagged CONFIRMED/PLAUSIBLE; your main session spot-checks the high-stakes ones against the cited lines, or a quick repro, before acting. Vetted rather than rubber-stamped, and without re-reading everything the agent read.
 - **A second opinion on your model tier.** On the first prompt of a session, if the task looks far deeper (or far more routine) than the model you're running, Clawness says so once. It suggests; it never switches anything.
 
-**Make them *your* standards.** The 195 built-in rules are a starting point. Add your own in seconds: run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/` and your whole team shares the same rules. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
+**Make them *your* standards.** The 195 built-in rules are a starting point. Add your own in seconds: run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/rules/` and `.clawness/memory.md` and your whole team shares the same rules and lessons. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
 
 > **Tripwire, not a sandbox.** The guard works by pattern-matching the agent's own tool calls. It catches honest mistakes, copy-pasted `curl … | sh`, reads of secrets outside your project, and data sent to a server that appears nowhere in your code, and it breaks the habit of approving everything without reading it. Someone determined can still disguise a command to get past it. The real protection is a container with a list of servers it's allowed to reach. It stays out of normal work: reading your own `.env`, plain API GETs, and traffic to your own machine aren't prompted. A call to an outside server that carries data or a token asks once per server. Disable with `CLAW_NO_ACCESS_GUARD=1`.
 
@@ -443,9 +443,9 @@ content, so Claude opens with where you left off instead of a blank stare.
   `WF-HANDOFF-001` tells Claude the format, the exact path, and to archive first.
 - **Durable lessons go in `.clawness/memory.md` instead**, which accumulates. A
   handoff is transient by design.
-- **Gitignore it.** If you commit `.clawness/` to share rules and memory with your
-  team, add `.clawness/handoff.md` to `.gitignore`. It's a note about what you
-  personally had half-finished, not shared knowledge.
+- **Gitignore it.** It's a note about what *you* personally had half-finished, not
+  shared knowledge. The [ignore block](#per-project-setup) Clawness offers on a
+  project's first session already covers it, along with the archived handoffs.
 
 Off with `CLAW_NO_HANDOFF=1`.
 
@@ -544,17 +544,29 @@ Add `--write` to create the project rules directory:
 clawness init . --write
 ```
 
-This creates `.clawness/rules/` and a starter `.clawness/memory.md` in your project. The hook automatically picks up rules from this directory when you're working in the project. **Commit `.clawness/` to git** so your whole team gets the same rules.
+This creates `.clawness/rules/` and a starter `.clawness/memory.md` in your project. The hook automatically picks up rules from this directory when you're working in the project.
+
+**Commit `.clawness/rules/` and `.clawness/memory.md`** so your whole team gets the same rules and the same hard-won lessons. The rest of `.clawness/` is per-machine session state — your outstanding handoff, the archived ones, and the guard/nag/session ledgers — and belongs in `.gitignore`. On the first session in a project Clawness offers to add the block for you (it asks; it never edits `.gitignore` itself), or add it by hand:
+
+```gitignore
+# Clawness — per-machine session state (memory.md and rules/ stay shared)
+.clawness/*
+!.clawness/memory.md
+!.clawness/rules/
+```
+
+Use `.clawness/*`, not `.clawness/`. Ignoring the directory itself stops git descending into it, and the two exceptions below silently do nothing.
 
 ### Project Rules Directory
 
 ```
 my-app/
 ├── .clawness/
-│   ├── memory.md                 # Per-codebase lessons, retrieved per prompt
+│   ├── memory.md                 # Per-codebase lessons, retrieved per prompt — commit
 │   ├── handoff.md                # Outstanding note for the next session (gitignore)
-│   ├── handoffs/done/            # Superseded handoffs, timestamped
-│   └── rules/
+│   ├── handoffs/done/            # Superseded handoffs, timestamped (gitignore)
+│   ├── *.json                    # Guard, nag and session ledgers (gitignore)
+│   └── rules/                    # Project rules — commit
 │       ├── _mandatory/           # Project-specific mandatory rules
 │       │   └── MYAPP-DEPLOY-001.yml
 │       └── my-app/               # Project-specific ranked rules
@@ -584,8 +596,8 @@ the home directory or non-git folders, and goes silent once the file exists.)
 Claude also maintains it on its own: mandatory rule `ENF-MEM-001` tells it to
 record a lesson when you ask or when a correction repeats, one line of 120
 characters or less, merging near-duplicates and trimming the file as it grows —
-and to put it **here rather than in `CLAUDE.md`**, which is re-read in full on
-every turn instead of being ranked. More on that split [below](#claudemd-vs-project-rules-vs-memorymd).
+and to put it **here rather than in `CLAUDE.md`**, which is loaded in full and sits
+in context for every turn instead of being ranked. More on that split [below](#claudemd-vs-project-rules-vs-memorymd).
 
 **The log is searched, not dumped.** This is the part that keeps it cheap. A
 memory file is the obvious thing to paste into context wholesale, and that's
@@ -642,12 +654,13 @@ full, on every single turn, before any hook runs.** Nothing Clawness does can bu
 it or trim it. That's fine for a page of orientation, and expensive for the file it
 tends to become after a year of "just add a note about this".
 
-So there are three homes, and one question tells you which:
+So there are four homes, and one question tells you which:
 
 | | Loaded | Cost per turn | Put here |
 |---|---|---|---|
 | `CLAUDE.md` | every turn, in full | the whole file, uncapped | what must fire **even when nothing in your prompt hints at it** — what the project is, key files, workflow, and the one-line form of every "don't change this without reading why" |
-| `.clawness/rules/` | when it matches your prompt | inside `CLAW_BUDGET` | long rationale attached to specific code — the *why* behind a design, in full, surfaced when you're actually in that file |
+| `.claude/rules/` **with `paths:`** | when Claude reads a matching file | nothing until then | guidance tied to particular files or directories (Claude Code's own mechanism, not Clawness's) |
+| `.clawness/rules/` | when it matches your prompt | inside `CLAW_BUDGET` | long rationale attached to a *topic* rather than a path — the *why* behind a design, in full, surfaced when you're actually working on it |
 | `.clawness/memory.md` | top 3 matches | ≤1200 characters | one-line traps that already bit you |
 
 The question is the first column: **does it need to fire when the prompt gives no hint
@@ -655,12 +668,29 @@ that it applies?** If yes, it has to be in CLAUDE.md, because retrieval can't be
 on to guess. If no, retrieval is strictly cheaper — you pay for it on the turns it
 matters instead of all of them.
 
+> **`@path` imports do not help.** Breaking a big CLAUDE.md into `@other-file.md`
+> references is the most popular version of this advice and it moves exactly zero
+> tokens: [imports are expanded and loaded at launch](https://code.claude.com/docs/en/memory#import-additional-files),
+> recursively, four hops deep. The same goes for `.claude/rules/` files *without*
+> `paths:` frontmatter. Only the four rows above change what you pay.
+
 **Clawness will mention this once if your CLAUDE.md gets large.** Over roughly 6,000
 tokens (`CLAW_CLAUDE_MD_LIMIT`) — at which point the file outweighs everything Clawness
 injects, on every turn of every session — a session-start check tells Claude to give you
-the number and offer the split. It never edits CLAUDE.md, and it asks once per project,
-returning only if the file grows by half again. Off with `CLAW_NO_CLAUDE_MD_CHECK=1`, or
-a `.clawness/claude-md-check-off` file in a project that should never be asked.
+the number and point you at the two tools that fix it. It never edits CLAUDE.md and never
+starts the work itself: that note fires before you've said what you came for, so the
+diagnosis is all it's entitled to. It asks once per project, returning only if the file
+grows by half again. Off with `CLAW_NO_CLAUDE_MD_CHECK=1`, or a
+`.clawness/claude-md-check-off` file in a project that should never be asked.
+
+**When you want to act on it, run `/clawness:claude-md`.** It measures the file section
+by section, sorts each one into stay / cut / `.claude/rules/` / `.clawness/rules/` /
+`.clawness/memory.md`, shows you the whole plan before touching anything, and verifies
+each moved section still surfaces before deleting the original. Claude Code's own
+[`/doctor`](https://code.claude.com/docs/en/commands) does the trim natively and knows
+more about how the harness loads instructions — if you don't keep Clawness project
+rules, use that instead. They compose: `/doctor` for the trim, `/clawness:claude-md`
+for the Clawness-specific placement.
 
 **One gap worth knowing about.** When Claude records a lesson, mandatory rule
 `ENF-MEM-001` sends it to `.clawness/memory.md`. But when **you** use Claude Code's own
@@ -830,8 +860,8 @@ clawness --rules-dir /path/to/rules stats
 |-----------|-------|---------|
 | **Rules** | 195 across 28 domains | Coding, science, research and LLM standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
-| **Skills** | 6 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status` |
-| **Hooks** | 12 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory bootstrap, handoff pickup, stack & version detection, changelog check, CLAUDE.md size check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
+| **Skills** | 7 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status`, `/clawness:claude-md` |
+| **Hooks** | 12 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory & gitignore bootstrap, handoff pickup, stack & version detection, changelog check, CLAUDE.md size check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
 | **CLI** | 9 commands | query, init, stats, lint, bench, eval, plan, agents-md, audit-skills |
 | **Installers** | bash + PowerShell (with matching uninstallers) | 7-step setup for Windows, macOS, Linux |
 | **Plugin manifest** | marketplace + plugin | For `claude plugin install` |

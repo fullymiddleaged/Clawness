@@ -103,9 +103,13 @@ def test_budget_keeps_the_tail_and_flags_trim():
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
 
 
-def _git_repo(parent: Path) -> Path:
+def _git_repo(parent: Path, ignored: bool = True) -> Path:
+    """A scratch repo. `ignored=True` pre-covers .clawness/ so the gitignore half of
+    memory_init stays quiet and a test can be about the memory file alone."""
     subprocess.run(["git", "init", "-q", str(parent)], check=True,
                    capture_output=True, text=True)
+    if ignored:
+        (parent / ".gitignore").write_text(".clawness/\n", encoding="utf-8")
     return parent
 
 
@@ -132,6 +136,118 @@ def test_bootstrap_is_silent_when_file_exists():
         assert res.stdout.strip() == ""
         # untouched
         assert "pre-existing" in existing.read_text(encoding="utf-8")
+
+
+# --- the gitignore offer -----------------------------------------------------
+#
+# memory.md and rules/ are meant to be committed; handoff.md and the ledgers are
+# per-machine. Without a rule, a project commits the lot.
+
+@needs_git
+def test_an_uncovered_clawness_dir_gets_the_ignore_offer():
+    with tempfile.TemporaryDirectory() as d:
+        repo = _git_repo(Path(d), ignored=False)
+        out = _run_memory_init(repo).stdout
+        assert "isn't covered by .gitignore" in out
+        # The exact patterns, including the ones that keep the shared half tracked.
+        assert ".clawness/*" in out
+        assert "!.clawness/memory.md" in out
+        assert "!.clawness/rules/" in out
+        # Consent shape: ask, don't edit.
+        assert "ask" in out
+        assert "Only edit .gitignore if the user agrees" in out
+        # Ignore rules don't untrack an already-committed file, and saying so is
+        # the difference between the offer working and the offer looking broken.
+        assert "git rm --cached" in out
+
+
+@needs_git
+def test_the_offer_names_the_directory_pattern_trap():
+    # `.clawness/` instead of `.clawness/*` stops git descending, so the two
+    # negations below it silently do nothing and memory.md is ignored after all.
+    # Anyone hand-editing this block will reach for the bare directory form.
+    with tempfile.TemporaryDirectory() as d:
+        out = _run_memory_init(_git_repo(Path(d), ignored=False)).stdout
+        assert "stops git descending" in out
+
+
+@needs_git
+def test_an_already_ignored_clawness_dir_is_left_alone():
+    # A wholesale `.clawness/` is a decision the user made. Don't revisit it.
+    with tempfile.TemporaryDirectory() as d:
+        repo = _git_repo(Path(d))  # writes `.clawness/`
+        out = _run_memory_init(repo).stdout
+        assert ".gitignore" not in out
+        assert not (repo / ".clawness" / "gitignore.json").exists()
+
+
+@needs_git
+def test_the_offer_is_made_once_and_then_never_again():
+    # Without the ledger, a "no thanks" would be re-asked every session forever.
+    with tempfile.TemporaryDirectory() as d:
+        repo = _git_repo(Path(d), ignored=False)
+        assert ".gitignore" in _run_memory_init(repo).stdout
+        assert (repo / ".clawness" / "gitignore.json").is_file()
+        # Nothing was written to .gitignore — the hook only ever asks.
+        assert not (repo / ".gitignore").exists()
+        assert _run_memory_init(repo).stdout.strip() == ""
+
+
+@needs_git
+def test_the_proposed_block_actually_keeps_the_shared_half_tracked():
+    # The offer is only worth making if the patterns do what the note claims. Apply
+    # them for real and let git adjudicate.
+    from hooks.memory_init import IGNORE_BLOCK
+
+    with tempfile.TemporaryDirectory() as d:
+        repo = _git_repo(Path(d), ignored=False)
+        (repo / ".gitignore").write_text(IGNORE_BLOCK, encoding="utf-8")
+        (repo / ".clawness" / "rules").mkdir(parents=True)
+        (repo / ".clawness" / "handoffs").mkdir(parents=True)
+        for rel in ("memory.md", "handoff.md", "sessions.json",
+                    "rules/PRJ-001.yml", "handoffs/2026-01-01.md"):
+            (repo / ".clawness" / rel).write_text("x", encoding="utf-8")
+
+        def ignored(rel: str) -> bool:
+            return subprocess.run(
+                ["git", "-C", str(repo), "check-ignore", "-q", f".clawness/{rel}"],
+                capture_output=True,
+            ).returncode == 0
+
+        assert not ignored("memory.md")          # shared
+        assert not ignored("rules/PRJ-001.yml")  # shared
+        assert ignored("handoff.md")             # per-machine
+        assert ignored("sessions.json")
+        assert ignored("handoffs/2026-01-01.md")
+
+
+@needs_git
+def test_the_offer_still_fires_for_a_project_that_already_has_memory():
+    # The two halves are independently gated: an existing memory.md means no memory
+    # note, but a project set up before this shipped still needs the ignore rule.
+    with tempfile.TemporaryDirectory() as d:
+        repo = _git_repo(Path(d), ignored=False)
+        (repo / ".clawness").mkdir()
+        (repo / ".clawness" / "memory.md").write_text("## Lessons\n", encoding="utf-8")
+        out = _run_memory_init(repo).stdout
+        assert "remember this" not in out
+        assert ".gitignore" in out
+
+
+@needs_git
+def test_opt_out_covers_the_ignore_offer_too():
+    with tempfile.TemporaryDirectory() as d:
+        repo = _git_repo(Path(d), ignored=False)
+        res = _run_memory_init(repo, {"CLAW_NO_MEMORY": "1"})
+        assert res.stdout.strip() == ""
+        assert not (repo / ".clawness" / "gitignore.json").exists()
+
+
+def test_a_non_git_dir_never_gets_the_ignore_offer():
+    with tempfile.TemporaryDirectory() as d:
+        plain = Path(d) / "nested"
+        plain.mkdir()
+        assert ".gitignore" not in _run_memory_init(plain).stdout
 
 
 @needs_git

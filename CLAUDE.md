@@ -87,6 +87,19 @@ dependency**. No ML models, no services, no Docker.
    auto-created on first session by `hooks/memory_init.py` (SessionStart) — gated to
    git work trees, opt-out `CLAW_NO_MEMORY`; it injects a note (like `git_check`) so
    Claude announces the file to the user, since hooks can't prompt directly.
+   That hook has a **second, independently gated concern (1.8.0): offering the
+   `.gitignore` block for `.clawness/`.** Same consent shape — it asks, never edits.
+   `memory.md` and `rules/` are meant to be committed; `handoff.md`, `handoffs/` and the
+   ledgers are per-machine. The block is an **allowlist** (`.clawness/*` plus `!` for the
+   two shared paths) so a ledger added in a future version is ignored by default, and the
+   trailing `/*` is load-bearing — ignoring the bare directory stops git descending and
+   the negations silently do nothing (`tests/test_memory.py` pins this by applying the
+   block for real and asking `git check-ignore`). Coverage is asked of **git**
+   (`check-ignore`), not of `.gitignore`'s text, so a global or wholesale rule counts and
+   is left alone. It needs its own ledger (`.clawness/gitignore.json`) because, unlike
+   creating memory.md, a declined offer isn't self-limiting; checked LAST, as everywhere
+   else. The two halves don't gate each other: a project that predates 1.8.0 has a
+   memory.md already and still needs the ignore rule.
 4. **Context-pressure watch** (`clawness/context_watch.py`, called from `claude_hook`):
    reads the session's own transcript (`transcript_path` in the hook payload; falls
    back to reconstructing `<config>/projects/<slugified-cwd>/<session_id>.jsonl`) and
@@ -189,8 +202,28 @@ dependency**. No ML models, no services, no Docker.
    - **Indexing CLAUDE.md like memory.md was rejected, don't rebuild it.** The harness
      has already loaded it by hook time and UserPromptSubmit can only append, so ranked
      chunks duplicate the full copy. The corollary: making CLAUDE.md cheaper is
-     necessarily *destructive*, which is why the note asks and why it insists on
-     confirming a moved section still surfaces before its copy is deleted.
+     necessarily *destructive*.
+   - **The hook is the diagnosis; `skills/claude-md/SKILL.md` is the remedy (1.8.0).**
+     1.7.0 had the SessionStart note offer a guided three-way relocation. Dogfooding it
+     here worked and that was the problem — it ate most of a session opened for
+     something else. The bug was the *timing*, not the content: a SessionStart note
+     fires before the user has said what they came for, so it can't propose a long
+     destructive refactor. The content moved verbatim into `/clawness:claude-md`, where
+     the user typing the command IS the consent, and the note now names that plus
+     Claude Code's `/doctor` and starts neither. If a later version wants the hook to do
+     more, improve the skill instead.
+   - **`@path` imports don't reduce cost, and the docs are explicit: "imported files
+     are expanded and loaded into context at launch", recursive to four hops.** So
+     reorganising CLAUDE.md into `@` references — much the most popular version of this
+     advice — moves zero tokens, and neither do `.claude/rules/` files without `paths:`
+     frontmatter. The only mechanisms that actually defer cost are `paths:`-scoped
+     `.claude/rules/`, nested `<subdir>/CLAUDE.md`, skills, and our own ranked
+     `.clawness/rules/`. The check still doesn't follow `@path` (that means
+     reimplementing the harness's parser), so its number under-reports an import-split
+     file — a known-real false negative that errs toward silence.
+   - **Firing on the project's FIRST session instead was rejected.** CLAUDE.md is
+     usually absent or small then; the bloat accrues over months, so first-session
+     gating would never fire for the case the check exists for.
    - **The ledger stores the SIZE, not a boolean** (unlike `changelog.json`, which
      answers a yes/no question once). Re-arms at 1.5x growth: "asked at 6k, silent
      forever at 30k" is the same absent-prompt failure as the old plan-gate off switch.

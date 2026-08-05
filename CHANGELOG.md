@@ -5,6 +5,59 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-08-05
+
+Splits the CLAUDE.md work in two: the session-start check keeps the diagnosis, and a
+new slash command does the remedy when *you* ask for it. Plus a one-time offer to
+teach git which half of `.clawness/` is shareable.
+
+### Added
+
+- **`/clawness:claude-md` — shrink an oversized CLAUDE.md, on purpose.** Measures the
+  file section by section, sorts each section into stay / cut / `.claude/rules/` /
+  `.clawness/rules/` / `.clawness/memory.md`, shows you the whole plan before touching
+  anything, and verifies each moved section still surfaces before deleting the
+  original. It defaults to leaving things alone: anything shaped like "don't undo this
+  without reading why" stays in CLAUDE.md, because retrieval can't be trusted to
+  surface what your prompt gave no hint about. If you don't keep Clawness project
+  rules it says so and points you at Claude Code's `/doctor` instead.
+- **A one-time offer to gitignore the per-machine half of `.clawness/`.** On a
+  project's first session Clawness now asks whether to add an ignore block keeping
+  `memory.md` and `rules/` tracked (they're meant to be shared) while ignoring
+  `handoff.md`, the archived handoffs, and the ledgers. It asks; it never edits
+  `.gitignore` itself, and it asks once per project. Silence it with
+  `CLAW_NO_MEMORY=1`.
+
+### Changed
+
+- **The CLAUDE.md size check reports and points; it no longer offers to reorganise
+  the file.** 1.7.0 had it propose moving long rationale into `.clawness/rules/` and
+  one-line traps into `.clawness/memory.md`. In practice that turned the start of a
+  session into a long, destructive reorganisation you hadn't asked for — the note
+  fires before you've said what you came to do. It now reports the size, explains the
+  per-turn cost, and names the two tools that fix it: `/doctor` and the new
+  `/clawness:claude-md`. It starts neither. Nothing already moved needs undoing;
+  project rules under `.clawness/rules/` still load and rank exactly as before.
+- **Documented that `@path` imports don't reduce context cost.** Breaking a large
+  CLAUDE.md into `@other-file.md` references is the most common version of this
+  advice and it saves nothing — imported files are expanded and loaded at launch,
+  recursively, four hops deep, and the same goes for `.claude/rules/` files without
+  `paths:` frontmatter. The README's "CLAUDE.md vs project rules vs memory.md" table
+  now lists what actually defers cost, including Claude Code's own path-scoped rules.
+- **Handoffs are now a short pointer rather than a status report.** `WF-HANDOFF-001`
+  and the `.clawness/handoff.md` template asked for four headed sections and up to 30
+  lines, which reliably produced a recap of the whole session — the one thing the next
+  session least needs, since it already has the git log and the code. The guidance is
+  now: carry enough context that the next action makes sense on its own and no more,
+  around ten to fifteen lines. The template prompts for a short paragraph plus the
+  next action, anything uncommitted, and open questions. Nothing about where the file
+  lives or how it is archived has changed, so existing handoffs keep working.
+- **`ENF-MEM-001` now also says to keep `CLAUDE.md` lean.** It already routed lessons
+  to `.clawness/memory.md` rather than `CLAUDE.md`; it now adds that `CLAUDE.md` itself
+  should stay durable orientation only, since Claude Code loads it in full on every
+  turn. The rule was tightened elsewhere to pay for the addition, so it is shorter than
+  before and the always-on block did not grow.
+
 ## [1.7.0] - 2026-08-04
 
 Deconflicts Clawness's lessons memory with Claude Code's own `CLAUDE.md`. They both

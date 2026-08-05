@@ -1,7 +1,7 @@
 {
   "name": "clawness",
   "displayName": "Clawness",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Puts the right rules in context on every prompt, automatically — built for full-stack developers moving across frontend, backend, and SQL in one session, researchers working in bare or LaTeX-only directories, and teams who want adversarial review (security red/blue team, code critic) before merge. 195 rules across 28 domains, retrieved by relevance rather than dumped into CLAUDE.md, plus a plan-approval gate, session security hardening, and per-codebase lessons memory. Requires Python 3.10+ on PATH.",
   "author": {
     "name": "Pete Salmond (fullymiddleaged)",
