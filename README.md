@@ -449,6 +449,61 @@ content, so Claude opens with where you left off instead of a blank stare.
 
 Off with `CLAW_NO_HANDOFF=1`.
 
+### Version-Gap Detection (on by default)
+
+A framework ships a new major. Your rules were written for the old one. Nothing
+notices, because a major bump keeps the *words* — "route", "cache", "app router" —
+and changes what they mean. A rule written for Next.js 14 scores like an ordinary
+match on a Next.js 17 prompt, and gets served with the same confidence as a rule
+that's still correct.
+
+So rules can record what they were checked against:
+
+```yaml
+applies_to: {"Next.js": "13-15"}   # the versions this was established against
+verified: "2026-08"                 # when someone actually checked
+sources: ["https://nextjs.org/docs/app/building-your-application/routing"]
+```
+
+When your project declares a version past that range, you get one sentence at
+session start — how many rules, verified to what, what you're running — and Claude
+is told to check current docs before relying on their version-specific details
+rather than asserting the older API shape. **It starts no work.** No research pass,
+no rule-writing, no audit. It orients and stops.
+
+- **Only a *verified* stamp warns.** `applies_to` on its own is a claim, not
+  evidence; a rule carrying one without `verified` and `sources` stays silent. A
+  wrong "this was checked" badge is worse than no badge — it's the original problem
+  wearing a hallmark.
+- **Stamps are per rule, never per folder.** A domain-wide range is the union of
+  its rules' ranges, which is the widest claim available, and too-wide is the
+  direction that fails *silently*.
+- **Once per gap, not once per session.** The ledger (`.clawness/staleness.json`)
+  records the version it warned about, so it re-arms when the version moves — not on
+  a timer.
+- **Covers the frameworks Clawness watches versions for** (Next.js, React, Vue,
+  Svelte, TypeScript, Tailwind, Express, Capacitor, Django, FastAPI, Pydantic,
+  SQLAlchemy, NumPy, pandas). Rules about general practice don't decay on a release
+  cadence; framework-pinned rules are the whole rot surface.
+- **What actually ships stamped today: the ten `nextjs` rules, the four `react`
+  rules, and the Pydantic and SQLAlchemy claims in `fastapi`.** Everything else is
+  unstamped and therefore silent, which is the honest state — a stamp means someone
+  read the docs, not that a script filled a field. On a Next.js 16 project the note
+  names three rules: `NX-IMAGE-001` (`priority` is deprecated for `preload`),
+  `NX-CACHE-001` (caching moved to Cache Components / `use cache`) and
+  `NX-ACTION-001` (`revalidateTag` now takes a `cacheLife` argument, and `updateTag`
+  is the read-your-writes path). On 15 it says nothing.
+
+**When you want to act on it, run `/clawness:refresh <domain>`.** It reads the
+lockfile rather than the manifest range, checks which of the changed constructs your
+code actually uses, looks up the framework's own migration guide, then shows you the
+list and stops. On approval it writes version-corrected overrides into
+`.clawness/rules/` — stamped with the major it checked, so they'll be flagged by this
+same check when you upgrade again. It's the only path that writes rule files, and
+nothing automatic can trigger it.
+
+Off with `CLAW_NO_STALENESS_NOTE=1`.
+
 ### Plan Gate (on by default)
 
 Clawness nudges a plan-first workflow: before the first file edit (`Write`/`Edit`/`MultiEdit`/`NotebookEdit`) of a session, it **asks** you rather than editing blind. It works through Claude Code's **own plan mode**, so if you present a plan and approve it, the gate clears itself for the rest of the session with no prompt at all. No special commands are needed in the normal flow.
@@ -744,6 +799,16 @@ correct: "@app.post('/users', response_model=UserRead) async def create(data: Us
 | `rule` | Yes | Yes | The instruction Claude follows |
 | `violation` | No | Yes | What NOT to do |
 | `correct` | No | Yes | What TO do |
+| `applies_to` | No | **No** | Framework versions this was established against, e.g. `{"Next.js": "13-15"}` |
+| `verified` | No | **No** | `YYYY-MM` — when someone actually checked |
+| `sources` | No | **No** | URLs that justified the range |
+
+The last three are the [version stamp](#version-gap-detection-on-by-default). They
+are deliberately excluded from retrieval, so stamping a rule can never move its
+score. The range is inclusive, one or two numeric components per bound — `13-15`, or
+`15` for a single major, or `1.4-2.0` where the minor matters. Open-ended ranges
+aren't expressible on purpose: "13 and everything after" is the claim nobody has
+evidence for. All three together, or the rule stays silent.
 
 ### Tips for Good Rules
 
@@ -840,6 +905,15 @@ clawness bench             # benchmark retrieval latency
 clawness eval              # retrieval quality: MRR@5 + hit-rate vs. ground truth
 clawness eval --floor-mrr 0.85 --floor-hit 0.95   # fail below floors (CI gate)
 
+# Corpus health (maintainers and fork maintainers)
+clawness audit-rules                       # all four checks
+clawness audit-rules --stale               # missing / over-wide version stamps
+clawness audit-rules --stale --max-age 18  # ...and stamps not rechecked in 18 months
+clawness audit-rules --coverage            # ranked rules in no eval query
+clawness audit-rules --overlap             # rule pairs competing for one top-k slot
+clawness audit-rules --reachability        # rules their own 'when' can't retrieve
+clawness audit-rules --strict              # exit non-zero if anything is reported
+
 # Plan gate (on by default; normal flow uses native plan mode)
 clawness plan status       # show gate state, and what turned it off if it is
 
@@ -860,9 +934,9 @@ clawness --rules-dir /path/to/rules stats
 |-----------|-------|---------|
 | **Rules** | 195 across 28 domains | Coding, science, research and LLM standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
-| **Skills** | 7 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status`, `/clawness:claude-md` |
-| **Hooks** | 12 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory & gitignore bootstrap, handoff pickup, stack & version detection, changelog check, CLAUDE.md size check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
-| **CLI** | 9 commands | query, init, stats, lint, bench, eval, plan, agents-md, audit-skills |
+| **Skills** | 9 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status`, `/clawness:claude-md`, `/clawness:refresh`, `/clawness:audit-rules` |
+| **Hooks** | 12 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory & gitignore bootstrap, handoff pickup, stack & version detection & rule-staleness check, changelog check, CLAUDE.md size check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
+| **CLI** | 10 commands | query, init, stats, lint, bench, eval, plan, agents-md, audit-rules, audit-skills |
 | **Installers** | bash + PowerShell (with matching uninstallers) | 7-step setup for Windows, macOS, Linux |
 | **Plugin manifest** | marketplace + plugin | For `claude plugin install` |
 
@@ -933,6 +1007,7 @@ silence them exactly there.
 | `CLAW_MEMORY_PIN_BUDGET` | `400` | Max characters of the always-injected `## Always` section |
 | `CLAW_MEMORY_MAX_ENTRIES` | `200` | Only the newest N lessons are searched, so a log that gets away from you can't slow the hook down (~1.6 ms at 40 entries, ~7 ms at 200) |
 | `CLAW_NO_STACK_NOTE` | (unset) | Don't inject the detected-stack note at session start |
+| `CLAW_NO_STALENESS_NOTE` | (unset) | Don't warn when this project's framework version has moved past the range its rules were verified against |
 | `CLAW_NO_MODEL_ADVISOR` | (unset) | Don't check the session's model tier against the opening task |
 | `CLAW_NO_CONTEXT_WATCH` | (unset) | Disable the context-pressure warnings |
 | `CLAW_CONTEXT_LIMIT` | (auto) | Your context window in tokens. Auto-detected from the `[1m]` marker on your configured model, then corrected upward if usage exceeds the assumption. Set it explicitly if that guess is wrong |

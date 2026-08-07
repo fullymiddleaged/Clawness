@@ -16,13 +16,16 @@ import argparse
 import json
 import math
 import os
+import re
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 import yaml
 
 from .core import Clawness, _estimate_tokens, load_rules
+from .staleness import WATCHED_LABELS, parse_range
 
 
 def _default_rules_dir() -> Path:
@@ -131,10 +134,81 @@ VAGUE_RE = _re.compile(
 )
 
 
+_VERIFIED_RE = re.compile(r"^\d{4}-\d{2}(-\d{2})?$")
+
+
+def _stamp_problems(r, raw: dict | None) -> list[str]:
+    """Mechanical validation of a rule's version stamp (applies_to/verified/sources).
+
+    Every check here exists because the failure it catches is **silent**. A stamp
+    that can't be read doesn't raise and doesn't warn — it just never fires, so
+    the rule looks reviewed and behaves exactly like an unreviewed one. Judgment
+    (is this range *right*?) is not lintable and belongs to the review pass; what
+    is lintable is whether the stamp can work at all.
+    """
+    problems: list[str] = []
+    raw_applies = (raw or {}).get("applies_to")
+
+    # The loader coerces an unusable applies_to to {} so the prompt hook can't
+    # crash on one. That silence is correct at runtime and wrong here.
+    if raw_applies is not None and not r.applies_to:
+        problems.append(
+            "'applies_to' is not a mapping of framework -> version range — "
+            "it is being dropped, so this rule reads as unstamped"
+        )
+
+    for label, spec in r.applies_to.items():
+        # The one that matters most: a label absent from VERSION_WATCH_* never
+        # matches the detector's `versions` dict, so the check silently never
+        # fires. A dead check that looks configured is worse than no check.
+        if label not in WATCHED_LABELS:
+            problems.append(
+                f"'applies_to' names '{label}', which no detector emits — the "
+                f"key must be a VERSION_WATCH label ({_nearest_label(label)})"
+            )
+        if parse_range(spec) is None:
+            problems.append(
+                f"'applies_to[{label}]' range '{spec}' is unparseable — use "
+                "'13-15' or '15' (one or two numeric components per bound)"
+            )
+
+    if r.verified:
+        if not _VERIFIED_RE.match(r.verified):
+            problems.append(
+                f"'verified' is '{r.verified}' — expected YYYY-MM (the month the "
+                "rule was reviewed)"
+            )
+        elif r.verified[:7] > datetime.now().strftime("%Y-%m"):
+            problems.append(f"'verified' date '{r.verified}' is in the future")
+
+    # verified/sources qualify a range. Without one they describe nothing, and
+    # the author probably believes the rule is armed when it is not.
+    if (r.verified or r.sources) and not r.applies_to:
+        problems.append(
+            "'verified'/'sources' without 'applies_to' — there is no range for "
+            "them to establish, and this rule arms no staleness warning"
+        )
+
+    return problems
+
+
+def _nearest_label(label: str) -> str:
+    """Best guess at what a mistyped framework label meant, for the lint message."""
+    folded = label.replace(".", "").replace("-", "").lower()
+    for known in sorted(WATCHED_LABELS):
+        if known.replace(".", "").replace("-", "").lower() == folded:
+            return f"did you mean '{known}'?"
+    return "known labels: " + ", ".join(sorted(WATCHED_LABELS))
+
+
 def cmd_lint(args: argparse.Namespace) -> None:
     rules_dir = Path(args.rules_dir)
     ranked, mandatory = load_rules(rules_dir)
     issues = 0
+    # Raw YAML per file, kept so the stamp pass can see what the author WROTE
+    # rather than what the loader could salvage — a dropped `applies_to` is
+    # invisible in the Rule object, which is exactly the failure to report.
+    raw_by_path: dict[str, dict] = {}
 
     # Encoding pass: load_rules silently skips files that don't decode as UTF-8
     # or won't parse (so one bad file can't crash the hook). Lint must surface
@@ -169,6 +243,8 @@ def cmd_lint(args: argparse.Namespace) -> None:
             issues += 1
             print(f"  {yml_path}:")
             print("    - top level is not a mapping — rule file must be a single YAML mapping")
+        else:
+            raw_by_path[str(yml_path)] = parsed
 
     # Duplicate-id pass across the whole corpus (ranked + mandatory share one
     # namespace — the retriever and rendering both index by id).
@@ -212,6 +288,7 @@ def cmd_lint(args: argparse.Namespace) -> None:
                 problems.append(
                     f"domain '{r.domain}' doesn't match its folder '{folder}'"
                 )
+        problems += _stamp_problems(r, raw_by_path.get(r.source_path))
         if r.mandatory:
             rendered_len = len(r.render(compact=True))
             if rendered_len > MANDATORY_CHAR_CEILING:
@@ -467,6 +544,185 @@ def cmd_eval(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+# ---------------------------------------------------------------------------
+# audit-rules — maintainer tooling for keeping the corpus honest
+# ---------------------------------------------------------------------------
+#
+# Unlike `lint`, every check here is a JUDGMENT call dressed as a number: an
+# overlapping pair may be two correct rules, an unstamped rule may simply not
+# need a stamp, a "stale" verified date may be on a rule nothing has changed
+# under. So this is report-only and non-zero exit is opt-in (`--strict`); CI
+# gates `lint` and `eval`, not this.
+
+
+def _months_between(older: str, newer: str) -> int | None:
+    """Whole months from *older* to *newer*, both YYYY-MM(-DD), or None."""
+    try:
+        oy, om = int(older[:4]), int(older[5:7])
+        ny, nm = int(newer[:4]), int(newer[5:7])
+    except (ValueError, IndexError):
+        return None
+    return (ny - oy) * 12 + (nm - om)
+
+
+def _audit_stale(rules: list, max_age: int | None) -> tuple[int, list[str]]:
+    """Rules with no stamp, an aged stamp, or a stamp wider than its evidence."""
+    lines: list[str] = []
+    unstamped = [r for r in rules if not r.applies_to]
+    if unstamped:
+        by_domain: dict[str, int] = {}
+        for r in unstamped:
+            by_domain[r.domain] = by_domain.get(r.domain, 0) + 1
+        lines.append(f"  {len(unstamped)} rule(s) carry no 'applies_to' — no version "
+                     "provenance, so they can never be detected as stale:")
+        for domain, count in sorted(by_domain.items(), key=lambda kv: -kv[1]):
+            lines.append(f"    {domain}: {count}")
+
+    now = datetime.now().strftime("%Y-%m")
+    for r in rules:
+        if not r.applies_to:
+            continue
+        # A range spanning more majors than it cites sources for is the "13-17
+        # slammed on everything" shape. Crude on purpose — it can't tell a
+        # thorough single source from a lazy one, which is exactly why this
+        # command reports rather than gates.
+        for label, spec in r.applies_to.items():
+            parsed = parse_range(spec)
+            if parsed is None:
+                continue
+            majors = parsed[1][0] - parsed[0][0] + 1
+            if majors > max(1, len(r.sources)):
+                lines.append(
+                    f"  {r.id}: '{label}' spans {majors} majors ({spec}) on "
+                    f"{len(r.sources)} source(s) — widen only as far as evidence goes"
+                )
+        if max_age is None or not r.verified:
+            continue
+        age = _months_between(r.verified, now)
+        if age is not None and age > max_age:
+            lines.append(f"  {r.id}: verified {r.verified} ({age} months ago)")
+
+    if max_age is None:
+        lines.append("  (age check skipped — pass --max-age <months> to run it; "
+                     "there is no default because there is no review-cadence data "
+                     "to derive one from)")
+    return len([ln for ln in lines if not ln.startswith("  (")]), lines
+
+
+def _audit_coverage(ranked: list, data_path: Path) -> tuple[int, list[str]]:
+    """Ranked rules that appear in no ground-truth `expect` list.
+
+    A rule nothing measures can regress in retrieval without any signal — the
+    eval floors stay green while the rule quietly stops surfacing.
+    """
+    try:
+        queries = json.loads(data_path.read_text(encoding="utf-8")).get("queries", [])
+    except (OSError, ValueError) as e:
+        return 1, [f"  could not read {data_path}: {e}"]
+
+    covered = {rid for q in queries for rid in q.get("expect", [])}
+    missing = sorted(r.id for r in ranked if r.id not in covered)
+    if not missing:
+        return 0, ["  every ranked rule appears in at least one eval query"]
+    lines = [f"  {len(missing)} of {len(ranked)} ranked rules are in no eval query:"]
+    lines += [f"    {rid}" for rid in missing]
+    return len(missing), lines
+
+
+def _cosine(a: dict[str, float], b: dict[str, float]) -> float:
+    if len(a) > len(b):
+        a, b = b, a
+    dot = sum(w * b[t] for t, w in a.items() if t in b)
+    if dot == 0.0:
+        return 0.0
+    na = math.sqrt(sum(w * w for w in a.values()))
+    nb = math.sqrt(sum(w * w for w in b.values()))
+    return dot / (na * nb) if na and nb else 0.0
+
+
+def _audit_overlap(wl: Clawness, threshold: float) -> tuple[int, list[str]]:
+    """Rule pairs similar enough that they compete for the same top-k slot.
+
+    Both may be correct — the cost is that one slot restates the other. Uses the
+    engine's own TF-IDF vectors, so "similar" means what the retriever means.
+    """
+    index = wl._tfidf
+    if index is None or not index._doc_vectors:
+        return 0, ["  no index"]
+    rules = wl._ranked_rules
+    pairs: list[tuple[float, str, str]] = []
+    vectors = index._doc_vectors
+    for i in range(len(vectors)):
+        for j in range(i + 1, len(vectors)):
+            score = _cosine(vectors[i], vectors[j])
+            if score >= threshold:
+                pairs.append((score, rules[i].id, rules[j].id))
+    if not pairs:
+        return 0, [f"  no pairs above {threshold:.2f}"]
+    pairs.sort(reverse=True)
+    lines = [f"  {len(pairs)} pair(s) at or above {threshold:.2f}:"]
+    lines += [f"    {score:.3f}  {a} <-> {b}" for score, a, b in pairs]
+    return len(pairs), lines
+
+
+def _audit_reachability(wl: Clawness) -> tuple[int, list[str]]:
+    """Rules their own `when` can't retrieve — unreachable by construction.
+
+    The weakest possible bar: if a rule's own trigger description doesn't put it
+    in the top 5, no user prompt will either.
+    """
+    unreachable = [
+        r.id for r in wl._ranked_rules
+        if r.when and r.id not in wl.rank_ids(r.when, top_k=5)
+    ]
+    if not unreachable:
+        return 0, [f"  all {len(wl._ranked_rules)} ranked rules retrieve on their own 'when'"]
+    lines = [f"  {len(unreachable)} rule(s) don't retrieve on their own 'when':"]
+    lines += [f"    {rid}" for rid in unreachable]
+    return len(unreachable), lines
+
+
+def cmd_audit_rules(args: argparse.Namespace) -> None:
+    rules_dir = Path(args.rules_dir)
+    wl = Clawness(rules_dir)
+    ranked, mandatory = wl._ranked_rules, wl._mandatory_rules
+
+    # No check flags means run them all — the useful default for "how healthy is
+    # this corpus?", which is the question the command exists to answer.
+    selected = [args.stale, args.coverage, args.overlap, args.reachability]
+    run_all = not any(selected)
+
+    data_path = (
+        Path(args.data) if args.data
+        else Path(__file__).resolve().parent.parent / "tests" / "ground_truth.json"
+    )
+
+    checks = [
+        ("stale", run_all or args.stale,
+         lambda: _audit_stale(ranked + mandatory, args.max_age)),
+        ("coverage", run_all or args.coverage,
+         lambda: _audit_coverage(ranked, data_path)),
+        ("overlap", run_all or args.overlap,
+         lambda: _audit_overlap(wl, args.overlap_threshold)),
+        ("reachability", run_all or args.reachability,
+         lambda: _audit_reachability(wl)),
+    ]
+
+    findings = 0
+    for name, enabled, run in checks:
+        if not enabled:
+            continue
+        count, lines = run()
+        findings += count
+        print(f"\n[{name}]")
+        for line in lines:
+            print(line)
+
+    print(f"\n{findings} finding(s) across {len(ranked) + len(mandatory)} rules.")
+    if findings and args.strict:
+        sys.exit(1)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="clawness",
@@ -507,6 +763,34 @@ def main() -> None:
     p_eval.add_argument("--top-k", "-k", type=int, default=5)
     p_eval.add_argument("--floor-mrr", type=float, default=None, help="Fail if MRR below this")
     p_eval.add_argument("--floor-hit", type=float, default=None, help="Fail if hit-rate below this")
+
+    # audit-rules (corpus health: provenance, eval coverage, overlap, reachability)
+    p_audit_rules = sub.add_parser(
+        "audit-rules",
+        help="Report corpus health: version provenance, eval coverage, "
+             "near-duplicate rules, unreachable rules",
+    )
+    p_audit_rules.add_argument("--stale", action="store_true",
+                               help="Rules with no/aged/over-wide version stamps")
+    p_audit_rules.add_argument("--coverage", action="store_true",
+                               help="Ranked rules in no ground-truth query")
+    p_audit_rules.add_argument("--overlap", action="store_true",
+                               help="Rule pairs competing for the same top-k slot")
+    p_audit_rules.add_argument("--reachability", action="store_true",
+                               help="Rules their own 'when' can't retrieve")
+    p_audit_rules.add_argument(
+        "--max-age", type=int, default=None,
+        help="Months after which a 'verified' date counts as aged. No default: "
+             "there is no review-cadence data to derive one from, and an invented "
+             "number would be argued with instead of acted on.",
+    )
+    p_audit_rules.add_argument("--overlap-threshold", type=float, default=0.30,
+                               help="Cosine at or above which a pair is reported "
+                                    "(default 0.30)")
+    p_audit_rules.add_argument("--data", default=None,
+                               help="Path to ground_truth.json (default: bundled tests/)")
+    p_audit_rules.add_argument("--strict", action="store_true",
+                               help="Exit non-zero if anything is reported")
 
     # audit-skills (TOFU integrity: scan context-injected artifacts)
     p_audit = sub.add_parser(
@@ -554,6 +838,7 @@ def main() -> None:
             "lint": cmd_lint,
             "bench": cmd_bench,
             "eval": cmd_eval,
+            "audit-rules": cmd_audit_rules,
             "audit-skills": cmd_audit_skills,
         }[args.command](args)
 

@@ -12,3 +12,12 @@ rule: >
   Return a cleanup function from useEffect for subscriptions and timers.
 violation: "useEffect(() => { fetchUser(userId) }, [])  // missing userId dep"
 correct: "useEffect(() => { fetchUser(userId) }, [userId])"
+
+# Reviewed against current official docs, August 2026.
+# 19.2 still lists 'used as a dependency of some Hook' as a case worth
+# useCallback, despite the React Compiler note.
+applies_to: {"React": "19"}
+verified: "2026-08"
+sources:
+  - https://react.dev/reference/rules/rules-of-hooks
+  - https://react.dev/reference/react/useCallback

@@ -13,3 +13,10 @@ rule: >
   interactivity — wrap only that child.
 violation: "Adding 'use client' to page.tsx because it contains a LikeButton"
 correct: "Keep page.tsx as Server Component, add 'use client' only to LikeButton"
+
+# Reviewed against the Next.js 16.3 docs, August 2026.
+applies_to: {"Next.js": "15-16"}
+verified: "2026-08"
+sources:
+  - https://nextjs.org/docs/app/getting-started/server-and-client-components
+  - https://nextjs.org/docs/app/api-reference/file-conventions/layout

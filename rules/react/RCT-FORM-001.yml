@@ -12,3 +12,11 @@ rule: >
   form submissions.
 violation: "Hand-rolling form state with useState for every field"
 correct: "React Hook Form + Zod resolver for client, same Zod schema in Server Action"
+
+# Reviewed against current official docs, August 2026.
+# useActionState is the 19 form API the rule names; confirmed against the 19.2
+# reference.
+applies_to: {"React": "19"}
+verified: "2026-08"
+sources:
+  - https://react.dev/reference/react/useActionState

@@ -172,6 +172,72 @@ dependency**. No ML models, no services, no Docker.
      an inventory; the manifest is right there. `GEN-INSTALLED-VER-001` is the durable
      half, and it is distinct from `GEN-DEPS-001`/`ENF-SEC-005`, which are about
      *choosing* a version for a NEW dependency rather than *matching* an existing one.
+6b. **Corpus staleness** (`clawness/staleness.py`, surfaced by `stack_detect`'s
+   `check_staleness`; remedy in `skills/refresh/SKILL.md`): a rule may carry
+   `applies_to`/`verified`/`sources` recording the versions it was established
+   against, and the note fires when the project declares one past that range.
+   - **The relevance floor cannot catch this.** It detects unfamiliar *vocabulary*;
+     a major bump keeps the words ("route", "cache", "app router") and changes their
+     meaning, so a 14-era rule scores like an ordinary match on a v17 prompt.
+     Measured on the live corpus: NX-CACHE-001 at 0.112, NX-ROUTE-001 at 0.121.
+   - **Stamps are per RULE, never per domain.** A domain range is the union of its
+     rules' ranges — structurally the widest claim available — and too-wide fails
+     *silent* while too-narrow produces a visible false alarm that gets corrected.
+     Don't "simplify" this by stamping folders.
+   - **Only a verified stamp arms the warning** (`is_armed`): `applies_to` without
+     `verified` *and* `sources` is asserted, not established, and stays silent. The
+     feature therefore ships doing nothing until real review has happened — that is
+     the honest behaviour, not a shortcoming. Establishing a range is an OUTPUT of
+     review; there is no way to derive it (git dates are a weak proxy, rule text
+     names an API not a version).
+   - Grammar is an inclusive `"13-15"` / `"15"` / `"1.4-2.0"`, one or two numeric
+     components per bound — the shape `_clean_version` produces. Ceilings pad with a
+     sentinel (`"15"` covers 15.9) because padding with 0 would false-alarm on 15.1.
+     **Open-ended (`"13-"`) is deliberately inexpressible**: "and everything after"
+     is the claim nobody has evidence for. Below-floor mismatches are silent — the
+     corpus is written forwards, so warning there fires on every un-upgraded project.
+   - The join key is the DETECTOR's label (`"Next.js"`), since that is how
+     `scan_project` keys `versions`. A typo'd label never matches, so the check goes
+     silently inert while looking configured — which is why `clawness lint` validates
+     membership in `WATCHED_LABELS` mechanically. That is the check to watch fail
+     first (TST-FAILFIRST-001).
+   - **The note orients; it does not commission work**, and its text is a tested
+     artifact (`TestNoteText`). An earlier attempt had Clawness author rule files
+     from the automatic path and it wrote heaps of them, eating the session — the
+     same failure as 1.7.0's CLAUDE.md remedy, and for the same reason: a
+     SessionStart note fires before the user has said what they came for. So the
+     note names `/clawness:refresh` and starts nothing, permits only a passively
+     triggered one-line append to `.clawness/memory.md` (`SESSION_BACKSTOP`, a
+     judgment call — the real bound is "if you happen to establish… while doing the
+     user's work"), and never names `.clawness/rules/`.
+   - Reads stamps from global AND project rules, project winning by id, so rules
+     `/clawness:refresh` generates are stale-checked by the same mechanism when the
+     project moves again. Without that they'd be the one class that never can be.
+   - **The ledger keys on the fact, not a date** (`.clawness/staleness.json` stores
+     label → detected version): once per mismatch, re-arming when the version moves.
+     A "checked today" flag was rejected — it goes silent for the rest of the day if
+     the user upgrades at 2pm having been checked at 9am, and re-asks forever once
+     declined. Same shape as `claude_md_check`'s size ledger. Revisit only if a
+     future version asks npm/PyPI what the current major *is* (network I/O, where a
+     TTL cache becomes correct). `unasked` is called LAST; opt-out
+     `CLAW_NO_STALENESS_NOTE`; fails silent on every path.
+   - **Don't auto-suppress stale rules.** A rule that's 80% right beats silence,
+     provided Claude knows to check — which is what the note buys.
+   - Known limit: covers only the ~14 `VERSION_WATCH_*` packages, detects *version*
+     drift only (not a framework abandoned outright, nor a rule wrong when written).
+   - **Two whole domains are structurally unstampable, found while stamping for
+     1.9.0 — don't rediscover them.** `python` has no join label at all: the watch
+     list is frameworks, not the interpreter, so a `"Python"` key fails lint and
+     there is nothing else a `PY-*` rule can key on. Adding one would mean detecting
+     the *interpreter* version, which `_python_version` (a dependency reader) does
+     not do. And the `fastapi`-labelled rules are deliberately left bare because
+     FastAPI ships `0.x`: `_clean_version` yields two components, so the effective
+     major is the minor, which moves every few weeks — any ceiling false-alarms
+     almost immediately. The version-sensitive claims in that domain hang off
+     `Pydantic` and `SQLAlchemy` instead, which have real majors. The general shape:
+     **a stamp is only worth writing where the label has a major that means
+     something.**
+
 7. **Changelog check** (`hooks/changelog_check.py`, SessionStart): reminds when a
    changelog exists, and asks **once per project, ever** when one doesn't — ledger at
    `.clawness/changelog.json`, `should_ask` called LAST so a session that would have
@@ -325,7 +391,13 @@ dependency**. No ML models, no services, no Docker.
 - `clawness/memory.py` — project-memory parsing + ranking (`parse_memory`,
   `rank_lessons`, `render_memory_block`). Imports the primitives from `core`, so
   `core.render_memory_block` delegates via a *deferred* import to avoid a cycle.
-- `clawness/cli.py` — `clawness` CLI: query, stats, lint, bench, eval, init, plan, agents-md, audit-skills.
+- `clawness/cli.py` — `clawness` CLI: query, stats, lint, bench, eval, init, plan,
+  agents-md, audit-rules, audit-skills. **`audit-rules` is report-only and NOT
+  CI-gated**, unlike lint/eval: every check is a judgment call dressed as a number
+  (an overlapping pair may be two correct rules; an unstamped rule may not need a
+  stamp), so `--strict` is opt-in. Its `--overlap` uses the engine's own TF-IDF doc
+  vectors, so "similar" means what the retriever means. `--max-age` deliberately has
+  no default — an invented cadence gets argued with instead of acted on.
 - `clawness/plan.py` — plan-gate logic (`gate_decision`, `is_plan_file`, session approval).
 - `clawness/guard.py` — access-guard logic (`classify_tool_call`, `value_in_project`, ask-ledger).
 - `clawness/trust.py` — trust-ledger logic (`scan_artifacts`, `diff_ledger`, `scan_injection_tells`).
@@ -338,6 +410,10 @@ dependency**. No ML models, no services, no Docker.
   truth for "what model is configured?"), keeping only the `[1m]` reading here.
 - `clawness/model_advisor.py` — model-tier advice (`normalize_tier`, `assess`,
   `should_advise`, `render_advice`, `read_settings_model`).
+- `clawness/staleness.py` — version stamps (`parse_range`, `is_above_ceiling`,
+  `is_armed`, `stale_rules`, `summarize`, `unasked`, `render_note`,
+  `WATCHED_LABELS`). Imports `VERSION_WATCH_*` from `init` — one source of truth for
+  the join labels. Called only from `stack_detect` (SessionStart), never per prompt.
 - `clawness/handoff.py` — session handoff (`find_handoff`, `render_handoff_note`,
   `describe_age`, `HANDOFF_TEMPLATE`).
 - `hooks/` — runtime hooks (`claude_hook`, `compress_output`, `plan_gate`, `access_guard`,
@@ -427,6 +503,17 @@ dependency**. No ML models, no services, no Docker.
   hardcode `opus`/`fable` in a shipped agent** — a distributed plugin can't know the
   user's plan, access or budget, and forcing a frontier tier is the same error as the
   old downgrade pointed the other way. `effort:`/`maxTurns:` are unrelated and stay.
+- **`.clawness/rules/` overrides by id, and the asymmetry with mandatory is
+  deliberate (1.9.0).** `add_rules` used to be a pure append, so a project rule and
+  the global rule it meant to override both entered the corpus and competed on
+  lexical score — the stale global copy won a query naming the newer version, with no
+  error and no warning. `_replace_by_id` now replaces a ranked rule in place
+  (position preserved, so merge order can't perturb ranking). **Mandatory rules still
+  append.** `.clawness/rules/` is project-local content — exactly the untrusted
+  surface ENF-SEC-006 is about — so under replacement a cloned repo shipping
+  `_mandatory/ENF-SEC-006.yml` would silently remove the real one from every turn.
+  Appending leaves the genuine rule rendering next to a visible impostor. The feature
+  that needed replacement is ranked version overrides, which this costs nothing.
 - **Token efficiency:** mandatory rules render compact (id+RULE only); `CLAW_VERBOSE`
   / `CLAW_COMPACT` toggle. Keep the per-turn block lean.
 - **Two install paths:** plugin (hooks declared in `plugin.json`, loaded from cache)

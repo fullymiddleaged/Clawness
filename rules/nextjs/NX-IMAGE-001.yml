@@ -12,3 +12,11 @@ rule: >
   LCP. Configure remotePatterns in next.config for external image domains.
 violation: "<img src='/photo.jpg' /> with no optimization"
 correct: "import Image from 'next/image'; <Image src='/photo.jpg' width={800} height={600} alt='...' />"
+
+# Reviewed against the Next.js 16.3 docs, August 2026.
+# 16 deprecates the `priority` prop in favour of `preload`.
+applies_to: {"Next.js": "15"}
+verified: "2026-08"
+sources:
+  - https://nextjs.org/docs/app/api-reference/components/image
+  - https://nextjs.org/docs/app/guides/upgrading/version-16

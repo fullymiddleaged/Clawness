@@ -12,3 +12,10 @@ rule: >
   social sharing. Create a sitemap.ts and robots.ts in the app root.
 violation: "Manually adding <title> in a <head> tag or missing page metadata"
 correct: "export const metadata: Metadata = { title: '...', description: '...' }"
+
+# Reviewed against the Next.js 16.3 docs, August 2026.
+applies_to: {"Next.js": "15-16"}
+verified: "2026-08"
+sources:
+  - https://nextjs.org/docs/app/getting-started/metadata-and-og-images
+  - https://nextjs.org/docs/app/api-reference/file-conventions/layout

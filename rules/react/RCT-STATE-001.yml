@@ -12,3 +12,9 @@ rule: >
   compute them during render. Never store what you can compute from props.
 violation: "const [fullName, setFullName] = useState(first + ' ' + last)"
 correct: "const fullName = first + ' ' + last  // computed during render"
+
+# Reviewed against current official docs, August 2026.
+applies_to: {"React": "19"}
+verified: "2026-08"
+sources:
+  - https://react.dev/learn/you-might-not-need-an-effect

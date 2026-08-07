@@ -11,3 +11,9 @@ rule: >
   If there is truly no unique ID, generate one when the data is created.
 violation: "items.map((item, index) => <Item key={index} />)"
 correct: "items.map(item => <Item key={item.id} />)"
+
+# Reviewed against current official docs, August 2026.
+applies_to: {"React": "19"}
+verified: "2026-08"
+sources:
+  - https://react.dev/learn/rendering-lists

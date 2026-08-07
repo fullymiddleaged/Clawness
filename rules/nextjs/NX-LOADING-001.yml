@@ -12,3 +12,10 @@ rule: >
   meaningful skeleton fallbacks rather than generic spinners.
 violation: "No loading.tsx — user sees blank page while data loads"
 correct: "loading.tsx with skeleton UI + Suspense around the slowest component"
+
+# Reviewed against the Next.js 16.3 docs, August 2026.
+applies_to: {"Next.js": "15-16"}
+verified: "2026-08"
+sources:
+  - https://nextjs.org/docs/app/api-reference/file-conventions/loading
+  - https://nextjs.org/docs/app/getting-started/fetching-data

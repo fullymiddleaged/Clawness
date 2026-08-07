@@ -13,3 +13,10 @@ rule: >
   simple mutations).
 violation: "Creating /api/create-todo/route.ts for a simple form POST"
 correct: "Server Action for the form; Route Handler for the Stripe webhook"
+
+# Reviewed against the Next.js 16.3 docs, August 2026.
+applies_to: {"Next.js": "15-16"}
+verified: "2026-08"
+sources:
+  - https://nextjs.org/docs/app/getting-started/route-handlers
+  - https://nextjs.org/docs/app/getting-started/mutating-data

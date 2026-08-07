@@ -10,6 +10,13 @@ the per-prompt rule retrieval (which surfaces matching rules as you work).
 Reuses the same detection as `clawness init` (one source of truth). Silent when
 nothing recognizable is found, in non-project locations (home dir / filesystem
 root), or when disabled via CLAW_NO_STACK_NOTE. Fails open on any error.
+
+Carries a second, independently gated concern: **corpus staleness**
+(`check_staleness`, logic in `clawness/staleness.py`). The versions this hook
+already parses are the ones a rule's `applies_to` stamp is compared against, so
+the check rides here rather than spawning another process — and SessionStart is
+the only place it may live, since `scan_project` re-runs uncached on every
+prompt. Its own opt-out is CLAW_NO_STALENESS_NOTE.
 """
 
 import os
@@ -110,7 +117,51 @@ def main() -> None:
         )
     note += " Correct this if the codebase says otherwise. Silence with CLAW_NO_STACK_NOTE=1."
     print(note)
+
+    # --- Corpus staleness (independent of the stack note above) ---
+    # Rides this hook because the versions it needs are already parsed here.
+    # CLAUDE.md is explicit that `scan_project` re-runs uncached on every prompt,
+    # so version work must not move onto that path — SessionStart only.
+    staleness_note = check_staleness(cwd_path, versions)
+    if staleness_note:
+        print("\n" + staleness_note)
     sys.exit(0)
+
+
+def check_staleness(cwd_path: Path, versions: dict) -> str:
+    """The staleness note for this project, or "" — never raises.
+
+    Reads stamps from the global corpus AND the project's own `.clawness/rules/`,
+    project winning by id (the same override precedence `add_rules` applies).
+    That last part is what makes rules written by `/clawness:refresh` subject to
+    the very check that produced them: stamped at the major they were checked
+    against, they go stale when the project moves again. Without it, generated
+    rules would be the one class that can never be detected as stale.
+    """
+    if os.environ.get("CLAW_NO_STALENESS_NOTE") or not versions:
+        return ""
+    root = git_root(cwd_path)
+    if root is None:
+        return ""
+    try:
+        from clawness.core import _replace_by_id, load_rules
+        from clawness.staleness import render_note, stale_rules, summarize, unasked
+
+        global_dir = Path(os.environ.get("CLAW_RULES_DIR") or
+                          Path(__file__).resolve().parent.parent / "rules")
+        ranked, mandatory = load_rules(global_dir)
+        project_dir = root / ".clawness" / "rules"
+        if project_dir.is_dir():
+            proj_ranked, proj_mandatory = load_rules(project_dir)
+            ranked = _replace_by_id(ranked, proj_ranked)
+            mandatory = mandatory + proj_mandatory
+
+        summaries = summarize(stale_rules(ranked + mandatory, versions))
+        # `unasked` is called LAST, and records as it goes, so a session that
+        # would have stayed quiet for any reason above doesn't spend the one shot.
+        return render_note(unasked(root, summaries))
+    except Exception:
+        return ""
 
 
 if __name__ == "__main__":

@@ -13,3 +13,12 @@ rule: >
   within a mostly-static shell.
 violation: "export const dynamic = 'force-dynamic' on a page that updates once a day"
 correct: "fetch(url, { next: { revalidate: 3600, tags: ['products'] } })"
+
+# Reviewed against the Next.js 16.3 docs, August 2026.
+# 16 replaces this model with Cache Components ('use cache' + cacheLife); the
+# pre-16 model is now a separate legacy guide.
+applies_to: {"Next.js": "15"}
+verified: "2026-08"
+sources:
+  - https://nextjs.org/docs/app/getting-started/caching
+  - https://nextjs.org/docs/app/guides/upgrading/version-16

@@ -67,11 +67,26 @@ class Rule:
     correct: str = ""
     source_path: str = ""
 
+    # ---- version provenance (optional; see CLAUDE.md "corpus staleness") ----
+    # applies_to maps a *detector label* ("Next.js" — the key `scan_project`
+    # emits, not the package name) to a version range the rule was established
+    # against. verified is the review date (YYYY-MM); sources are what justified
+    # the range. All three default empty and a rule without them behaves exactly
+    # as before. Deliberately NOT in build_search_text: provenance must never
+    # move a retrieval score.
+    applies_to: dict[str, str] = field(default_factory=dict)
+    verified: str = ""
+    sources: list[str] = field(default_factory=list)
+
     # ---- derived fields (populated at index time) ----
     _search_text: str = field(default="", repr=False)
 
     def build_search_text(self) -> str:
-        """Concatenate all searchable fields into one string for indexing."""
+        """Concatenate all searchable fields into one string for indexing.
+
+        Version provenance (applies_to/verified/sources) is excluded on purpose —
+        including it would let a stamp shift retrieval scores, so stamping a rule
+        could silently change which rules surface."""
         parts = [
             self.id,
             self.domain,
@@ -121,6 +136,40 @@ class Rule:
 # Rule loader
 # ---------------------------------------------------------------------------
 
+def _parse_applies_to(raw: object) -> dict[str, str]:
+    """Coerce a rule's `applies_to:` into {label: range}, dropping anything
+    malformed. A stamp that can't be read must not raise in the prompt hook and
+    must not half-arm the staleness check — an unusable stamp is no stamp.
+    `clawness lint` is where a malformed one gets reported loudly."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for label, spec in raw.items():
+        if label is None or spec is None:
+            continue
+        label_s = str(label).strip()
+        spec_s = str(spec).strip()
+        if label_s and spec_s:
+            out[label_s] = spec_s
+    return out
+
+
+def _replace_by_id(existing: list[Rule], incoming: list[Rule]) -> list[Rule]:
+    """Merge *incoming* into *existing*, replacing same-id rules in place and
+    appending the rest. Within *incoming*, the last rule with a given id wins.
+    See `Clawness.add_rules` for why this applies to ranked rules only."""
+    merged = list(existing)
+    positions = {r.id: i for i, r in enumerate(merged)}
+    for rule in incoming:
+        pos = positions.get(rule.id)
+        if pos is None:
+            positions[rule.id] = len(merged)
+            merged.append(rule)
+        else:
+            merged[pos] = rule
+    return merged
+
+
 def load_rules(rules_dir: str | Path) -> tuple[list[Rule], list[Rule]]:
     """
     Walk *rules_dir* and return (ranked_rules, mandatory_rules).
@@ -161,6 +210,9 @@ def load_rules(rules_dir: str | Path) -> tuple[list[Rule], list[Rule]]:
             violation=str(data.get("violation") or "").strip(),
             correct=str(data.get("correct") or "").strip(),
             source_path=str(yml_path),
+            applies_to=_parse_applies_to(data.get("applies_to")),
+            verified=str(data.get("verified") or "").strip(),
+            sources=[str(s) for s in (data.get("sources") or []) if s is not None],
         )
         r.build_search_text()
 
@@ -829,8 +881,24 @@ class Clawness:
     def add_rules(self, ranked: list["Rule"], mandatory: list["Rule"]) -> None:
         """Merge additional rules (e.g. a project's `.clawness/rules/`) into the
         corpus. Call `build_index()` once after all `add_rules()` calls are done —
-        this does not rebuild the index itself, so multiple merges stay cheap."""
-        self._ranked_rules += ranked
+        this does not rebuild the index itself, so multiple merges stay cheap.
+
+        An incoming **ranked** rule whose id already exists replaces the existing
+        one, in place. This is what makes `.clawness/rules/` the override layer it
+        is documented to be: before 1.9.0 this appended, so a project rule and the
+        global rule it meant to override both entered the corpus and competed on
+        lexical score — the stale global copy won a query that named the newer
+        version. Position is preserved, so merge order can't perturb ranking.
+
+        **Mandatory rules are appended, never replaced, and that asymmetry is
+        deliberate.** `.clawness/rules/` is project-local content, so it is
+        exactly the untrusted surface ENF-SEC-006 is about: a cloned repo
+        shipping `_mandatory/ENF-SEC-006.yml` would, under replacement, silently
+        remove the real one from every turn. Appending leaves the genuine rule
+        rendering (alongside a visible impostor) — noisier, but the invariant
+        holds. The feature that needed replacement is version overrides of ranked
+        framework rules, which this costs nothing."""
+        self._ranked_rules = _replace_by_id(self._ranked_rules, ranked)
         self._mandatory_rules += mandatory
         self._indexed = False
 

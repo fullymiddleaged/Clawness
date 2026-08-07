@@ -13,3 +13,13 @@ rule: >
   update every dynamic route page in the same pass.
 violation: "function Page({ params }: { params: { slug: string } }) { return params.slug }"
 correct: "async function Page({ params }: { params: Promise<{ slug: string }> }) { const { slug } = await params }"
+
+# Reviewed against the Next.js 16.3 docs, August 2026.
+# 16 removes the synchronous fallback entirely; the 14-vs-15 split the rule
+# describes still holds.
+applies_to: {"Next.js": "14-16"}
+verified: "2026-08"
+sources:
+  - https://nextjs.org/docs/app/api-reference/file-conventions/page
+  - https://nextjs.org/docs/app/api-reference/file-conventions/layout
+  - https://nextjs.org/docs/app/guides/upgrading/version-16

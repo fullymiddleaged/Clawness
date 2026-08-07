@@ -13,3 +13,11 @@ rule: >
   Alembic for migrations.
 violation: "Global session object shared across requests — causes race conditions"
 correct: "async def get_db(): async with async_session() as s: yield s — with per-request lifecycle"
+
+# Reviewed against current official docs, August 2026.
+# Checked against SQLAlchemy 2.0.51: create_async_engine, AsyncSession and
+# async_sessionmaker with a per-request 'async with'.
+applies_to: {"SQLAlchemy": "2.0"}
+verified: "2026-08"
+sources:
+  - https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html

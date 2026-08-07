@@ -5,6 +5,86 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-08-07
+
+Rules can now say which framework versions they were checked against, and Clawness
+tells you when your project has moved past them. Plus the fix that makes
+`.clawness/rules/` the override layer it was always documented to be.
+
+### Added
+
+- **Rules can carry a version stamp, and a session-start note when your project
+  outruns it.** A rule may record `applies_to` (the framework versions it was
+  established against), `verified` (when) and `sources` (what justified it). If your
+  project declares a version past that range, Clawness says so once — one sentence,
+  naming how many rules and which versions. The relevance floor could never catch
+  this: a major bump keeps the words ("route", "cache", "app router") and changes
+  their meaning, so a rule written for Next.js 14 scores like an ordinary match on a
+  Next.js 17 prompt and gets served confidently. The note starts no work; it orients
+  and stops. Silence it with `CLAW_NO_STALENESS_NOTE=1`.
+- **Only a *verified* stamp raises a warning.** A rule carrying `applies_to` without
+  `verified` and `sources` is asserted, not established, and stays silent. So the
+  feature ships doing nothing until real review has happened — a wrong "this was
+  checked" badge is worse than no badge at all.
+- **`/clawness:refresh <domain>` — bring a project's rules up to its actual version.**
+  Reads the lockfile (not the manifest range), greps for the constructs each candidate
+  rule would govern, looks up the framework's own migration guide for what changed,
+  then shows you the list and stops. On approval it writes version-corrected overrides
+  into `.clawness/rules/`, stamped with the major it actually checked — so when you
+  later upgrade again, its own rules go stale and get flagged by the same check. It is
+  the only path allowed to author rule files, and nothing automatic can invoke it.
+- **`clawness audit-rules` — corpus health for maintainers and fork maintainers.**
+  Four checks: `--stale` (rules with no version stamp, an aged one, or a range wider
+  than the sources cited for it), `--coverage` (ranked rules appearing in no eval
+  query — currently **48 of 186**, so retrieval regressions on them are invisible),
+  `--overlap` (rule pairs competing for the same top-k slot — top pair is
+  `FA-ASYNC-001 ↔ PY-ASYNC-001` at **0.637**; both correct, but in a FastAPI project
+  one slot restates the other), and `--reachability` (rules their own `when` can't
+  retrieve — **0 of 186** today, so this locks in a healthy state rather than finding
+  anything). Report-only: these are judgment calls, so nothing fails unless you pass
+  `--strict`. `--max-age` has no default on purpose — there is no review-cadence data
+  to derive one from.
+- **`/clawness:audit-rules` — the correctness pass `audit-rules` can't automate.**
+  One domain at a time, against current official docs: still true / now wrong / now
+  the framework default / unsettled, then it writes the stamp on each rule
+  individually. It reports verdicts and never rewrites rule text — a rule silently
+  flipped by a hallucination governs every later prompt, which is worse than a stale
+  one because it looks reviewed.
+- **The ten `nextjs` rules are the first carrying a real stamp**, reviewed against the
+  Next.js 16.3 docs in August 2026. Seven are confirmed current and stamped through 16;
+  three are capped at 15 because 16 genuinely moved under them — `NX-IMAGE-001`
+  (`priority` deprecated in favour of `preload`), `NX-CACHE-001` (the whole model is now
+  Cache Components / `use cache`) and `NX-ACTION-001` (`revalidateTag` needs a
+  `cacheLife` argument; `updateTag` is the read-your-writes path). So a Next.js 16
+  project gets the note about exactly those three, a 15 project hears nothing, and the
+  stale rules keep serving — 80% right beats silence, provided you know to check.
+- **`react` and two `fastapi` rules stamped as well.** The four React rules are
+  confirmed against the React 19.2 docs (the Compiler note on `useCallback` does not
+  displace the "used as a Hook dependency" case `RCT-HOOKS-001` names).
+  `FA-PYDANTIC-001` is stamped to Pydantic 2 and `FA-DBSESSION-001` to SQLAlchemy 2.0,
+  the two version-sensitive claims in that domain.
+- **Two domains turn out not to be stampable, which is worth knowing.** `python` has no
+  join label — `WATCHED_LABELS` covers frameworks, not the interpreter, so there is
+  nothing for a `PY-*` rule to key on. And FastAPI's own rules are left unstamped
+  because it ships `0.x`: the effective major is the second component, which moves
+  every few weeks, so any ceiling would fire a false alarm almost immediately — the
+  precise way users learn to ignore a warning.
+- **`clawness lint` validates version stamps.** Unknown framework label, unparseable
+  range, a future `verified` date, an `applies_to` that isn't a mapping, or evidence
+  with no range to establish. Every one of these fails *silently* at runtime — a
+  typo'd label like `NextJS` simply never matches, so the rule looks reviewed and
+  behaves exactly like an unreviewed one.
+
+### Fixed
+
+- **`.clawness/rules/` actually overrides global rules now.** A project rule sharing
+  an id with a global one used to be *appended*: both copies entered the corpus and
+  competed on lexical score, so the rule you wrote to override a stale one could
+  simply lose to it — no error, no warning, no effect. An incoming ranked rule now
+  replaces the existing one with that id. Mandatory rules are still appended rather
+  than replaced, deliberately: `.clawness/rules/` is project-local content, so a
+  cloned repo must not be able to silently remove an always-on security rule.
+
 ## [1.8.0] - 2026-08-05
 
 Splits the CLAUDE.md work in two: the session-start check keeps the diagnosis, and a

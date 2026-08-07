@@ -12,3 +12,10 @@ rule: >
   getServerSideProps or getStaticProps — those are Pages Router patterns.
 violation: "useEffect(() => { fetch('/api/posts').then(...) }, []) in a page component"
 correct: "export default async function Page() { const posts = await db.select().from(posts) }"
+
+# Reviewed against the Next.js 16.3 docs, August 2026.
+applies_to: {"Next.js": "15-16"}
+verified: "2026-08"
+sources:
+  - https://nextjs.org/docs/app/getting-started/fetching-data
+  - https://nextjs.org/docs/app/api-reference/file-conventions/page

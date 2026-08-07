@@ -14,3 +14,10 @@ rule: >
   'use client', not the entire layout.
 violation: "Putting 'use client' on root layout.tsx to use ThemeProvider"
 correct: "Create a separate 'use client' Providers component, import it in Server layout"
+
+# Reviewed against the Next.js 16.3 docs, August 2026.
+applies_to: {"Next.js": "15-16"}
+verified: "2026-08"
+sources:
+  - https://nextjs.org/docs/app/api-reference/file-conventions/layout
+  - https://nextjs.org/docs/app/getting-started/server-and-client-components

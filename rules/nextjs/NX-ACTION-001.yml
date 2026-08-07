@@ -12,3 +12,12 @@ rule: >
   non-form programmatic calls — use Route Handlers for those.
 violation: "Creating a POST API route just to handle a form submission"
 correct: "'use server' action that writes to DB then calls revalidatePath('/dashboard')"
+
+# Reviewed against the Next.js 16.3 docs, August 2026.
+# 16 makes revalidateTag's cacheLife argument required and adds
+# updateTag/refresh for read-your-writes in Server Actions.
+applies_to: {"Next.js": "15"}
+verified: "2026-08"
+sources:
+  - https://nextjs.org/docs/app/getting-started/mutating-data
+  - https://nextjs.org/docs/app/guides/upgrading/version-16
