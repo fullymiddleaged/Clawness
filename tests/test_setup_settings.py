@@ -239,7 +239,19 @@ def _is_claw(h: dict) -> bool:
 
 
 def _sh():
+    """The POSIX shell Claude Code would run a hook command through.
+
+    On Windows that is Git Bash, and it must be preferred explicitly: the only
+    `bash` on the Windows PATH is usually WSL's, which sees `/mnt/c/...` but
+    resolves no `python`/`py` (no `.exe` suffix), so the picker legitimately
+    falls through there and the test would measure the wrong shell.
+    """
     import shutil
+    if os.name == "nt":
+        for p in (r"C:\Program Files\Git\bin\bash.exe",
+                  r"C:\Program Files\Git\usr\bin\bash.exe"):
+            if Path(p).exists():
+                return p
     return shutil.which("sh") or shutil.which("bash")
 
 
@@ -272,6 +284,12 @@ def test_picker_still_runs_the_interpreter_when_one_exists(tmp_path):
     if not sh:
         import pytest
         pytest.skip("no POSIX shell available")
+    probe = subprocess.run(
+        [sh, "-c", 'for p in python3 python py; do command -v "$p" && exit 0; done; exit 1'],
+        capture_output=True, text=True, timeout=60)
+    if probe.returncode != 0:
+        import pytest
+        pytest.skip(f"no interpreter visible to {sh} — premise not met")
     script = tmp_path / "marker.py"
     script.write_text("print('MARKER-RAN')\n", encoding="utf-8")
     cmd = S.build_hook_entry(script, notice=True)["command"]
