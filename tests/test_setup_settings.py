@@ -10,6 +10,7 @@ Runs under pytest, or standalone:  python tests/test_setup_settings.py
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -175,6 +176,109 @@ def test_partial_state_self_heals_missing_post_companion(tmp_path):
     healed = json.loads(settings.read_text(encoding="utf-8"))
     assert "access_guard.py" in _scripts_on(healed, "PostToolUse")
     assert "plan_gate.py" in _scripts_on(healed, "PostToolUse")
+
+
+# ---------------------------------------------------------------------------
+# No-interpreter fall-through
+#
+# With no Python on PATH every `command -v` in the picker fails, the `&&`
+# short-circuits, and the loop's status is the last failed test — exit 1. Claude
+# Code treats a non-zero, non-2 exit as a non-blocking error and shows a hook
+# error notice plus the first line of stderr, which is empty here: an
+# unexplained error on every session start, prompt and gated tool call, with the
+# plan gate and access guard silently inert and no bootstrap.log to diagnose
+# from (ensure_deps can't run either). These pin the trailing `exit 0` and the
+# one notice that explains it.
+# ---------------------------------------------------------------------------
+
+PLUGIN_JSON = Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json"
+
+
+def _plugin_commands() -> list:
+    data = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
+    return [
+        h["command"]
+        for groups in data["hooks"].values()
+        for group in groups
+        for h in group["hooks"]
+    ]
+
+
+def test_every_plugin_hook_command_exits_zero(tmp_path):
+    for cmd in _plugin_commands():
+        assert cmd.endswith("; exit 0"), cmd
+
+
+def test_exactly_one_plugin_hook_carries_the_no_python_notice(tmp_path):
+    # Eight SessionStart registrations all echoing would repeat it eight times.
+    carrying = [c for c in _plugin_commands() if S.NO_PYTHON_NOTICE in c]
+    assert len(carrying) == 1, f"{len(carrying)} commands carry the notice"
+    assert "git_check.py" in carrying[0]
+
+
+def test_installer_matches_the_plugin_fall_through(tmp_path):
+    """Both install paths must degrade identically — the manual path is not the
+    one people read the README for."""
+    data = _install(tmp_path)
+    commands = [
+        h["command"]
+        for groups in data["hooks"].values()
+        for group in groups
+        for h in group["hooks"]
+        if _is_claw(h)
+    ]
+    assert commands, "no Clawness hooks wired"
+    for cmd in commands:
+        assert cmd.endswith("; exit 0"), cmd
+    carrying = [c for c in commands if S.NO_PYTHON_NOTICE in c]
+    assert len(carrying) == 1 and "git_check.py" in carrying[0]
+
+
+def _is_claw(h: dict) -> bool:
+    return any(name in h.get("command", "") for name in S.CLAW_HOOK_SCRIPTS)
+
+
+def _sh():
+    import shutil
+    return shutil.which("sh") or shutil.which("bash")
+
+
+def test_picker_fall_through_exits_zero_and_says_why(tmp_path):
+    """The real plugin.json command, through a real shell, with nothing on PATH.
+
+    `command -v` and `echo` are shell builtins, so an empty PATH removes every
+    interpreter without breaking the test itself.
+    """
+    import subprocess
+    sh = _sh()
+    if not sh:
+        import pytest
+        pytest.skip("no POSIX shell available")
+    cmd = next(c for c in _plugin_commands() if "git_check.py" in c)
+    env = dict(os.environ, PATH="", CLAUDE_PLUGIN_ROOT=str(tmp_path))
+    r = subprocess.run([sh, "-c", cmd], capture_output=True, text=True,
+                       env=env, timeout=60)
+    assert r.returncode == 0, f"rc={r.returncode} stderr={r.stderr!r}"
+    assert "Python 3.10+ was not found" in r.stdout
+    # SessionStart stdout becomes context, so this is what reaches the user.
+    assert "plan gate and access guard are inactive" in r.stdout
+
+
+def test_picker_still_runs_the_interpreter_when_one_exists(tmp_path):
+    """The fall-through must not fire when Python IS present — `exec` replaces
+    the shell, so nothing after `done` should run."""
+    import subprocess
+    sh = _sh()
+    if not sh:
+        import pytest
+        pytest.skip("no POSIX shell available")
+    script = tmp_path / "marker.py"
+    script.write_text("print('MARKER-RAN')\n", encoding="utf-8")
+    cmd = S.build_hook_entry(script, notice=True)["command"]
+    r = subprocess.run([sh, "-c", cmd], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, f"rc={r.returncode} stderr={r.stderr!r}"
+    assert "MARKER-RAN" in r.stdout
+    assert S.NO_PYTHON_NOTICE not in r.stdout
 
 
 if __name__ == "__main__":

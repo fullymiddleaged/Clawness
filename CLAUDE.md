@@ -152,6 +152,20 @@ dependency**. No ML models, no services, no Docker.
      continue branch safe is the template's **`## Open questions`** section — the note
      bounds questions to what is listed there, so "don't ask" can't mean "guess". If you
      ever drop that section, restore the interview.
+   - **The session name is a SUGGESTION, and cannot be anything else (1.9.0).** An
+     unnamed session is titled from the user's first message, so every pickup reads
+     "carry on" in their history — the one phrase all pickups share. Claude Code has
+     a built-in `/rename [name]` (alias `/name`; bare, it generates a kebab name from
+     the conversation), but a slash command can only be TYPED: no hook can rename a
+     session and neither can Claude. `suggest_session_name` therefore derives a name
+     from the handoff's `# ` heading and the note asks Claude to surface the one-liner
+     once, on the pickup branch only — the heading is the wrong name for a session the
+     user opened on something else. It returns "" (and the note says nothing) when the
+     heading has no letters after cleaning, which is exactly the template's default
+     `# Handoff — {date}`: a suggestion the user has to read and reject costs more
+     than silence. Don't "improve" this by writing `name`/`nameSource` into
+     `<config>/sessions/<pid>.json` — that file is the CLI's own live state, in an
+     undocumented shape, and it may well hold it in memory anyway.
    - Truncation keeps the **head** (budget `CLAW_HANDOFF_BUDGET`, default 2000) —
      opposite of the lessons log, because a handoff's summary and state are written at
      the top. `## Open questions` is last and therefore the first thing truncated away;
@@ -225,7 +239,7 @@ dependency**. No ML models, no services, no Docker.
      provided Claude knows to check — which is what the note buys.
    - Known limit: covers only the ~14 `VERSION_WATCH_*` packages, detects *version*
      drift only (not a framework abandoned outright, nor a rule wrong when written).
-   - **Two whole domains are structurally unstampable, found while stamping for
+   - **Four whole domains are structurally unstampable, found while stamping for
      1.9.0 — don't rediscover them.** `python` has no join label at all: the watch
      list is frameworks, not the interpreter, so a `"Python"` key fails lint and
      there is nothing else a `PY-*` rule can key on. Adding one would mean detecting
@@ -234,9 +248,25 @@ dependency**. No ML models, no services, no Docker.
      FastAPI ships `0.x`: `_clean_version` yields two components, so the effective
      major is the minor, which moves every few weeks — any ceiling false-alarms
      almost immediately. The version-sensitive claims in that domain hang off
-     `Pydantic` and `SQLAlchemy` instead, which have real majors. The general shape:
-     **a stamp is only worth writing where the label has a major that means
-     something.**
+     `Pydantic` and `SQLAlchemy` instead, which have real majors. `typescript` and
+     `css` are unstampable for the *opposite* reason — the label has a fine major,
+     the CLAIM doesn't. "Enable `strict`, prefer `unknown` to `any`", "`??` not
+     `||`", "Flexbox for one dimension, Grid for two" were true before TypeScript 7
+     and will be true after 8, so a ceiling on them buys exactly one guaranteed
+     false alarm per major. (`css` has no Tailwind rule at all — the `Tailwind`
+     label is in `VERSION_WATCH_JS` for the stack note's benefit, not because
+     anything keys on it. Check before assuming a label implies corpus.) The
+     general shape: **a stamp is only worth writing where the major changes the
+     claim** — the label having a major is necessary, not sufficient.
+   - **A review can find the rule WRONG, not just unstamped, and that is the point.**
+     Two of the 1.9.0 domains turned up rules teaching a hazard that had reversed:
+     `SCI-ARRAY-001` on pandas views (3.0's Copy-on-Write inverted it — chained
+     assignment now silently no-ops where it used to mutate-and-warn) and
+     `CAP-WEBVIEW-001` on the Status Bar plugin (inert under Capacitor 8's
+     unconditional edge-to-edge). Prefer rewriting the rule to carry BOTH eras over
+     capping it at the old major: a ceiling makes users on the old version see a
+     note about a rule that is still correct for them, while the rewrite serves
+     everyone and the stamp then records the range you actually checked.
 
 7. **Changelog check** (`hooks/changelog_check.py`, SessionStart): reminds when a
    changelog exists, and asks **once per project, ever** when one doesn't — ledger at
@@ -450,6 +480,30 @@ dependency**. No ML models, no services, no Docker.
 - **Hook commands use a portable interpreter picker** `for p in python3 python py; …`
   (Windows has no `python3`; Claude runs hooks via a POSIX shell). Same picker in
   `plugin.json` and what `setup_settings.py` writes.
+  - **The trailing `; exit 0` on every hook command is load-bearing (1.9.0).** With
+    no interpreter on PATH every `command -v` fails, the `&&` short-circuits, and
+    the loop's status is the last failed test — **exit 1, with empty stdout and
+    stderr**. Claude Code treats a non-zero, non-2 exit as a *non-blocking* error
+    (only 2 blocks) and shows a `hook error` notice plus the first line of stderr:
+    so the user got an unexplained error on every session start, every prompt and
+    every gated tool call, while the plan gate and access guard sat inert and
+    `ensure_deps` never ran — meaning not even a `bootstrap.log` to diagnose from.
+    Skills and agents keep working (they're markdown), so the plugin looks *partly*
+    alive, which is what makes it hard to diagnose.
+  - **Exactly ONE registration echoes `NO_PYTHON_NOTICE`** (`git_check`, the first
+    non-async SessionStart hook). SessionStart stdout becomes context, so that is
+    what actually reaches the user; putting it on all eight would repeat it eight
+    times. The constant lives in `setup_settings.py` and is mirrored into
+    `plugin.json`, with `tests/test_setup_settings.py` asserting they agree and
+    driving the real command string through a real shell with `PATH=""` (`command
+    -v` and `echo` are builtins, so an empty PATH removes every interpreter without
+    breaking the test).
+  - **It cannot rescue the Windows Store stub case.** On a Windows box with no
+    Python, the App Execution Aliases put a `python.exe`/`python3.exe` shim on
+    PATH; `command -v` *succeeds*, and a failed `exec` exits the shell, so nothing
+    after `done` runs. Untested — needs a clean Windows VM. If that shim ever exits
+    0 on SessionStart/UserPromptSubmit, its "install from the Microsoft Store"
+    message gets injected as if it were our rules block.
 - **Plan gate rides native plan mode, and PROMPTS — never hard-blocks.** `PreToolUse`
   emits `ask` (not `deny`) for edits until approval is recorded for the session, so an
   unapproved session is nudged with a native approve dialog, never trapped. Approval is

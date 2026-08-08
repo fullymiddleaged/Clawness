@@ -20,10 +20,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from clawness.handoff import (  # noqa: E402
     HANDOFF_TEMPLATE,
+    SESSION_NAME_WORDS,
     archive_handoff,
     describe_age,
     find_handoff,
     render_handoff_note,
+    suggest_session_name,
 )
 
 REPO = Path(__file__).resolve().parent.parent
@@ -77,6 +79,40 @@ def test_age_reads_naturally():
     assert describe_age(86400) == "yesterday"
     assert describe_age(3 * 86400) == "3 days ago"
     assert describe_age(45 * 86400) == "a month ago"
+
+
+# --- session name ---------------------------------------------------------
+
+def test_name_comes_from_the_heading_minus_the_word_every_handoff_carries():
+    assert suggest_session_name(
+        "# Handoff — v1.9.0 ready to release, three smoke tests outstanding\n\nbody"
+    ) == "v1.9.0-ready-to-release"
+    assert suggest_session_name("# auth refactor\n") == "auth-refactor"
+
+
+def test_name_keeps_the_dots_in_a_version():
+    # A version is the most identifying thing a heading carries; "v190" isn't it.
+    assert suggest_session_name("# Handoff — v1.9.0 release") == "v1.9.0-release"
+
+
+def test_name_stays_inside_the_word_budget():
+    long = "# Handoff — one two three four five six seven eight"
+    name = suggest_session_name(long)
+    assert name.count("-") == SESSION_NAME_WORDS - 1
+    assert name == "one-two-three-four"
+
+
+def test_a_heading_naming_nothing_suggests_nothing():
+    # The template writes `# Handoff — {date}`; with "handoff" dropped that is a bare
+    # date, and `/rename 2026-08-08` is worse than staying quiet.
+    assert suggest_session_name(HANDOFF_TEMPLATE.format(date="2026-08-08")) == ""
+    assert suggest_session_name("no heading here at all\n") == ""
+    assert suggest_session_name("") == ""
+    assert suggest_session_name("## Where we left off\nnot an h1\n") == ""
+
+
+def test_name_survives_punctuation_and_case():
+    assert suggest_session_name("# FIX: the Login/Bug (again)!") == "fix-the-loginbug-again"
 
 
 # --- rendering ------------------------------------------------------------
@@ -159,6 +195,25 @@ def test_a_handoff_written_the_way_wf_handoff_001_asks_fits_the_default_budget()
     note = render_handoff_note(find_handoff(_project(body)))  # no explicit budget
     assert "truncated" not in note
     assert "drop the old table now or after the deploy?" in note
+
+
+def test_the_note_offers_a_session_name_on_the_pickup_branch():
+    # A hook can't rename the session and neither can Claude — /rename is typed by the
+    # user — so the note's whole job here is to put the name in front of them once.
+    note = render_handoff_note(find_handoff(_project(
+        "# Handoff — v1.9.0 release\n\n**Next:** push the tag\n")))
+    assert "/rename v1.9.0-release" in note
+    assert "pickup branch only" in note
+    assert "Say it once" in note
+
+
+def test_a_date_only_heading_offers_no_name_rather_than_a_bad_one():
+    # SAMPLE's heading is the template's `# Handoff — <date>`. A suggestion the user
+    # has to read and reject costs more than the silence does.
+    note = render_handoff_note(find_handoff(_project(SAMPLE)))
+    assert "/rename" not in note
+    # ...and the rest of the instruction is untouched by its absence.
+    assert "go straight to Next steps and start work" in note
 
 
 def test_age_is_reported_but_never_changes_the_instruction():

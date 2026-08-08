@@ -10,6 +10,9 @@ build/
 venv/
 .env
 *.tar.gz
-.clawness/
+# Clawness — per-machine session state (memory.md and rules/ stay shared)
+.clawness/*
+!.clawness/memory.md
+!.clawness/rules/
 .clawness_prewarm.py
 .pytest_cache/

@@ -12,3 +12,14 @@ rule: >
   App Tracking Transparency on iOS if any tracking occurs.
 violation: "Submitting a Capacitor app with zero native features — App Store rejects it"
 correct: "Integrate push notifications + camera, declare privacy labels, target current SDK"
+
+# Reviewed against the Capacitor 8.5 docs, August 2026.
+# 8 raises the Android floor to minSdk 24 / targetSdk 36 and iOS deployment
+# target to 15.0. The rule deliberately says "the current required minimum SDK"
+# rather than a number, since the store requirements move independently of
+# Capacitor; the stamp exists to force a re-read on the next major.
+applies_to: {"Capacitor": "7-8"}
+verified: "2026-08"
+sources:
+  - https://capacitorjs.com/docs/updating/7-0
+  - https://capacitorjs.com/docs/updating/8-0

@@ -1,14 +1,29 @@
 id: CAP-WEBVIEW-001
 domain: capacitor
 severity: warning
-tags: [webview, safe-area, status-bar, keyboard, viewport, css, notch]
-triggers: [safe-area, status-bar, StatusBar, Keyboard, viewport, notch, env, padding]
+tags: [webview, safe-area, status-bar, system-bars, keyboard, viewport, css, notch, edge-to-edge]
+triggers: [safe-area, status-bar, StatusBar, SystemBars, Keyboard, viewport, notch, env, padding, edge-to-edge]
 when: Styling or laying out UI in a Capacitor app.
 rule: >
   Account for safe area insets (notch, home indicator, status bar) using
-  CSS env(safe-area-inset-*). Configure the StatusBar plugin for style
-  and color. Handle the keyboard pushing content up with the Keyboard
-  plugin. Test on both iOS and Android — WebView rendering differs. Set
-  viewport-fit=cover in the meta viewport tag.
-violation: "Content hidden behind the iOS notch or Android status bar"
-correct: "padding-top: env(safe-area-inset-top); viewport-fit=cover in meta tag"
+  CSS env(safe-area-inset-*), and set viewport-fit=cover in the meta
+  viewport tag. On Capacitor 8 the app is edge-to-edge on Android and the
+  Status Bar plugin's escape hatches no longer work — setOverlaysWebView(false)
+  and setBackgroundColor() have no effect against API 36, and the
+  android.adjustMarginsForEdgeToEdge config option was removed. Use the
+  SystemBars API bundled with @capacitor/core (setStyle, show, hide) for
+  style and visibility, and keep @capacitor/status-bar only for legacy
+  behaviour. Handle the keyboard pushing content up with the Keyboard
+  plugin. Test on both iOS and Android — WebView rendering differs.
+violation: "StatusBar.setOverlaysWebView({ overlay: false }) to reserve space — a no-op on Capacitor 8"
+correct: "padding-top: env(safe-area-inset-top); viewport-fit=cover in meta tag; SystemBars.setStyle() for icon style"
+
+# Reviewed against the Capacitor 8.5 docs, August 2026.
+# 8 makes Android edge-to-edge unconditional and moves system bar styling to the
+# SystemBars API in @capacitor/core; the Status Bar plugin is now the legacy path
+# and its overlay/background options are inert on API 36.
+applies_to: {"Capacitor": "8"}
+verified: "2026-08"
+sources:
+  - https://capacitorjs.com/docs/apis/system-bars
+  - https://capacitorjs.com/docs/updating/8-0

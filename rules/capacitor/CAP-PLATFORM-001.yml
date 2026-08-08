@@ -11,3 +11,12 @@ rule: >
   so the app works in the browser during development and as a PWA.
 violation: "Calling Camera.getPhoto() without checking if running natively"
 correct: "if (Capacitor.isNativePlatform()) { Camera.getPhoto() } else { fileInput.click() }"
+
+# Reviewed against the Capacitor 8.5 docs, August 2026.
+# Capacitor.isNativePlatform() and getPlatform() are unchanged across the 7 and
+# 8 migrations.
+applies_to: {"Capacitor": "7-8"}
+verified: "2026-08"
+sources:
+  - https://capacitorjs.com/docs/core-apis/web
+  - https://capacitorjs.com/docs/updating/8-0

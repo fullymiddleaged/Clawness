@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/ensure_deps.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/ensure_deps.py\"; done; exit 0",
             "async": true,
             "timeout": 600
           }
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/git_check.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/git_check.py\"; done; echo \"[Clawness] Python 3.10+ was not found on PATH, so none of Clawness's hooks can run: no rules are being injected, and the plan gate and access guard are inactive. Tell the user in one line, and point them at the Installing Python section of https://github.com/fullymiddleaged/clawness - do not install Python for them.\"; exit 0",
             "timeout": 10
           }
         ]
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_init.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/memory_init.py\"; done; exit 0",
             "timeout": 10
           }
         ]
@@ -59,7 +59,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/handoff_check.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/handoff_check.py\"; done; exit 0",
             "timeout": 10
           }
         ]
@@ -68,7 +68,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stack_detect.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/stack_detect.py\"; done; exit 0",
             "timeout": 10
           }
         ]
@@ -77,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/changelog_check.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/changelog_check.py\"; done; exit 0",
             "timeout": 10
           }
         ]
@@ -86,7 +86,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_md_check.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_md_check.py\"; done; exit 0",
             "timeout": 10
           }
         ]
@@ -95,7 +95,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/trust_ledger.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/trust_ledger.py\"; done; exit 0",
             "timeout": 10
           }
         ]
@@ -106,7 +106,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/claude_hook.py\"; done; exit 0",
             "timeout": 30
           }
         ]
@@ -118,7 +118,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/compress_output.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/compress_output.py\"; done; exit 0",
             "timeout": 10
           }
         ]
@@ -128,7 +128,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/plan_gate.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/plan_gate.py\"; done; exit 0",
             "timeout": 10
           }
         ]
@@ -138,7 +138,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/access_guard.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/access_guard.py\"; done; exit 0",
             "timeout": 10
           }
         ]
@@ -150,7 +150,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/plan_gate.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/plan_gate.py\"; done; exit 0",
             "timeout": 10
           }
         ]
@@ -160,7 +160,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/access_guard.py\"; done",
+            "command": "for p in python3 python py; do command -v \"$p\" >/dev/null 2>&1 && exec \"$p\" \"${CLAUDE_PLUGIN_ROOT}/hooks/access_guard.py\"; done; exit 0",
             "timeout": 10
           }
         ]

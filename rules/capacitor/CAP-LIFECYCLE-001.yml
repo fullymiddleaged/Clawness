@@ -12,3 +12,12 @@ rule: >
   Clean up all listeners on component unmount to prevent memory leaks.
 violation: "Ignoring app lifecycle — stale data shown when user returns to app"
 correct: "appStateChange listener that refreshes auth token and refetches data on resume"
+
+# Reviewed against the Capacitor 8.5 docs, August 2026.
+# The App plugin's appStateChange and backButton listeners are unchanged across
+# the 7 and 8 migrations; neither guide touches them.
+applies_to: {"Capacitor": "7-8"}
+verified: "2026-08"
+sources:
+  - https://capacitorjs.com/docs/apis/app
+  - https://capacitorjs.com/docs/updating/8-0

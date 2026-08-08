@@ -13,3 +13,13 @@ rule: >
   devices — emulators miss push notifications and biometrics edge cases.
 violation: "Building web app but forgetting npx cap sync — native app shows old code"
 correct: "npm run build && npx cap sync && npx cap open ios"
+
+# Reviewed against the Capacitor 8.5 docs, August 2026.
+# The cap sync/copy/open CLI and capacitor.config.ts are unchanged across the 7
+# and 8 migrations; 8 raises the toolchain floor (Node 22, Xcode 26, JDK/Android
+# Studio Otter) without moving these commands.
+applies_to: {"Capacitor": "7-8"}
+verified: "2026-08"
+sources:
+  - https://capacitorjs.com/docs/cli
+  - https://capacitorjs.com/docs/updating/8-0

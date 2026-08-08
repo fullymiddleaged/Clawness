@@ -12,3 +12,12 @@ rule: >
   permissions to AndroidManifest.xml. Never request at app launch.
 violation: "Requesting camera permission on first app open with no explanation"
 correct: "Show explanation dialog, then checkPermissions(), then requestPermissions()"
+
+# Reviewed against the Capacitor 8.5 docs, August 2026.
+# checkPermissions/requestPermissions and the Info.plist / AndroidManifest
+# declarations are unchanged across the 7 and 8 migrations.
+applies_to: {"Capacitor": "7-8"}
+verified: "2026-08"
+sources:
+  - https://capacitorjs.com/docs/plugins/creating-plugins/method-types
+  - https://capacitorjs.com/docs/updating/8-0

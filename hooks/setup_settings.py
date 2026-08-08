@@ -41,7 +41,18 @@ def default_settings_path() -> Path:
     return claude_config_dir() / "settings.json"
 
 
-def build_hook_entry(hook_script: Path, timeout: int = 30) -> dict:
+# Injected as context when no interpreter is found. Kept here and in
+# .claude-plugin/plugin.json; tests/test_setup_settings.py asserts they agree.
+NO_PYTHON_NOTICE = (
+    "[Clawness] Python 3.10+ was not found on PATH, so none of Clawness's hooks can "
+    "run: no rules are being injected, and the plan gate and access guard are "
+    "inactive. Tell the user in one line, and point them at the Installing Python "
+    "section of https://github.com/fullymiddleaged/clawness - do not install Python "
+    "for them."
+)
+
+
+def build_hook_entry(hook_script: Path, timeout: int = 30, notice: bool = False) -> dict:
     """Build the hook JSON object pointing at our script.
 
     Uses a portable interpreter picker (python3 -> python -> py) rather than a
@@ -49,13 +60,32 @@ def build_hook_entry(hook_script: Path, timeout: int = 30) -> dict:
     — matching the plugin's hooks and avoiding a mismatch with whatever the
     installer happened to detect (e.g. the Windows `py` launcher). Claude Code
     runs hook commands via a POSIX shell (sh / Git Bash on Windows), so the
-    loop is portable across all platforms."""
+    loop is portable across all platforms.
+
+    **The trailing `exit 0` is load-bearing.** With no interpreter on PATH every
+    `command -v` fails, the `&&` short-circuits, and the loop's status is the
+    last failed test — exit 1. Claude Code treats a non-zero, non-2 exit as a
+    non-blocking error and shows a `hook error` notice followed by the first
+    line of stderr, which here is empty: the user gets an unexplained error on
+    every session start, every prompt and every gated tool call, with the plan
+    gate and access guard silently inert. Exiting 0 keeps the same fail-open
+    behaviour without the blank-reason noise.
+
+    *notice* additionally echoes NO_PYTHON_NOTICE. `SessionStart` stdout is
+    added to Claude's context, so this is what actually tells the user why
+    nothing works. Set it on exactly ONE registration — eight SessionStart hooks
+    all echoing would repeat it eight times. It cannot help when `command -v`
+    finds a Windows Store `python.exe` stub: a failed `exec` exits the shell, so
+    nothing after `done` runs."""
     # Forward slashes even on Windows — Claude Code / Git Bash handle them fine.
     script_path = str(hook_script.resolve()).replace("\\", "/")
     command = (
         'for p in python3 python py; do '
         f'command -v "$p" >/dev/null 2>&1 && exec "$p" "{script_path}"; done'
     )
+    if notice:
+        command += f'; echo "{NO_PYTHON_NOTICE}"'
+    command += "; exit 0"
     return {
         "type": "command",
         "command": command,
@@ -279,7 +309,10 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
             results.append("git-check: already configured")
         else:
             start_events.append({
-                "hooks": [build_hook_entry(git_script, timeout=10)],
+                # Carries the no-Python notice for the whole install — the first
+                # non-async SessionStart registration, so it reports once per
+                # session. Don't set notice=True anywhere else.
+                "hooks": [build_hook_entry(git_script, timeout=10, notice=True)],
             })
             results.append("git-check: added")
 

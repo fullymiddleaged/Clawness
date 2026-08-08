@@ -1,19 +1,38 @@
 id: SCI-ARRAY-001
 domain: science
 severity: error
-tags: [numpy, pandas, array, dataframe, vectorize, dtype, nan, broadcasting, view]
-triggers: [numpy, pandas, dataframe, array, vectorize, broadcast, dtype, iterrows, nan values, slice the array, copy or view]
+tags: [numpy, pandas, array, dataframe, vectorize, dtype, nan, broadcasting, view, copy-on-write]
+triggers: [numpy, pandas, dataframe, array, vectorize, broadcast, dtype, iterrows, nan values, slice the array, copy or view, chained assignment, SettingWithCopyWarning]
 when: Manipulating numerical arrays or dataframes.
 rule: >
   Three failure modes cost more time than everything else in array code. First,
-  aliasing - a basic NumPy slice and many pandas selections are VIEWS, so writing
-  through one mutates the original; call .copy() when you mean a copy, and check
-  before assuming an operation returned fresh memory. Second, dtype - integer
-  arrays silently truncate assigned floats, int64 overflows without warning, and an
-  object-dtype column means something upstream failed to parse. Third, missing data
-  - NaN is not equal to itself, propagates through arithmetic, and is dropped or
-  kept differently by mean, groupby and merge; decide explicitly per operation.
-  Vectorise rather than looping row by row: iterrows over a large frame is both
-  slower and harder to read than the array expression it replaces.
-violation: "for i, row in df.iterrows(): df.loc[i,'z'] = row.x / row.y   — then wondering where NaN came from"
-correct: "df['z'] = df.x.div(df.y).replace([np.inf,-np.inf], np.nan)   with the dtype asserted after load"
+  aliasing - and in pandas it inverted at 3.0, so check which version you are on.
+  A basic NumPy slice is a VIEW in every version: writing through one mutates the
+  original, so call .copy() when you mean a copy. In pandas before 3.0 a selection
+  might be a view and writing through it could mutate the source
+  (SettingWithCopyWarning); from 3.0 Copy-on-Write is the only mode, every
+  selection behaves as a copy, and chained assignment (df[df.a > 1]['b'] = 0)
+  silently does nothing - no error, no warning, and the warning that used to flag
+  it is gone. Assign in one .loc step either way. Second, dtype - integer arrays
+  silently truncate assigned floats, int64 array overflow is unwarned, and an
+  object-dtype column means something upstream failed to parse; note pandas 3
+  infers a dedicated str dtype for text, so a `== object` check no longer catches
+  string columns and missing text is NaN rather than None or pd.NA. Third,
+  missing data - NaN is not equal to itself, propagates through arithmetic, and
+  is dropped or kept differently by mean, groupby and merge; decide explicitly
+  per operation. Vectorise rather than looping row by row: iterrows over a large
+  frame is both slower and harder to read than the array expression it replaces.
+violation: "df[df.a > 1]['b'] = 0   — silently a no-op on pandas 3, and it used to warn"
+correct: "df.loc[df.a > 1, 'b'] = 0   with the dtype asserted after load"
+
+# Reviewed against the pandas 3.0 and NumPy 2.x docs, August 2026.
+# pandas 3.0 (Jan 2026) made Copy-on-Write the only mode and removed
+# SettingWithCopyWarning, inverting the aliasing hazard the rule is about, and
+# changed the default text dtype from object to str. NumPy's array-overflow and
+# view semantics are unchanged under NEP 50 (scalars warn, arrays still don't).
+applies_to: {"pandas": "2-3", "NumPy": "2"}
+verified: "2026-08"
+sources:
+  - https://pandas.pydata.org/docs/whatsnew/v3.0.0.html
+  - https://pandas.pydata.org/docs/user_guide/copy_on_write.html
+  - https://numpy.org/doc/stable/reference/arrays.promotion.html

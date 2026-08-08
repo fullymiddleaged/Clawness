@@ -41,6 +41,20 @@ DONE_DIR = ("handoffs", "done")
 # have been a handoff; fix the writing, not this number.
 DEFAULT_BUDGET = 2000
 
+# Claude Code titles an unnamed session from the user's first message, so every pickup
+# lands in their history as "carry on" — the one phrase every pickup shares, and so the
+# one title that tells none of them apart. It ships a built-in `/rename [name]` for
+# exactly this, but a slash command can only be TYPED: a hook cannot rename the session
+# and neither can Claude. So the note carries a suggestion and the user spends one
+# keystroke on it. Matches the shape Claude Code's own generator produces — 2-4
+# lowercase words, hyphen-separated — so a suggested name sits alongside a generated
+# one without looking foreign.
+SESSION_NAME_WORDS = 4
+# Words every handoff heading carries, which therefore distinguish nothing. Dropped
+# before the word budget is spent, not after.
+_NAME_SKIP = frozenset({"handoff", "handoffs", "wip", "session", "notes"})
+_NAME_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789.")
+
 # Skeleton for whoever writes one (WF-HANDOFF-001 points here). Deliberately short:
 # a handoff is a running start, not a status report, and a long one won't be read.
 #
@@ -75,6 +89,43 @@ def find_handoff(project_root: str | Path) -> Path | None:
         return path if path.is_file() else None
     except OSError:
         return None
+
+
+def suggest_session_name(text: str) -> str:
+    """
+    A kebab-case session name from the handoff's first `# ` heading, or "".
+
+    Returns "" rather than a bad guess in two cases, because a wrong suggestion is
+    worse than none — the user has to read it, judge it and reject it:
+
+      * no heading at all;
+      * a heading with no letters left after cleaning. The template writes
+        `# Handoff — {date}`, and once "handoff" is dropped that is a bare date;
+        `/rename 2026-08-08` names nothing, so say nothing.
+    """
+    heading = ""
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("# "):
+            heading = line[2:]
+            break
+    if not heading:
+        return ""
+
+    words = []
+    for raw in heading.split():
+        # Punctuation goes, but an internal dot stays: a version is the most
+        # identifying thing a handoff heading carries, and "v1.9.0" beats "v190".
+        word = "".join(c for c in raw.lower() if c in _NAME_CHARS).strip(".")
+        if not word or word in _NAME_SKIP:
+            continue
+        words.append(word)
+        if len(words) >= SESSION_NAME_WORDS:
+            break
+
+    if not any(c.isalpha() for c in "".join(words)):
+        return ""
+    return "-".join(words)
 
 
 def describe_age(seconds: float) -> str:
@@ -174,6 +225,18 @@ def render_handoff_note(
         "then wait. When they say it's done (or you write a new handoff), move this "
         "file to .clawness/handoffs/done/ with a timestamped name instead of deleting it."
     )
+
+    # Only on the pickup branch: if they opened with a fresh task instead, the handoff's
+    # heading is the wrong name for the session they're actually in.
+    name = suggest_session_name(text)
+    if name:
+        instruction += (
+            " One aside, on the pickup branch only: an unnamed session takes its "
+            "title from the user's first message, so this one will sit in their "
+            "history as \"carry on\". Once you are underway, mention in a single "
+            f"line that `/rename {name}` retitles it — they have to type it "
+            "themselves. Say it once and drop it."
+        )
 
     parts = [
         f"[Clawness] A handoff from the previous session in this project was written {age} "

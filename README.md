@@ -45,7 +45,7 @@ what clawness rules do you see in your context?
 
 If it describes the injected rule block, you're live. (`/clawness:status` also works.)
 
-> `clawness@clawness` isn't a typo. It's `plugin@marketplace`, and both happen to be named *clawness*. No Python 3.10+? See [Installing Python](#installing-python-if-you-dont-have-it). Without it, the plugin installs but injects nothing.
+> `clawness@clawness` isn't a typo. It's `plugin@marketplace`, and both happen to be named *clawness*. No Python 3.10+? See [Installing Python](#installing-python-if-you-dont-have-it). Without it, the plugin installs but injects nothing — Claude will say so on your first session.
 
 ---
 
@@ -257,7 +257,7 @@ The install registers the skills, agents, hooks, and rules, but it isn't live un
 2. **Let first-run setup finish.** On the first session a background hook installs PyYAML, which takes a few seconds. Details below.
 3. **Verify** by asking Claude *"what clawness rules do you see in your context?"*, or run `/clawness:status`.
 
-> **What runs on first launch.** The hooks are Python scripts, so **Python 3.10+ must be on your PATH**. Without it the plugin installs but injects nothing (see [Installing Python](#installing-python-if-you-dont-have-it)). On your first session a background `SessionStart` hook runs `pip install pyyaml`, the only dependency, in a few seconds, logged to `bootstrap.log`. The plan gate and access guard are on by default; disable with `CLAW_NO_PLAN_GATE=1` / `CLAW_NO_ACCESS_GUARD=1`.
+> **What runs on first launch.** The hooks are Python scripts, so **Python 3.10+ must be on your PATH**. Without it the plugin installs but injects nothing, and Claude tells you so at the start of your first session (see [Installing Python](#installing-python-if-you-dont-have-it)). One exception it can't detect: if Windows' Microsoft Store `python.exe` stub is on your PATH, it looks like a working Python — uninstall the stub under *Manage App Execution Aliases*, or install real Python from python.org. On your first session a background `SessionStart` hook runs `pip install pyyaml`, the only dependency, in a few seconds, logged to `bootstrap.log`. The plan gate and access guard are on by default; disable with `CLAW_NO_PLAN_GATE=1` / `CLAW_NO_ACCESS_GUARD=1`.
 
 ### Option 2: Manual Install
 

@@ -63,12 +63,41 @@ tells you when your project has moved past them. Plus the fix that makes
   displace the "used as a Hook dependency" case `RCT-HOOKS-001` names).
   `FA-PYDANTIC-001` is stamped to Pydantic 2 and `FA-DBSESSION-001` to SQLAlchemy 2.0,
   the two version-sensitive claims in that domain.
-- **Two domains turn out not to be stampable, which is worth knowing.** `python` has no
+- **`capacitor` and `science` reviewed too — and two rules were teaching a hazard that
+  had reversed.** `SCI-ARRAY-001` warned that pandas selections are views, so writing
+  through one mutates the original. pandas 3.0 (January 2026) made Copy-on-Write the
+  only mode: selections always behave as copies, and chained assignment
+  (`df[df.a > 1]['b'] = 0`) now silently does nothing — no error, and the
+  `SettingWithCopyWarning` that used to flag it is gone. The rule now carries both
+  eras, plus the 3.0 `str` dtype change that stops `== object` catching text columns,
+  and is stamped `pandas 2-3` / `NumPy 2`. `CAP-WEBVIEW-001` told you to configure the
+  Status Bar plugin; on Capacitor 8 Android is edge-to-edge unconditionally,
+  `setOverlaysWebView(false)` and `setBackgroundColor()` are inert against API 36, and
+  the `SystemBars` API bundled with `@capacitor/core` is the replacement — stamped to
+  8. The other five Capacitor rules are confirmed unchanged across the 7 and 8
+  migrations and stamped `7-8`.
+- **Four domains turn out not to be stampable, which is worth knowing.** `python` has no
   join label — `WATCHED_LABELS` covers frameworks, not the interpreter, so there is
   nothing for a `PY-*` rule to key on. And FastAPI's own rules are left unstamped
   because it ships `0.x`: the effective major is the second component, which moves
   every few weeks, so any ceiling would fire a false alarm almost immediately — the
-  precise way users learn to ignore a warning.
+  precise way users learn to ignore a warning. `typescript` and `css` are the other
+  two, for the opposite reason: their claims don't have versions. "Enable `strict`,
+  use `unknown` over `any`", "`??` not `||`", "Flexbox for one dimension, Grid for
+  two" survived TypeScript 7 and will survive 8, so a ceiling on them buys one
+  guaranteed false alarm per major and nothing else. A stamp is only worth writing
+  where the major changes the claim.
+- **Picking up a handoff can now name the session.** Until a session has a name,
+  Claude Code titles the conversation from your first message — so every handoff
+  pickup lands in your history as "carry on", the one phrase they all share and
+  therefore the one title that tells none of them apart. The session-start note now
+  derives a kebab-case name from the handoff's own heading, and if you pick the
+  handoff up Claude offers you the one-liner once (`/rename v1.9.0-ready-to-release`).
+  It's a suggestion you type: a slash command can only come from you, so neither the
+  hook nor Claude can retitle a session on your behalf. A heading that names nothing
+  — the template's bare `# Handoff — <date>` — offers nothing rather than a guess,
+  and the offer is made only if you actually picked the handoff up, since its heading
+  is the wrong name for a session you opened on something else.
 - **`clawness lint` validates version stamps.** Unknown framework label, unparseable
   range, a future `verified` date, an `applies_to` that isn't a mapping, or evidence
   with no range to establish. Every one of these fails *silently* at runtime — a
@@ -77,6 +106,16 @@ tells you when your project has moved past them. Plus the fix that makes
 
 ### Fixed
 
+- **Installing without Python now tells you so, instead of failing quietly.** Python
+  3.10+ has always been a prerequisite, but if it wasn't on your PATH the hooks exited
+  1 with nothing on stderr — Claude Code reported a `hook error` with no reason, on
+  every session start, every prompt and every gated tool call. Meanwhile the plan gate
+  and access guard were inert, the dependency bootstrap never ran so there was no
+  `bootstrap.log` to check, and the skills and agents kept working, so the plugin
+  looked half-alive. Hook commands now exit 0 when no interpreter is found, and one
+  session-start hook explains what's missing and points at the README. Note this
+  can't help if a Windows Store `python.exe` stub is on your PATH — uninstall the
+  stub or install real Python from python.org.
 - **`.clawness/rules/` actually overrides global rules now.** A project rule sharing
   an id with a global one used to be *appended*: both copies entered the corpus and
   competed on lexical score, so the rule you wrote to override a stale one could
