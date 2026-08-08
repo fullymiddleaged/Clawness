@@ -13,3 +13,5 @@
 - Never hand-test a hook with git-bash `mktemp -d`: Windows Python resolves /tmp/x to C:\tmp\x, so git_root fails and it looks broken.
 - A staleness note asking Claude to author rules wrote heaps of them and degraded the session; keep rule-authoring opt-in.
 - `clawness bench` swings 1.3-5ms with machine load; compare against a stashed HEAD run before blaming a change.
+- Plugin skills/hooks load from ~/.claude/plugins/cache/clawness/<version>, so new skills can't be smoke-tested pre-push.
+- Defender blocks pip's console-script shim (clawness.exe): "Access is denied". Test packaging via `python -m clawness.cli`.
