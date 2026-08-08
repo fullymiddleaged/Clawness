@@ -5,7 +5,7 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.9.0] - 2026-08-07
+## [1.9.0] - 2026-08-08
 
 Rules can now say which framework versions they were checked against, and Clawness
 tells you when your project has moved past them. Plus the fix that makes

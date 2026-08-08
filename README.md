@@ -485,8 +485,9 @@ no rule-writing, no audit. It orients and stops.
   Svelte, TypeScript, Tailwind, Express, Capacitor, Django, FastAPI, Pydantic,
   SQLAlchemy, NumPy, pandas). Rules about general practice don't decay on a release
   cadence; framework-pinned rules are the whole rot surface.
-- **What actually ships stamped today: the ten `nextjs` rules, the four `react`
-  rules, and the Pydantic and SQLAlchemy claims in `fastapi`.** Everything else is
+- **What actually ships stamped today: 23 rules** — the ten `nextjs` rules, the four
+  `react` rules, the six `capacitor` rules, `SCI-ARRAY-001` in `science`, and the
+  Pydantic and SQLAlchemy claims in `fastapi`. Everything else is
   unstamped and therefore silent, which is the honest state — a stamp means someone
   read the docs, not that a script filled a field. On a Next.js 16 project the note
   names three rules: `NX-IMAGE-001` (`priority` is deprecated for `preload`),
