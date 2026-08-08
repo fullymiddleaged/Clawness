@@ -15,3 +15,4 @@
 - `clawness bench` swings 1.3-5ms with machine load; compare against a stashed HEAD run before blaming a change.
 - Plugin skills/hooks load from ~/.claude/plugins/cache/clawness/<version>, so new skills can't be smoke-tested pre-push.
 - Defender blocks pip's console-script shim (clawness.exe): "Access is denied". Test packaging via `python -m clawness.cli`.
+- In tests, `shutil.which("bash")` finds WSL bash, which resolves no python (no .exe); prefer Git Bash — that's what runs hooks.
