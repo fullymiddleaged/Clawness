@@ -467,6 +467,23 @@ _CONCEPT_GROUPS: dict[str, tuple[str, ...]] = {
         "aerodynamic", "drag", "lift", "wake", "vortex", "shedding", "inlet",
         "outlet", "skewness", "snappyhexmesh", "checkmesh", "gci",
     ),
+    # Machine-learning discipline (training/evaluating models). Own marker rather
+    # than widening __science__: ML rules live in a stack-gated domain, so bridging
+    # these terms into __science__ would raise noise on every (cross-cutting)
+    # science prompt for no gain. Deliberately EXCLUDES the collision words
+    # "feature", "validation", "precision", "recall", "model", "train", "test",
+    # "split", "accuracy", "score" — they read as ordinary dev language, and the
+    # rules that need them (CV discipline, metrics) are reachable by direct lexical
+    # overlap on "cross"/"validation" etc. without the bridge. On-stack an ml repo
+    # sees the base floor, so an over-broad term here would leak within it too.
+    "__ml__": (
+        "overfit", "overfitting", "underfit", "underfitting", "regularization",
+        "regularisation", "regularize", "regularise", "hyperparameter",
+        "hyperparameters", "sklearn", "scikit", "xgboost", "lightgbm",
+        "estimator", "classifier", "regressor", "leakage", "holdout", "kfold",
+        "stratified", "imbalance", "imbalanced", "oversample", "undersample",
+        "smote", "roc", "auc", "gridsearch",
+    ),
     "__resilience__": (
         "timeout", "timeouts", "retry", "retries", "backoff", "jitter",
         "idempotent", "idempotency", "circuit", "breaker", "resilience",
@@ -724,6 +741,15 @@ _STACK_DOMAINS = frozenset({
     # eval-set rules are noise in a repo that calls no model. Detected from
     # anthropic/openai/langchain deps (see init.py).
     "llm",
+    # "ml" is training/evaluating your own models (not building on hosted ones —
+    # that is llm). Detected from modelling libs (scikit-learn/xgboost/torch/
+    # statsmodels...), NOT from the science detector, so it fires for ANY codebase
+    # that trains a model — a fintech fraud model as readily as a physics
+    # classifier — and stays silent in a plain CRUD app. Ordinary off-stack floor,
+    # NOT the narrow tier: like sql/docker it is legitimately cross-stack (a web
+    # service really does train a model), so its vocabulary isn't alien the way
+    # Fortran's is. On-stack (a modelling lib is present) it falls to the base floor.
+    "ml",
     # Scientific-computing languages. Stack-gated for the same reason as the web
     # ones — Fortran column-major advice on a TypeScript prompt is pure noise —
     # and NOT topical like science/, because these have unambiguous detectors

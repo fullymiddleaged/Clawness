@@ -1,0 +1,17 @@
+id: RES-CITECHECK-001
+domain: research
+severity: error
+tags: [citation, reference, doi, fabrication, ai-generated, verification, integrity]
+triggers: [citation, reference list, bibliography, does this paper exist, verify the citation, doi, ai generated references, hallucinated citation, add a reference, cite a study]
+when: Adding, generating, or repeating a citation - especially one an AI produced.
+rule: >
+  Confirm every citation independently before it goes in: that the work actually
+  exists (resolve the DOI and check it maps to that exact title, authors and year)
+  and that the source actually supports the specific claim you attached to it -
+  which means reading it, not the title. Never trust an AI-generated reference;
+  plausible fabrications routinely carry real-looking or hijacked DOIs, and peer
+  review does not systematically check references, so the responsibility is
+  entirely the author's. Disclose AI assistance where used; an AI cannot be an
+  author because it cannot take responsibility (COPE/ICMJE).
+violation: "Pasting a model's suggested references straight into the bibliography without opening one"
+correct: "For each citation: resolve the DOI, confirm title/authors/year match, read the source for the claim"

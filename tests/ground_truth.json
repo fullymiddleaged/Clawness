@@ -1287,6 +1287,210 @@
       "expect": [
         "TST-BOUNDARY-001"
       ]
+    },
+    {
+      "q": "should i use np.random.seed or default_rng for reproducible random numbers",
+      "expect": [
+        "SCI-RNG-001"
+      ]
+    },
+    {
+      "q": "how do i seed random number generators across parallel workers without correlated streams",
+      "expect": [
+        "SCI-RNG-001"
+      ]
+    },
+    {
+      "q": "my matrix solve gives a wildly inaccurate answer, is it ill conditioned",
+      "expect": [
+        "SCI-LINALG-001"
+      ]
+    },
+    {
+      "q": "should i use lstsq or inv for this least squares problem",
+      "expect": [
+        "SCI-LINALG-001"
+      ]
+    },
+    {
+      "q": "scipy minimize returned a result but did it actually converge",
+      "expect": [
+        "SCI-SCIPY-001"
+      ]
+    },
+    {
+      "q": "check whether curve_fit converged before trusting the fitted parameters",
+      "expect": [
+        "SCI-SCIPY-001"
+      ]
+    },
+    {
+      "q": "should i use snakemake or a shell script for my multi-step analysis",
+      "expect": [
+        "SCI-PIPELINE-001"
+      ]
+    },
+    {
+      "q": "my analysis has ten steps and i keep rerunning everything, need a workflow manager",
+      "expect": [
+        "SCI-PIPELINE-001"
+      ]
+    },
+    {
+      "q": "the model gave me references, how do i check they are real",
+      "expect": [
+        "RES-CITECHECK-001"
+      ]
+    },
+    {
+      "q": "verify this citation actually supports the claim before i add it",
+      "expect": [
+        "RES-CITECHECK-001"
+      ]
+    },
+    {
+      "q": "which reporting checklist do i use for a systematic review",
+      "expect": [
+        "RES-REPORTING-001"
+      ]
+    },
+    {
+      "q": "what should a randomized trial writeup report, consort",
+      "expect": [
+        "RES-REPORTING-001"
+      ]
+    },
+    {
+      "q": "write a data availability statement for my paper",
+      "expect": [
+        "RES-AVAILABILITY-001"
+      ]
+    },
+    {
+      "q": "how do i share my code and data with a doi so it is reusable",
+      "expect": [
+        "RES-AVAILABILITY-001"
+      ]
+    },
+    {
+      "q": "should i preregister this analysis and what counts as exploratory",
+      "expect": [
+        "RES-PREREG-001"
+      ]
+    },
+    {
+      "q": "i found an effect after looking at the data, can i present it as my hypothesis",
+      "expect": [
+        "RES-PREREG-001"
+      ]
+    },
+    {
+      "q": "how do i write a response letter to reviewers",
+      "expect": [
+        "RES-REVIEW-001"
+      ]
+    },
+    {
+      "q": "structure my point by point reply to reviewer comments",
+      "expect": [
+        "RES-REVIEW-001"
+      ]
+    },
+    {
+      "q": "my cross validation accuracy is suspiciously high, is this data leakage",
+      "expect": [
+        "MLD-LEAKAGE-001"
+      ]
+    },
+    {
+      "q": "should i fit the scaler before or after the train test split",
+      "expect": [
+        "MLD-LEAKAGE-001"
+      ]
+    },
+    {
+      "q": "how do i tune hyperparameters without biasing my performance estimate",
+      "expect": [
+        "MLD-CV-001"
+      ]
+    },
+    {
+      "q": "my samples come from the same patients, which cross validation split do i use",
+      "expect": [
+        "MLD-CV-001"
+      ]
+    },
+    {
+      "q": "what metric should i choose to evaluate this classifier and what baseline",
+      "expect": [
+        "MLD-METRICS-001"
+      ]
+    },
+    {
+      "q": "compare my model against a trivial dummy baseline",
+      "expect": [
+        "MLD-METRICS-001"
+      ]
+    },
+    {
+      "q": "how do i handle class imbalance with smote correctly",
+      "expect": [
+        "MLD-IMBALANCE-001"
+      ]
+    },
+    {
+      "q": "should i oversample the minority class before or inside cross validation",
+      "expect": [
+        "MLD-IMBALANCE-001"
+      ]
+    },
+    {
+      "q": "are my classifier predicted probabilities trustworthy",
+      "expect": [
+        "MLD-CALIBRATION-001"
+      ]
+    },
+    {
+      "q": "how do i calibrate probabilities and draw a reliability diagram",
+      "expect": [
+        "MLD-CALIBRATION-001"
+      ]
+    },
+    {
+      "q": "how do i make my model training reproducible with random_state",
+      "expect": [
+        "MLD-REPRO-001"
+      ]
+    },
+    {
+      "q": "my model gives different accuracy each run despite setting a seed",
+      "expect": [
+        "MLD-REPRO-001"
+      ]
+    },
+    {
+      "q": "my training accuracy is way higher than validation, how do i fix overfitting",
+      "expect": [
+        "MLD-OVERFIT-001"
+      ]
+    },
+    {
+      "q": "how do i regularize to close the train validation gap",
+      "expect": [
+        "MLD-OVERFIT-001"
+      ]
+    },
+    {
+      "q": "what should i report for a machine learning based science study",
+      "expect": [
+        "MLD-REFORMS-001"
+      ]
+    },
+    {
+      "q": "reporting checklist for a trained model in a paper",
+      "expect": [
+        "MLD-REFORMS-001"
+      ]
     }
   ]
 }

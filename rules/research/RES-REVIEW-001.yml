@@ -1,0 +1,16 @@
+id: RES-REVIEW-001
+domain: research
+severity: info
+tags: [peer-review, response-letter, revision, rebuttal, manuscript]
+triggers: [respond to reviewers, reviewer comments, response letter, revise and resubmit, rebuttal, point by point, address the reviews, reviewer 2]
+when: Responding to peer-review comments on a manuscript.
+rule: >
+  Write a point-by-point response: reproduce every reviewer comment verbatim and
+  answer directly beneath it, so nothing is skipped. For each, describe the exact
+  change made and cite where it lives in the revised manuscript (page and line, or a
+  quoted passage), rather than asserting 'we have addressed this' - the response
+  must be checkable against a marked-up version. Answer the points you decline too,
+  with a reason. Open with a short summary of the major changes, and keep the tone
+  professional even where you disagree.
+violation: "A paragraph claiming 'all comments have been addressed' with no per-comment replies or line references"
+correct: "Each comment quoted, answered beneath, with the specific edit and its page/line in the revision"

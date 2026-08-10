@@ -157,6 +157,37 @@ def test_llm_domain_is_stack_gated():
     assert on_ids, "llm rules missing from a project that uses an LLM SDK"
 
 
+def test_ml_domain_is_stack_gated():
+    """ml/ (training/evaluating models — distinct from matlab, which owns the ML-
+    id prefix) is a stack domain: leakage/CV/calibration rules stay quiet in a
+    project that trains no model, while a project with a modelling library gets
+    them. Keyed on r.domain, NOT the id prefix, precisely because matlab is ML-*.
+    Marginal prompt on purpose (a strong match clears the off-stack floor anyway)."""
+    prompt = "evaluate whether this model works"
+    off = Clawness(RULES_DIR, stack_domains={"python", "science", "general"})
+    on = Clawness(RULES_DIR, stack_domains={"python", "ml", "general"})
+    off_by, on_by = ({r.id: r for r in w._ranked_rules} for w in (off, on))
+    off_ids = [i for i in off.rank_ids(prompt, top_k=8) if off_by[i].domain == "ml"]
+    on_ids = [i for i in on.rank_ids(prompt, top_k=8) if on_by[i].domain == "ml"]
+    assert not off_ids, f"ml rules leaked into a non-ML project: {off_ids}"
+    assert on_ids, "ml rules missing from a project that trains models"
+
+
+def test_ml_rules_do_not_leak_into_routine_dev_work():
+    """ml/ must stay out of ordinary coding results when the project trains no
+    model. The trap is vocabulary: "class" (OOP) collides with class imbalance,
+    "model" and "test" are everywhere. Keyed on r.domain so it can't be fooled by
+    the MLD- prefix. Asserted under a real (non-ml) stack, where the off-stack
+    floor is what has to hold the line."""
+    for stack in ({"typescript", "react", "nextjs", "css", "general"},
+                  {"python", "fastapi", "sql", "general"}):
+        wl = Clawness(RULES_DIR, stack_domains=stack)
+        by_id = {r.id: r for r in wl._ranked_rules}
+        leaks = [(p, rid) for p in _ROUTINE_DEV_PROMPTS
+                 for rid in wl.rank_ids(p, top_k=5) if by_id[rid].domain == "ml"]
+        assert not leaks, f"ml rules leaked into routine dev work: {leaks}"
+
+
 def test_science_domain_is_cross_cutting():
     """science/ must NOT be stack-gated: a researcher often works in a bare or
     LaTeX-only directory where nothing is detected, and gating would silence the

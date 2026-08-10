@@ -133,6 +133,19 @@ PYTHON_DEPS: list[tuple[str, list[str], str]] = [
     ("matplotlib",             ["science", "python"],               "Matplotlib"),
     ("astropy",                ["science", "python"],               "Astropy"),
     ("pandas",                 ["science", "python"],               "pandas"),
+    # Machine-learning: TRAINING/evaluating your own models, distinct from the
+    # `llm` domain (building on hosted models). Gated on the modelling library,
+    # not on "is this science" — a fintech fraud model and a physics classifier
+    # get the same discipline rules, a plain CRUD app gets none. Substring match,
+    # so "torch" also catches pytorch/torchvision and "jax" catches jaxlib.
+    ("scikit-learn",           ["ml", "python"],                    "scikit-learn"),
+    ("xgboost",                ["ml", "python"],                    "XGBoost"),
+    ("lightgbm",               ["ml", "python"],                    "LightGBM"),
+    ("statsmodels",            ["ml", "python"],                    "statsmodels"),
+    ("torch",                  ["ml", "python"],                    "PyTorch"),
+    ("tensorflow",             ["ml", "python"],                    "TensorFlow"),
+    ("keras",                  ["ml", "python"],                    "Keras"),
+    ("jax",                    ["ml", "python"],                    "JAX"),
 ]
 
 

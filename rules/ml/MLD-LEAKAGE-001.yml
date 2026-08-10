@@ -1,0 +1,18 @@
+id: MLD-LEAKAGE-001
+domain: ml
+severity: error
+tags: [data-leakage, pipeline, preprocessing, cross-validation, feature-selection, sklearn]
+triggers: [data leakage, target leakage, leakage, fit the scaler, standardscaler, feature selection, preprocess before split, fit_transform, too good to be true accuracy, pipeline]
+when: Preprocessing, selecting features, or building any train/evaluate workflow.
+rule: >
+  Leakage is using at training time any information you would not have at prediction
+  time; it produces optimistic scores that collapse in production. The common forms:
+  fitting a scaler, imputer, PCA or feature selector on the whole dataset before
+  splitting (the transform has seen the test rows); duplicate or near-duplicate rows
+  spanning train and test; a feature that is a proxy for or downstream of the target;
+  and a test set not drawn from the population you actually care about. Never call
+  fit or fit_transform on test data. Put every data-dependent transform inside a
+  Pipeline and pass the Pipeline - not pre-transformed arrays - to cross_val_score
+  or GridSearchCV, so each fold re-fits the transforms on its own training rows.
+violation: "X = SelectKBest(k=25).fit_transform(X, y); then train_test_split(X, y)  # selector saw the test rows"
+correct: "make_pipeline(StandardScaler(), SelectKBest(25), clf) passed to cross_val_score(model, X, y, cv)"

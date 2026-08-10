@@ -9,14 +9,16 @@
 
 Clawness is a Claude Code plugin aimed at people who often work across common codebases. It dynamically puts relevant rules into context on every prompt, whether you're shipping code or carrying out research. What's in the box:
 
-- **195 rules** across 28 domains: coding, plus scientific computing, research method, and building with LLMs. Only the ones matching your task get injected.
+- **212 rules** across 29 domains: coding, plus scientific computing, machine learning, research method, and building with LLMs. Only the ones matching your task get injected.
 - **7 adversarial review sub-agents**: security red/blue team, code critic, architecture challenger.
 - **A plan-approval gate** before the first edit of a session, on by default.
 - **Session security**: an access guard on dangerous tool calls, plus a trust ledger for skills, agents and MCP servers.
 - **Session continuity**: a per-project lessons memory, a warning when your context window is filling up, and a handoff the next session picks up on its own.
-- **Low token cost.** Putting all 195 rules in CLAUDE.md would cost about 32,600 tokens *every turn*. Clawness injects roughly 850 fixed plus only what matches, re-states the always-on block in full on just 1 prompt in 5, and compresses long command output. The per-project memory file is searched the same way the rules are, so a log of 200 lessons costs about what a log of 4 costs.
+- **Low token cost.** Only the matching rules are injected, never the whole set, so a typical turn costs about 1,700 tokens instead of the ~35,400 that dumping all 212 rules into CLAUDE.md would cost *every turn*. [How the cost breaks down →](#retrieval-engine)
 
-Install it once and it works across every project on your machine. Under 1 MB, no services, no models, about 2 ms per prompt.
+Install it once and it works across every project on your machine. Under 1 MB, no services, no models, about 3 ms per prompt.
+
+> **Not just for shipping code.** Clawness also covers scientific computing, machine learning and research method — 61 rules spanning `science`, `research`, `ml`, CFD, Julia, Fortran, MATLAB and R, injected the same automatic way. See [For Researchers and Scientists](#for-researchers-and-scientists).
 
 Inspired by [infinri/Writ](https://github.com/infinri/Writ), rebuilt from ~2GB of infrastructure to pure Python.
 
@@ -51,105 +53,17 @@ If it describes the injected rule block, you're live. (`/clawness:status` also w
 
 ## What Problem Does This Solve?
 
-Clawness makes Claude Code work the way you do: **the right rules in context on every prompt, without you mentioning them, and without paying for the ones that don't apply.** The same retrieval method surfaces your project's own recorded lessons, so that file can grow for years without costing you more per prompt, and the plan gate, access guard and review agents all ride the same hook. One install, about 2 ms of overhead, no infrastructure. It applies to code and to research alike: see [For Researchers and Scientists](#for-researchers-and-scientists).
+Clawness makes Claude Code work the way you do: **the right rules in context on every prompt, without you mentioning them, and without paying for the ones that don't apply.** The same retrieval method surfaces your project's own recorded lessons, so that file can grow for years without costing you more per prompt, and the plan gate, access guard and review agents all ride the same hook. One install, about 2 ms of overhead, no infrastructure — across code and research alike.
 
 None of that is built in. Vanilla Claude Code forgets your conventions between turns, trusts every tool call you've ever allow-listed, and gives you no cheap way to enforce a standard or rein in a runaway edit. Clawness fills each gap, per prompt.
 
-Take coding rules: *"parameterized SQL only," "async I/O end-to-end," "API responses use the envelope format."* Without Clawness you either dump them all into CLAUDE.md (wastes tokens, dilutes attention every turn) or mention them by hand (you forget, Claude forgets). With Clawness:
+Take coding rules: *"parameterized SQL only," "async I/O end-to-end," "API responses use the envelope format."* Without Clawness you either dump them all into CLAUDE.md (wastes tokens, dilutes attention every turn) or mention them by hand (you forget, Claude forgets). Clawness scores every rule against your task and injects only the few that fit, plus an always-on mandatory set — so a full-stack developer moving between frontend, backend and SQL in one session always has the right rules and never the rest.
 
-- **The right rules, every prompt.** 195 rules in YAML; a hook injects only the ones relevant to your task, plus an always-on mandatory set (security, testing, lessons-memory) — handy for full-stack developers moving between frontend, backend, and SQL in the same session. Nothing to remember, no context bloat.
-- **A memory that learns your codebase.** When something challenging hits — a build flag this machine needs, a trap in a dependency, a constraint nobody wrote down — Claude records it as one line in `.clawness/memory.md`, and it's there in every future session. Commit that file and your whole team inherits the lessons. The part that makes it work: the log is **searched, not dumped**. Only the lessons matching what you're doing right now get injected, so it can grow to hundreds of entries without costing you any more per prompt than a handful would.
-- **A plan-first gate.** The first edit of a session asks before it happens, working through Claude Code's own plan mode, so the agent can't rewrite half your repo before you've looked. One click, at most once per session, and never a hard block.
-- **Session security.** An access guard asks you to confirm a tool call that looks like it's sending your data somewhere, or deleting something it shouldn't, *even when you've already allowed that tool*. That's the point: once you've allowed something, you stop reading the prompts. A trust ledger flags a skill, agent or MCP server that changed since last session.
-- **Cleaner context.** Long bash output is compressed to the lines that matter, so a noisy install or test run doesn't eat your window.
-- **Sessions that survive their own length.** Clawness reads your transcript and tells you when the context window is filling up, rather than letting quality degrade without warning. At that point it offers to write a handoff, which the *next* session in that project picks up automatically. No path to remember, nothing to ask for.
-- **Adversarial review on tap.** Security red/blue team, code critic, architecture challenger, and more, one ask away. The judgment agents **run on whatever model you chose** (they inherit your session's tier, so Clawness never downgrades a security review behind your back), while the mechanical ones stay on a cheaper tier. They return findings tagged CONFIRMED/PLAUSIBLE; your main session spot-checks the high-stakes ones against the cited lines, or a quick repro, before acting. Vetted rather than rubber-stamped, and without re-reading everything the agent read.
-- **A second opinion on your model tier.** On the first prompt of a session, if the task looks far deeper (or far more routine) than the model you're running, Clawness says so once. It suggests; it never switches anything.
+The same hook carries the rest of what's [in the box](#clawness): a lessons memory that's **searched, not dumped**, a plan-first gate, session-security guards, output compression, context-and-handoff continuity, adversarial review agents, and a model-tier check. Each is covered in detail under [Using It](#using-it) below.
 
 **Make them *your* standards.** The 195 built-in rules are a starting point. Add your own in seconds: run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/rules/` and `.clawness/memory.md` and your whole team shares the same rules and lessons. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
 
 > **Tripwire, not a sandbox.** The guard works by pattern-matching the agent's own tool calls. It catches honest mistakes, copy-pasted `curl … | sh`, reads of secrets outside your project, and data sent to a server that appears nowhere in your code, and it breaks the habit of approving everything without reading it. Someone determined can still disguise a command to get past it. The real protection is a container with a list of servers it's allowed to reach. It stays out of normal work: reading your own `.env`, plain API GETs, and traffic to your own machine aren't prompted. A call to an outside server that carries data or a token asks once per server. Disable with `CLAW_NO_ACCESS_GUARD=1`.
-
----
-
----
-
-## For Researchers and Scientists
-
-Clawness isn't only for shipping software. Physics, maths, and engineering work has its own
-ways to go wrong, and 23 rules across `science/` and `research/` cover them, the same way
-the coding rules work: injected automatically, with no command to remember. A further 21 cover
-simulation and the languages that work is actually written in — CFD, Julia, Fortran, MATLAB
-and R.
-
-**Catching the errors that survive review.** A dimensionally inconsistent equation is wrong no
-matter how reasonable the number looks. A float compared with `==` fails on the one input you
-didn't try. A result quoted to five significant figures from two-figure inputs is a false claim
-about how well the quantity is known. Ask a question and the relevant rule arrives with it:
-
-| You ask | You get |
-|---|---|
-| *"check the units in this equation"* | `SCI-UNITS-001`: carry units, check dimensional consistency first |
-| *"is this p value significant"* | `SCI-STATS-001`: multiple comparisons, effect size with a CI, not a bare p |
-| *"my simulation results look wrong"* | `SCI-VALIDATE-001`: validate against a known analytic case before trusting it |
-| *"make my numerical results reproducible"* | `SCI-REPRO-001`: pin seed, versions, data revision; record the command |
-| *"is this idea actually novel"* | `RES-NOVELTY-001`: run the negative search; most reinvention is a vocabulary mismatch |
-| *"find the frontier of this field"* | `RES-FRONTIER-001`: take it from what the field says is open, not from what you failed to find |
-| *"is this mesh good enough"* | `CFD-MESH-001`: mesh quality and y+ decide whether the wall model you picked is even valid |
-| *"the solver isn't converging"* | `CFD-CONVERGE-001`: falling residuals are not a converged answer; show grid convergence |
-| *"speed up this MATLAB loop"* | `ML-VECTOR-001`: preallocate — `x(end+1)` copies the whole array every iteration |
-
-**Doing the research, not just the code.** `research/` covers method: state a falsifiable
-question before gathering, cite the primary source you actually opened rather than a summary of
-it, keep what a source says separate from what you inferred, bound a literature sweep to the
-present and state the cutoff, report disagreement instead of picking a side without saying so,
-and produce a structured synthesis (established / contested / open) rather than forty per-paper
-summaries.
-
-**Simulation and the scientific languages.** Research doesn't get written in TypeScript. `cfd/`
-covers the failure modes of a simulation you'll defend in a viva or a design review — mesh
-quality and y+, residual convergence mistaken for grid convergence, Courant number and the
-steady-vs-transient choice, and picking a turbulence model on grounds you can state. Alongside
-it, `julia/`, `fortran/`, `matlab/` and `r/` carry four rules each on the traps specific to
-those languages: type stability and allocation, `intent` and explicit precision, preallocation
-and vectorised indexing, `NA` semantics and silent type coercion.
-
-These five domains sit at the **highest** relevance bar, and deliberately so. Their vocabulary —
-*solver, converge, residual, vectorize* — is also everyday programming vocabulary, so in a
-Python web service "the solver isn't converging" gets you Python answers, not CFD ones. Inside a
-project that actually is one of these (an OpenFOAM case directory, a `Project.toml`, a
-`DESCRIPTION`), they're on-stack and the higher bar never applies.
-
-**Prior art before you commit the effort.** Two rules fire on a build- or derive-shaped request
-before the work starts: `GEN-PRIORART-001` for "is there already a library for this", and
-`SCI-PRIORART-001` for "is this already equation 12 of a 2019 review". The costliest research
-mistake is three weeks spent rediscovering a published negative result.
-
-**Checking what a model hands you.** `SCI-DERIVE-001` applies with particular force to a
-derivation an LLM produced, since fluent algebra with a sign error reads exactly like fluent
-algebra. It asks for limiting cases, a dimensional check, symmetry, and a numerical spot-check
-before you build on it. The always-on `ENF-VERIFY-001` backs this up on every turn: evidence
-before assertion, and an explicit statement of what's verified versus assumed when a claim
-can't be checked.
-
-**It works where you actually work.** Clawness usually holds back rules for languages your
-project doesn't use, but `science/` and `research/` are exempt on purpose: a directory holding
-only `paper.tex`, or nothing at all yet, still gets them. Holding them back would silence these
-rules exactly where they're needed. Detection also stacks up, so a repo with `paper.tex`
-alongside `analysis.py` counts as both science and Python:
-
-```bash
-clawness query --stack science,python "is this derivation right"       # → SCI-DERIVE-001
-clawness query --stack science,python "mutable default argument here"  # → PY-MUTABLE-001
-```
-
-One prompt gets the physics rule, the next gets the Python rule, in the same project, with no
-mode to switch.
-
-**Building with LLMs?** The `llm/` domain covers that too: eval sets instead of vibes for
-prompt changes, schema-constrained output, prompt injection into tool-using agents, and never
-asserting exact model text in a test. These rules *are* held back by project type, so they stay
-out of projects that call no model.
 
 ---
 
@@ -174,7 +88,7 @@ You type a prompt in Claude Code
             ▼
 ┌──────────────────────────┐
 │  BM25 + TF-IDF + RRF     │  hybrid lexical retrieval + concept expansion
-│  + concept expansion     │  picks the top rules in ~2ms (pure Python)
+│  + concept expansion     │  picks the top rules in ~3ms (pure Python)
 │  context budget: 4000    │  stops adding rules when token budget is full
 └──────────┬───────────────┘
            │
@@ -564,6 +478,108 @@ None of these would be *guaranteed* stopped, just made louder: a question you ha
 
 ---
 
+## For Researchers and Scientists
+
+Clawness isn't only for shipping software. Physics, maths, and engineering work has its own
+ways to go wrong, and 32 rules across `science/` and `research/` cover them, the same way
+the coding rules work: injected automatically, with no command to remember. A further 21 cover
+simulation and the languages that work is actually written in — CFD, Julia, Fortran, MATLAB
+and R — and a new 8-rule `ml/` domain covers training and evaluating models (data leakage,
+cross-validation, calibration), detected from the modelling libraries in the project so it
+reaches any model-training codebase, scientific or not. And because research is rarely one
+repo — a bare analysis directory here, a LaTeX draft there, a solver case somewhere else — a
+single install covers all of them at once.
+
+**Catching the errors that survive review.** A dimensionally inconsistent equation is wrong no
+matter how reasonable the number looks. A float compared with `==` fails on the one input you
+didn't try. A result quoted to five significant figures from two-figure inputs is a false claim
+about how well the quantity is known. Ask a question and the relevant rule arrives with it:
+
+| You ask | You get |
+|---|---|
+| *"check the units in this equation"* | `SCI-UNITS-001`: carry units, check dimensional consistency first |
+| *"is this p value significant"* | `SCI-STATS-001`: multiple comparisons, effect size with a CI, not a bare p |
+| *"my simulation results look wrong"* | `SCI-VALIDATE-001`: validate against a known analytic case before trusting it |
+| *"make my numerical results reproducible"* | `SCI-REPRO-001`: pin seed, versions, data revision; record the command |
+| *"is this idea actually novel"* | `RES-NOVELTY-001`: run the negative search; most reinvention is a vocabulary mismatch |
+| *"find the frontier of this field"* | `RES-FRONTIER-001`: take it from what the field says is open, not from what you failed to find |
+| *"check these references are real"* | `RES-CITECHECK-001`: resolve each DOI and read the source — never trust an AI-generated citation |
+| *"which reporting checklist for this study"* | `RES-REPORTING-001`: PRISMA / CONSORT / STROBE / ARRIVE by study type; report its minimum items |
+| *"is this matrix solve trustworthy"* | `SCI-LINALG-001`: check the condition number; `lstsq` over `inv` when it's ill-conditioned |
+| *"is this mesh good enough"* | `CFD-MESH-001`: mesh quality and y+ decide whether the wall model you picked is even valid |
+| *"the solver isn't converging"* | `CFD-CONVERGE-001`: falling residuals are not a converged answer; show grid convergence |
+| *"speed up this MATLAB loop"* | `ML-VECTOR-001`: preallocate — `x(end+1)` copies the whole array every iteration |
+| *"my cross-validation accuracy looks too good"* | `MLD-LEAKAGE-001`: fit every transform inside a Pipeline within CV, never on the full dataset |
+
+**Doing the research, not just the code.** `research/` covers method: state a falsifiable
+question before gathering, cite the primary source you actually opened rather than a summary of
+it, keep what a source says separate from what you inferred, bound a literature sweep to the
+present and state the cutoff, report disagreement instead of picking a side without saying so,
+and produce a structured synthesis (established / contested / open) rather than forty per-paper
+summaries. It also covers the integrity and reporting layer, grounded in recognised standards:
+verifying that every citation exists and supports its claim — never trusting an AI-generated
+reference (COPE/ICMJE); matching the right reporting checklist to the study type (PRISMA 2020,
+CONSORT 2025, STROBE, ARRIVE 2.0); shipping a data- and code-availability statement with a
+repository DOI, made FAIR; pre-registering confirmatory work and labelling the exploratory as
+exploratory; and answering peer review point by point.
+
+**Training and evaluating models.** The `ml/` domain is the discipline that separates a real
+result from an optimistic one: data leakage and the fit-every-transform-inside-a-Pipeline-within-CV
+idiom that prevents it, cross-validation and split discipline (nested CV for tuning, grouped or
+temporal splits when samples aren't independent), a metric chosen before results and measured
+against a trivial baseline, class imbalance handled inside the folds, probability calibration,
+run reproducibility, and overfitting. It's detected from the modelling libraries a project
+imports (scikit-learn, XGBoost, PyTorch, statsmodels...), so it reaches any codebase that trains
+a model — a fraud detector in a web service as readily as a physics classifier — and stays quiet
+where nothing is trained. (Its rule ids use the `MLD-` prefix; `ML-` is the MATLAB domain.)
+
+**Simulation and the scientific languages.** Research doesn't get written in TypeScript. `cfd/`
+covers the failure modes of a simulation you'll defend in a viva or a design review — mesh
+quality and y+, residual convergence mistaken for grid convergence, Courant number and the
+steady-vs-transient choice, and picking a turbulence model on grounds you can state. Alongside
+it, `julia/`, `fortran/`, `matlab/` and `r/` carry four rules each on the traps specific to
+those languages: type stability and allocation, `intent` and explicit precision, preallocation
+and vectorised indexing, `NA` semantics and silent type coercion.
+
+These five domains sit at the **highest** relevance bar, and deliberately so. Their vocabulary —
+*solver, converge, residual, vectorize* — is also everyday programming vocabulary, so in a
+Python web service "the solver isn't converging" gets you Python answers, not CFD ones. Inside a
+project that actually is one of these (an OpenFOAM case directory, a `Project.toml`, a
+`DESCRIPTION`), they're on-stack and the higher bar never applies.
+
+**Prior art before you commit the effort.** Two rules fire on a build- or derive-shaped request
+before the work starts: `GEN-PRIORART-001` for "is there already a library for this", and
+`SCI-PRIORART-001` for "is this already equation 12 of a 2019 review". The costliest research
+mistake is three weeks spent rediscovering a published negative result.
+
+**Checking what a model hands you.** `SCI-DERIVE-001` applies with particular force to a
+derivation an LLM produced, since fluent algebra with a sign error reads exactly like fluent
+algebra. It asks for limiting cases, a dimensional check, symmetry, and a numerical spot-check
+before you build on it. The always-on `ENF-VERIFY-001` backs this up on every turn: evidence
+before assertion, and an explicit statement of what's verified versus assumed when a claim
+can't be checked.
+
+**It works where you actually work.** Clawness usually holds back rules for languages your
+project doesn't use, but `science/` and `research/` are exempt on purpose: a directory holding
+only `paper.tex`, or nothing at all yet, still gets them. Holding them back would silence these
+rules exactly where they're needed. Detection also stacks up, so a repo with `paper.tex`
+alongside `analysis.py` counts as both science and Python:
+
+```bash
+clawness query --stack science,python "is this derivation right"       # → SCI-DERIVE-001
+clawness query --stack science,python "mutable default argument here"  # → PY-MUTABLE-001
+```
+
+One prompt gets the physics rule, the next gets the Python rule, in the same project, with no
+mode to switch.
+
+**Building with LLMs?** The `llm/` domain covers that too: eval sets instead of vibes for
+prompt changes, schema-constrained output, prompt injection into tool-using agents, and never
+asserting exact model text in a test. These rules *are* held back by project type, so they stay
+out of projects that call no model.
+
+---
+
 ## Per-Project Setup
 
 Global rules handle security, testing, general best practices, and framework conventions. For project-specific rules (your API format, your database conventions, your naming patterns), use `init`:
@@ -933,7 +949,7 @@ clawness --rules-dir /path/to/rules stats
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Rules** | 195 across 28 domains | Coding, science, research and LLM standards, injected per-prompt |
+| **Rules** | 212 across 29 domains | Coding, science, machine learning, research and LLM standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 9 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status`, `/clawness:claude-md`, `/clawness:refresh`, `/clawness:audit-rules` |
 | **Hooks** | 12 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory & gitignore bootstrap, handoff pickup, stack & version detection & rule-staleness check, changelog check, CLAUDE.md size check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |
@@ -946,13 +962,14 @@ clawness --rules-dir /path/to/rules stats
 | Domain | Rules | Covers |
 |--------|-------|--------|
 | `general` | 23 | Cross-cutting: prior art before building, abstraction/YAGNI, comments, memory, nesting, magic numbers, immutability, dependency selection, versioning/lockfiles, matching the version a project already installs, changelog upkeep, release & version numbering, linting, naming, validation, logging, env config, accessibility, git, performance *(3 mandatory)* |
-| `science` | 14 | Physics/maths/engineering practice: prior art, dimensional consistency, numerical stability, uncertainty propagation, statistical discipline, derivation checking, solver validation, reproducibility, paper claims, figure standards, array/dataframe correctness (views, dtype, NaN), notebook hygiene, parallel and GPU determinism, scientific data formats |
+| `science` | 18 | Physics/maths/engineering practice: prior art, dimensional consistency, numerical stability, matrix conditioning and stable solves, uncertainty propagation, statistical discipline, derivation checking, solver validation, solver/optimizer convergence checks, modern RNG and safe parallel seeding, reproducibility and environment lockfiles, workflow managers for multi-step analyses, paper claims, figure standards, array/dataframe correctness (views, dtype, NaN), notebook hygiene, parallel and GPU determinism, scientific data formats |
+| `research` | 14 | Source hygiene (primary sources, verifying citations exist and support the claim, inference vs claim, date-bounded sweeps, reporting disagreement), reporting standards (PRISMA/CONSORT/STROBE/ARRIVE checklists, data/code availability with a DOI and FAIR, pre-registration and confirmatory-vs-exploratory honesty, point-by-point peer-review responses), and the research programme (falsifiable questions, mapping a frontier, novelty negative-search, cross-domain mapping, structured synthesis) |
 | `security` | 11 | Auth, secrets, deps, untrusted-content/exfil *(4 mandatory)*; SQLi, XSS, package supply-chain, SSRF, path traversal, object-level authz/IDOR, password hashing & crypto *(ranked)* |
 | `workflows` | 11 | Multi-agent orchestration (security audit, code review, testing, perf, refactoring, architecture, parallel research), session handoff, sub-agent cost/vetting, and lessons-memory upkeep *(1 mandatory)* |
 | `nextjs` | 10 | Server/Client components, data fetching, caching, layouts, metadata, Server Actions |
-| `research` | 9 | Source hygiene (primary sources, inference vs claim, date-bounded sweeps, reporting disagreement) and the research programme (falsifiable questions, mapping a frontier, novelty negative-search, cross-domain mapping, structured synthesis) |
 | `fastapi` | 8 | Pydantic v2, dependency injection, async, error handling, CORS, DB sessions |
 | `meta` | 8 | Rationalization counters — rebuttals to common AI shortcuts ("too simple to test", hardcode "temporarily", "I'll refactor later", trusting input) |
+| `ml` | 8 | Training/evaluating your own models (stack-gated on modelling libs, so it fires for any model-training codebase, science or not): data leakage and the Pipeline idiom, cross-validation and split discipline (nested CV, grouped/temporal), metrics and baselines, class imbalance, probability calibration, run reproducibility, overfitting/regularisation, REFORMS reporting for ML-based science |
 | `llm` | 7 | Building with models: eval sets for prompt changes, prompt injection into tool-using agents, schema-constrained output, token cost & caching, testing non-determinism, model-id pinning, retrieval over context-stuffing |
 | `python` | 7 | Async I/O, imports, error handling, type hints, mutable defaults, context managers, pathlib |
 | `testing` | 7 | Coverage for new code *(1 mandatory)*; watching a test fail before trusting it green, testing on the boundary rather than near it, determinism, mocking at the boundary, assertion specificity, test isolation *(ranked)* |

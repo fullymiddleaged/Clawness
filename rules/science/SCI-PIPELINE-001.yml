@@ -1,0 +1,18 @@
+id: SCI-PIPELINE-001
+domain: science
+severity: warning
+tags: [pipeline, workflow, snakemake, nextflow, reproducibility, provenance, automation]
+triggers: [snakemake, nextflow, workflow manager, analysis pipeline, multi-step analysis, rerun only what changed, pipeline dag, orchestrate the analysis, driver script]
+when: Orchestrating a multi-step analysis (more than a couple of chained scripts).
+rule: >
+  Once an analysis is more than a couple of scripts run by hand, drive it with a
+  workflow manager (Snakemake, Nextflow) rather than an ad-hoc driver script. Hand
+  running loses track of what is stale, so you either re-run everything or forget a
+  step and ship inconsistent outputs. A workflow manager builds the dependency DAG
+  from declared inputs and outputs, re-runs only what actually changed (modern
+  Snakemake triggers on changed code, parameters and software environment, not just
+  file timestamps), records which rule produced each output, and can pin a
+  per-step environment. This is orchestration, distinct from pinning inputs for
+  reproducibility - you want both.
+violation: "run_all.sh calling ten scripts in order; after editing step 4, unsure which outputs are now stale"
+correct: "A Snakefile whose rules declare input/output; `snakemake` re-runs only the affected steps"

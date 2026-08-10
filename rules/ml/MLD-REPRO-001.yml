@@ -1,0 +1,18 @@
+id: MLD-REPRO-001
+domain: ml
+severity: warning
+tags: [reproducibility, random-state, seed, determinism, gpu, splits]
+triggers: [random_state, random seed, reproducible model, same results, nondeterministic training, gpu determinism, pin the split, seed the model]
+when: Training or evaluating a model whose results need to be reproducible.
+rule: >
+  Fix and record random_state on every stochastic component - the splitter, the
+  estimator, any resampler - and pin the exact split. Pass an integer to a CV
+  splitter so every model is compared on identical folds; passing a RandomState
+  instance to a splitter yields different folds on each call, silently comparing
+  models on different data. Version the data and the environment (a lockfile)
+  alongside the code. Know the limit: GPU and parallel reductions (cuDNN, atomic
+  sums) are non-deterministic even with a seed, so seeding bounds run-to-run
+  variance rather than eliminating it - report the variance instead of a single
+  lucky run.
+violation: "train_test_split(X, y) with no random_state, then quoting one run's accuracy to three decimals"
+correct: "KFold(shuffle=True, random_state=0) and train_test_split(..., random_state=0); versions pinned"

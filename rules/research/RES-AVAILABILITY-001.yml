@@ -1,0 +1,18 @@
+id: RES-AVAILABILITY-001
+domain: research
+severity: warning
+tags: [data-availability, code-availability, fair, doi, repository, licence, open-science]
+triggers: [data availability statement, code availability, share the data, deposit the code, zenodo, repository doi, fair data, available on request, make the data open, archive the code]
+when: Publishing or sharing the data and code behind a result.
+rule: >
+  Ship a data availability statement pointing to the minimum dataset needed to
+  verify the result, deposited in a repository with a persistent identifier (a DOI),
+  and a code availability statement pointing to a version-tagged, archived release
+  (for example a Zenodo-archived GitHub tag), not a bare repository URL that can
+  change. 'Available on request' is not sufficient. Make what you deposit FAIR:
+  a persistent identifier, machine-readable metadata, standard open formats, and an
+  explicit reuse licence. Note that Accessible does not mean Open - when data are
+  legitimately restricted (privacy, ethics, proprietary), state that and how access
+  is controlled rather than forcing everything public or staying silent.
+violation: "'Data available from the authors on request', no repository, no DOI, code in an untagged repo"
+correct: "Data + code deposited with DOIs, cited in the paper, licensed; restricted parts explained with access terms"

@@ -1,0 +1,19 @@
+id: SCI-SCIPY-001
+domain: science
+severity: error
+tags: [scipy, optimization, convergence, solver, curve-fit, root-finding, numerical]
+triggers: [scipy optimize, minimize, curve_fit, root finding, did not converge, result.success, optimizer failed, solve_ivp, integration tolerance, convergence flag]
+when: Calling a scipy solver, optimizer, root-finder, or integrator.
+rule: >
+  scipy.optimize.minimize, root, least_squares and curve_fit ALWAYS return an x,
+  even when the algorithm failed to converge - a non-converged optimum reads
+  exactly like a good one. Check the diagnostic before using the value: raise or
+  handle on not result.success (result.message says why it stopped); read the
+  error estimate quad returns; inspect the covariance from curve_fit. Choosing the
+  method is a correctness decision, not a preference - match it to the problem
+  (bounds, constraints, whether a gradient is available), set integration
+  tolerances deliberately, and pick the scipy.stats test that fits the data
+  (paired vs independent, parametric assumptions). Use solve_ivp, not the old
+  odeint, for new ODE code.
+violation: "res = minimize(f, x0); use res.x  # never checked res.success — it silently didn't converge"
+correct: "res = minimize(f, x0, method='L-BFGS-B'); assert res.success, res.message"

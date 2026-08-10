@@ -1,0 +1,18 @@
+id: RES-PREREG-001
+domain: research
+severity: warning
+tags: [preregistration, confirmatory, exploratory, harking, publication-bias, integrity]
+triggers: [preregister, pre-registration, registered report, exploratory analysis, confirmatory analysis, harking, report negative results, deviation from the plan, fishing for significance]
+when: Planning or reporting an analysis that tests a hypothesis.
+rule: >
+  Separate confirmatory from exploratory work and be honest about which you did.
+  Pre-register the hypothesis and analysis plan before seeing the data (a Registered
+  Report, reviewed before results exist, removes the incentive to p-hack or to
+  invent the hypothesis after the fact); an analysis decided after looking at the
+  data is exploratory and must be labelled exploratory, not presented as a
+  prediction it confirmed (HARKing). Report every pre-specified outcome, including
+  the negative and failed ones, and disclose any deviation from the registered plan
+  rather than quietly absorbing it. This is distinct from correcting for multiple
+  tests - it is about not letting the result choose the hypothesis.
+violation: "Running many analyses, then writing the one that worked as the hypothesis you set out to test"
+correct: "Pre-registered primary analysis reported in full; extras clearly labelled exploratory; negatives reported"

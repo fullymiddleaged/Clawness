@@ -1,0 +1,19 @@
+id: RES-REPORTING-001
+domain: research
+severity: warning
+tags: [reporting-guidelines, prisma, consort, strobe, arrive, checklist, transparency]
+triggers: [reporting guideline, prisma, consort, strobe, arrive, systematic review writeup, clinical trial report, checklist for the paper, report the study, write up the methods]
+when: Writing up a study for which a recognised reporting guideline exists.
+rule: >
+  Report against the checklist that matches the study type, so a reader can appraise
+  and reproduce it - PRISMA 2020 for systematic reviews and meta-analyses, CONSORT
+  2025 for randomised trials (the 2025 revision, not 2010), STROBE for observational
+  studies, ARRIVE 2.0 (the Essential 10) for in-vivo animal work. Report the
+  guideline's minimum items rather than a subset: the flow diagram with exclusion
+  counts, an a-priori sample-size justification, and how randomisation and blinding
+  were done are the items most often dropped and most needed. Register trials and
+  reviews and report against the pre-specified primary outcome. These guide what to
+  REPORT, not how to run the study - use them to check completeness, not to dictate
+  design.
+violation: "A meta-analysis with no PRISMA flow diagram and no protocol registration or search strategy"
+correct: "Follow PRISMA 2020: flow diagram with exclusion reasons, registered protocol, full search per database"

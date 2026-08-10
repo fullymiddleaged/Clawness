@@ -1,0 +1,18 @@
+id: MLD-CV-001
+domain: ml
+severity: error
+tags: [cross-validation, train-test-split, nested-cv, groupkfold, timeseriessplit, model-selection]
+triggers: [cross validation, train test split, hold out set, nested cv, hyperparameter tuning, kfold, groupkfold, time series split, evaluate the model, tune the model]
+when: Splitting data, cross-validating, or tuning hyperparameters.
+rule: >
+  Touch the held-out test set once, at the very end. Every earlier peek - watching
+  its metric, picking a threshold or features against it - turns it into a
+  validation set and leaks. Tuning hyperparameters on the same cross-validation you
+  then quote as performance is optimistically biased; use nested CV (an inner
+  GridSearchCV to tune, an outer cross_val_score to estimate generalisation).
+  Plain KFold and a random split assume independent, identically distributed
+  samples: when rows share a subject, site or device use GroupKFold or
+  StratifiedGroupKFold so a group never straddles the split, and for time-ordered
+  data use TimeSeriesSplit - a random shuffle trains on the future and leaks.
+violation: "GridSearchCV over X, then reporting that same CV's best score as the model's performance"
+correct: "cross_val_score(GridSearchCV(pipe, grid, cv=inner), X, y, cv=outer); GroupKFold when rows aren't independent"

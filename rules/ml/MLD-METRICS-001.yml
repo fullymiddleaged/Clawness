@@ -1,0 +1,17 @@
+id: MLD-METRICS-001
+domain: ml
+severity: error
+tags: [metrics, baseline, accuracy, imbalance, evaluation, dummy-classifier]
+triggers: [which metric, evaluation metric, accuracy, f1 score, roc auc, baseline model, model performance, is this model good, imbalanced accuracy]
+when: Choosing an evaluation metric or judging whether a model is any good.
+rule: >
+  Choose the metric before you see results - picking the metric that flatters the
+  model after the fact is a garden of forking paths. Judge every model against a
+  trivial baseline, not against zero: a DummyClassifier (most_frequent or
+  stratified) or DummyRegressor is the floor a real model must clear. Accuracy is
+  misleading under class imbalance, where always predicting the majority class
+  scores as well as its prevalence (about 76% on a 76/24 split) while learning
+  nothing; report balanced accuracy, precision/recall/F1, or PR-AUC / ROC-AUC
+  chosen for what the errors cost.
+violation: "Reporting 94% accuracy on a 94/6 imbalanced problem as a success, with no baseline"
+correct: "Beat DummyClassifier(strategy='stratified'); report balanced_accuracy / PR-AUC picked up front"

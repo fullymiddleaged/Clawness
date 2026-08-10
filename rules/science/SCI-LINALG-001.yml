@@ -1,0 +1,19 @@
+id: SCI-LINALG-001
+domain: science
+severity: error
+tags: [linear-algebra, conditioning, stability, matrix, sparse, least-squares, numpy, scipy]
+triggers: [ill conditioned, condition number, np.linalg.cond, singular matrix, solve the system, least squares, lstsq, sparse matrix, inaccurate solution, matrix is nearly singular]
+when: Solving a linear system, fitting by least squares, or inverting a matrix.
+rule: >
+  A linear solve can return a confident, wrong answer. Check np.linalg.cond(A)
+  before trusting it: a condition number near 10**k means you lose up to k of your
+  ~15-16 float64 digits, so cond ~1e8 already halves your precision and ~1e16
+  leaves none. inv() on an ill-conditioned matrix may not raise and returns
+  garbage silently, so prefer solve() for square well-conditioned systems and
+  lstsq() (SVD-based, truncates tiny singular values) for over/under-determined or
+  ill-conditioned ones. Reach for scipy.linalg over numpy.linalg for dense work
+  (LAPACK-backed, and assume_a='pos'/'sym' picks a stable specialised solver), and
+  scipy.sparse.linalg for large sparse systems - never densify a sparse operator
+  to call a dense routine.
+violation: "x = np.linalg.inv(A) @ b on a matrix with cond(A)=1e12, result trusted without a check"
+correct: "if np.linalg.cond(A) > 1e10: use lstsq; else np.linalg.solve(A, b)"

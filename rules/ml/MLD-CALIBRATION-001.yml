@@ -1,0 +1,18 @@
+id: MLD-CALIBRATION-001
+domain: ml
+severity: warning
+tags: [calibration, probabilities, predict-proba, reliability-diagram, decision-threshold]
+triggers: [calibration, calibrated probabilities, predict_proba, reliability diagram, probability threshold, risk score, are these probabilities meaningful]
+when: Acting on a classifier's predicted probabilities rather than just its labels.
+rule: >
+  A classifier's predict_proba is not necessarily a calibrated probability - many
+  models (SVMs, boosted trees, naive Bayes) output scores that rank well but do not
+  match observed frequencies. If you act on the numbers themselves (a risk
+  threshold, an expected-value decision, a reported likelihood), calibrate them and
+  check first. Diagnose with a reliability diagram (predicted probability vs
+  observed frequency); correct with CalibratedClassifierCV, fit on data held out
+  from the classifier's own training data, since calibrating on the training data
+  leaks and reports over-confident reliability. If you only need the ranking or the
+  argmax label, calibration may not matter - decide which you need.
+violation: "Thresholding raw SVM decision scores as if they were probabilities of the positive class"
+correct: "Reliability diagram to check; CalibratedClassifierCV on held-out data before acting on the probabilities"

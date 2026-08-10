@@ -455,9 +455,12 @@ dependency**. No ML models, no services, no Docker.
   registered. Every SessionStart note hook uses it; `git_check` keeps its own *downward*
   tree scan because "is git used anywhere relevant?" is a different question from
   `git_root`'s upward walk.
-- `rules/<domain>/*.yml` — the corpus (195 rules / 28 domains; `_mandatory/` = always-on).
+- `rules/<domain>/*.yml` — the corpus (212 rules / 29 domains; `_mandatory/` = always-on).
   Beyond the language domains: `llm/` (building with models — stack-gated, detected from
-  anthropic/openai/langchain deps), `science/` and `research/` (physics/maths/engineering
+  anthropic/openai/langchain deps), `ml/` (training/evaluating your OWN models — leakage,
+  CV, calibration — stack-gated on modelling libs sklearn/xgboost/torch/statsmodels, so it
+  fires for any model-training codebase, science or not; note its rule ids use the `MLD-`
+  prefix because `matlab/` owns `ML-`), `science/` and `research/` (physics/maths/engineering
   practice and research method — **cross-cutting on purpose**, since a researcher often
   works in a bare or LaTeX-only directory where gating would silence them), plus
   `reliability/`, `testing/` and `ci/`. `cfd/`, `julia/`, `fortran/`, `matlab/` and `r/`
@@ -624,9 +627,9 @@ dependency**. No ML models, no services, no Docker.
   on Windows and mangle them into mojibake (`—` → `â€"`) *at load time*. `clawness
   lint` now flags non-UTF-8 / U+FFFD rule files; keep new reads/writes UTF-8.
 - **Keep retrieval a couple of ms** — no heavy imports or model loads in
-  `claude_hook.py`/`core.py`. It was ~0.8ms at 121 rules and is ~1.6ms at 195; the
-  concept-expansion pass scales with both corpus size and `_CONCEPT_GROUPS`, so measure
-  with `clawness bench` when adding either.
+  `claude_hook.py`/`core.py`. It was ~0.8ms at 121 rules, ~1.6ms at 195, and ~3ms at
+  212 (after adding the `__ml__` concept group); the concept-expansion pass scales with
+  both corpus size and `_CONCEPT_GROUPS`, so measure with `clawness bench` when adding either.
 - **Version lives in 4 places** — bump `pyproject.toml`, `.claude-plugin/plugin.json`,
   `.claude-plugin/marketplace.json`, and `clawness/__init__.py` (`__version__`) together,
   and add a CHANGELOG entry. `tests/test_version.py` asserts all four agree + a CHANGELOG

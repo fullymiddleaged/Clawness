@@ -1,0 +1,18 @@
+id: MLD-REFORMS-001
+domain: ml
+severity: info
+tags: [reforms, reporting, ml-based-science, checklist, reproducibility, leakage]
+triggers: [reforms, ml reporting checklist, report the model, ml based science, document the model, reproducible ml study, model card for a paper]
+when: Designing, writing up, or reviewing a study whose findings come from a trained model.
+rule: >
+  When the scientific result rests on a trained model, report it against the REFORMS
+  checklist (Kapoor et al., 2024) so it can be appraised and reproduced. Its eight
+  areas are the ones reviewers cannot reconstruct otherwise: study goals;
+  computational reproducibility (release code, data, and the compute environment);
+  data quality; preprocessing; modelling and how it was compared to baselines; data
+  leakage - stated explicitly, documenting how each type was precluded; metrics with
+  uncertainty (justify the metric, report confidence intervals not point estimates);
+  and generalisability and limitations. Treat it as a completeness check on the
+  write-up, not a constraint on the method.
+violation: "Reporting a model's headline accuracy with no baseline comparison, uncertainty, or leakage discussion"
+correct: "A methods section covering the REFORMS areas: environment, baselines, leakage precluded, metrics with CIs, limits"

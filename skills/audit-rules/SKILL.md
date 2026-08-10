@@ -19,7 +19,7 @@ major than the day's current one) and rule text names an API, not a version. So
 `applies_to` is an **output of this review**, established rule by rule from that
 rule's own evidence.
 
-**One domain per run.** 195 rules in one pass is not a review. Reviewing several
+**One domain per run.** 212 rules in one pass is not a review. Reviewing several
 domains at once is how a careful pass becomes a bulk stamp, which is the exact
 failure per-rule stamping exists to prevent.
 

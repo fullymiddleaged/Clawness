@@ -1,0 +1,17 @@
+id: MLD-OVERFIT-001
+domain: ml
+severity: error
+tags: [overfitting, regularization, generalization, test-set, learning-curve, model-selection]
+triggers: [overfitting, overfit, train test gap, regularization, generalization, model memorized, tuning on the test set, validation curve, too complex model]
+when: A model fits training data far better than held-out data, or you are selecting model complexity.
+rule: >
+  A large gap between training and validation performance is overfitting. Close it
+  by regularising (L1/L2, a smaller C or larger alpha, tree depth or
+  min_samples_leaf, early stopping), getting more data, or using fewer features -
+  not by adding capacity. The cardinal sin is tuning against the test set: any
+  hyperparameter, threshold or feature chosen by looking at test performance folds
+  the test set into training, so its score no longer estimates generalisation. Do
+  all selection on validation or cross-validation; the test set is final and used
+  once. Validation and learning curves tell you which regime you are in.
+violation: "Trying architectures until test accuracy peaks, then reporting that test accuracy as the result"
+correct: "Select on CV/validation, regularise to close the train-val gap, then read the test set once at the end"

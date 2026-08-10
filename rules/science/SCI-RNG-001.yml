@@ -1,0 +1,18 @@
+id: SCI-RNG-001
+domain: science
+severity: error
+tags: [random, rng, seed, generator, reproducibility, parallel, numpy]
+triggers: [random seed, np.random.seed, default_rng, generator, random numbers, seed the workers, reproducible random, monte carlo, sample randomly]
+when: Generating random numbers, especially where results must be reproducible or parallel.
+rule: >
+  Use an explicit Generator (np.random.default_rng(seed)) threaded through your
+  code, not the legacy global API (np.random.seed then np.random.rand/randn). The
+  global is one process-wide state any imported library can perturb, and call
+  ordering silently changes your stream - the legacy API is frozen, not removed,
+  but do not build on it. For parallel or worker streams, derive independent
+  children with parent.spawn(n) or SeedSequence(seed).spawn(n); never seed workers
+  as root_seed + worker_id, which produces overlapping, correlated streams that
+  bias the ensemble. When combining an id with a fixed seed by hand, put the
+  varying id first: default_rng([worker_id, root_seed]).
+violation: "np.random.seed(0) once, then each of 8 workers does RandomState(base + rank)"
+correct: "rng = default_rng(base); streams = rng.spawn(8)   # one independent Generator per worker"

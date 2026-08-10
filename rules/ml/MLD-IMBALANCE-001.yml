@@ -1,0 +1,17 @@
+id: MLD-IMBALANCE-001
+domain: ml
+severity: error
+tags: [imbalance, smote, resampling, class-weight, decision-threshold, imblearn]
+triggers: [imbalanced data, imbalanced dataset, smote, oversample the minority, undersample the majority, resample inside cross validation, class_weight, minority class]
+when: Handling a classification problem with imbalanced classes.
+rule: >
+  Resampling must happen inside the cross-validation folds, on training data only.
+  SMOTE or oversampling applied before the split synthesises minority points from
+  rows that later land in the test fold - leakage that badly inflates the reported
+  score. A plain sklearn Pipeline will not resample correctly under CV; use
+  imblearn's Pipeline so the resampler is applied to the training folds alone.
+  Often better than resampling at all: set class_weight='balanced' and tune the
+  decision threshold, since leaving it at 0.5 is rarely right on an imbalanced
+  problem. Pair this with an imbalance-aware metric, never bare accuracy.
+violation: "X_res, y_res = SMOTE().fit_resample(X, y); then train_test_split — minority points leak across the split"
+correct: "imblearn.pipeline.Pipeline([('smote', SMOTE()), ('clf', clf)]) inside cross_val_score; or class_weight='balanced'"

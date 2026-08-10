@@ -5,6 +5,48 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-08-10
+
+A deep pass on scientific and research work: a new machine-learning domain, and
+broader coverage of numerical computing, research method, and reporting standards —
+17 new rules across three domains, grounded in current primary sources.
+
+### Added
+
+- **New `ml` domain — discipline for training and evaluating models.** Detected from
+  modelling libraries (scikit-learn, XGBoost, LightGBM, statsmodels, PyTorch,
+  TensorFlow, Keras, JAX), *not* from "is this science", so it fires for any codebase
+  that trains a model — a fraud model in a web service as readily as a physics
+  classifier — and stays silent in a plain app that trains none. It sits beside `llm`
+  (building on hosted models) and the cross-cutting `science` domain. Eight rules:
+  data leakage (`MLD-LEAKAGE-001`), cross-validation and split discipline
+  (`MLD-CV-001`), metrics and baselines (`MLD-METRICS-001`), class imbalance
+  (`MLD-IMBALANCE-001`), probability calibration (`MLD-CALIBRATION-001`), run
+  reproducibility (`MLD-REPRO-001`), overfitting and regularisation
+  (`MLD-OVERFIT-001`), and the REFORMS reporting checklist for ML-based science
+  (`MLD-REFORMS-001`). The `MLD-` prefix (not `ML-`) is deliberate: `ML-` is the
+  MATLAB domain.
+- **Five new numerical / scientific-computing rules.** Modern NumPy random generators
+  and safe parallel seeding (`SCI-RNG-001`), matrix conditioning and stable solves
+  (`SCI-LINALG-001`), checking solver/optimizer convergence flags (`SCI-SCIPY-001`),
+  and workflow managers for multi-step analyses (`SCI-PIPELINE-001`). `SCI-REPRO-001`
+  now names lockfiles (uv / pixi) as the way to pin an environment.
+- **Five new research-method and integrity rules, grounded in recognised standards.**
+  Verifying that every citation exists and supports its claim — never trusting
+  AI-generated references (`RES-CITECHECK-001`, per COPE/ICMJE); matching the right
+  reporting checklist to the study type — PRISMA 2020, CONSORT 2025, STROBE, ARRIVE
+  2.0 (`RES-REPORTING-001`); data and code availability statements with a repository
+  DOI, made FAIR (`RES-AVAILABILITY-001`); pre-registration and honest
+  confirmatory-vs-exploratory reporting (`RES-PREREG-001`); and point-by-point
+  responses to peer review (`RES-REVIEW-001`).
+
+### Notes
+
+- No new version stamps: the machine-learning and numerical guidance is stable across
+  library majors (scikit-learn/scipy/statsmodels have never had a claim-inverting
+  major), so stamping would only buy future false alarms. `VERSION_WATCH_*` is
+  unchanged.
+
 ## [1.9.0] - 2026-08-08
 
 Rules can now say which framework versions they were checked against, and Clawness
