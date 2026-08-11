@@ -577,6 +577,25 @@ dependency**. No ML models, no services, no Docker.
   vs manual (`install.sh`/`install.ps1` → editable `pip install` + `setup_settings.py`
   writes hooks to `settings.json`). The plugin path does NOT install the `clawness`
   CLI — plugin users verify via `/clawness:status`.
+- **Skills reach the bundled CLI through a stashed wrapper, NOT `${CLAUDE_PLUGIN_ROOT}`
+  (1.10.1).** That env var resolves only in hook/MCP *JSON* config — in a skill's Bash
+  it is EMPTY (upstream anthropics/claude-code#9354, still open), and the plugin never
+  pip-installs `clawness` (only pyyaml), so a skill's `python -m clawness.cli` raises
+  `ModuleNotFoundError` from any real project dir. `ensure_deps.stash_cli_wrapper()`
+  (SessionStart) self-locates the plugin root via `Path(__file__).parent.parent` — the
+  same idiom the hooks use to import `clawness` — and writes `clawness-cli.sh` (plugin
+  root baked onto `PYTHONPATH`, as `as_posix()` so the sh string needs no backslash
+  escaping and Windows Python still accepts it) to `<config>/clawness/` for **every**
+  Claude config dir. The four CLI-using skills (`status`, `refresh`, `claude-md`,
+  `audit-rules`) call `bash "$CLAW"` where `CLAW=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh`.
+  Rewritten every session, so a plugin update that relocates the install dir self-heals
+  before any skill runs. It uses its own inline `_config_dirs()` (mirroring
+  `plan._claude_config_dirs`) rather than importing it — this bootstrap runs before
+  pyyaml, hence before `clawness` (whose `__init__` imports core→yaml) is importable,
+  and its contract is to have no import that can fail on a fresh install. The regression
+  test that actually catches the bug runs the *generated* wrapper from a non-checkout
+  cwd (`tests/test_ensure_deps.py`); the maintainer's editable checkout on `sys.path`
+  masks it otherwise — the same maintainer-vs-user blind spot that let it ship.
 - **Naming:** package `clawness`, env vars `CLAW_*`, project dir `.clawness/`. (The
   `infinri/Writ` mentions in README and CHANGELOG are upstream credit / historical
   record — leave those. Everywhere else was renamed to Clawness; `install.ps1` keeps a

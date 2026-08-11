@@ -148,11 +148,16 @@ Stamping the rules you write closes the loop: when this project later moves 17�
 
 ### 7. Verify
 
-- `clawness lint` (or `python -m clawness.cli lint` if `clawness` isn't on PATH —
-  normal for a plugin-only install). It validates the stamp mechanically: unknown
-  framework label, unparseable range, future `verified` date.
-- `clawness query "<a prompt this should match>"` and confirm the new id appears.
-  A rule that doesn't retrieve is worse than the stale one it replaced.
+The `clawness` CLI ships with the plugin but isn't on your PATH; run it via the
+wrapper the SessionStart bootstrap writes each session:
+`CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"`. If `$CLAW`
+is missing the bootstrap hasn't run — start a fresh session. (Editable/manual
+installs may use `python -m clawness.cli` instead.)
+
+- `bash "$CLAW" lint` — validates the stamp mechanically: unknown framework label,
+  unparseable range, future `verified` date.
+- `bash "$CLAW" query "<a prompt this should match>"` and confirm the new id
+  appears. A rule that doesn't retrieve is worse than the stale one it replaced.
 - Tell the user the new rules load on the **next** session, not this one.
 - Suggest committing `.clawness/rules/` — it is meant to be shared, unlike the
   handoff and the ledgers.

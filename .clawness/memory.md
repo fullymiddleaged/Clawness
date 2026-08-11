@@ -16,3 +16,4 @@
 - Plugin skills/hooks load from ~/.claude/plugins/cache/clawness/<version>, so new skills can't be smoke-tested pre-push.
 - Defender blocks pip's console-script shim (clawness.exe): "Access is denied". Test packaging via `python -m clawness.cli`.
 - In tests, `shutil.which("bash")` finds WSL bash, which resolves no python (no .exe); prefer Git Bash — that's what runs hooks.
+- ${CLAUDE_PLUGIN_ROOT} is EMPTY in skill/command Bash (only set in hook/MCP JSON; upstream #9354); skills reach the CLI via ensure_deps' stashed clawness-cli.sh.

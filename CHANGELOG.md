@@ -5,6 +5,19 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.1] - 2026-08-11
+
+### Fixed
+
+- **Skills that call the `clawness` CLI now work on plugin-only installs.**
+  `/clawness:status`, `/clawness:refresh`, `/clawness:claude-md` and
+  `/clawness:audit-rules` previously told you to run `python -m clawness.cli`, which
+  failed with `ModuleNotFoundError` for anyone who installed via the plugin (the CLI
+  isn't pip-installed and a skill's shell can't see the plugin's location). Clawness
+  now writes a small wrapper to `<config>/clawness/clawness-cli.sh` at the start of
+  each session and the skills invoke that, so they work without any manual install.
+  Core rule injection, agents, and the plan gate were never affected.
+
 ## [1.10.0] - 2026-08-10
 
 A deep pass on scientific and research work: a new machine-learning domain, and

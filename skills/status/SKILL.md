@@ -10,9 +10,14 @@ description: >
 
 Show the user what's currently active in their Clawness setup.
 
-> All commands below use `clawness`. If it isn't on PATH (common for a
-> plugin-only install), use the identical `python -m clawness.cli ...`
-> (`python3` on macOS/Linux) instead.
+> **Running the Clawness CLI.** It ships with the plugin but isn't on your PATH.
+> Use the wrapper the SessionStart bootstrap hook writes each session:
+> ```bash
+> CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
+> bash "$CLAW" <command>          # e.g. bash "$CLAW" stats
+> ```
+> If `$CLAW` doesn't exist, the bootstrap hasn't run yet — start a fresh session.
+> (Editable/manual installs may instead use `python -m clawness.cli ...`.)
 
 Keep this FAST — it's a quick health check, not a full scan. Step 1 already
 proves retrieval at zero cost, so a test query is unnecessary.
@@ -35,7 +40,7 @@ proves retrieval at zero cost, so a test query is unnecessary.
 
 2. **Show the corpus + token cost.** Run (fast):
    ```bash
-   clawness stats
+   bash "$CLAW" stats
    ```
    Report total rules, domains, and the `Tokens / turn` line.
 
@@ -45,6 +50,4 @@ proves retrieval at zero cost, so a test query is unnecessary.
 **Summary** — keep it to a few lines:
 - Rule injection: working (you saw the block) / not seeing rules
 - Global rules: N across M domains; ~N tokens/turn (tune with `CLAW_TOP_K`, `CLAW_VERBOSE`, `CLAW_COMPACT`)
-- Project rules: N, or "none — `clawness init .` to add some"
-
-> If `clawness` isn't on PATH (plugin-only install), use `python -m clawness.cli ...`.
+- Project rules: N, or "none — `bash \"$CLAW\" init .` to add some"

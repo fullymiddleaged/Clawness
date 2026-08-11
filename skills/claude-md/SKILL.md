@@ -115,9 +115,12 @@ approved section, in order, smallest first:
 
 1. Write the new file (or add the rule).
 2. Verify it:
-   - `.clawness/rules/` → `clawness query "<a prompt this should match>"` and
-     confirm the new ID appears. If `clawness` isn't on PATH (normal for a
-     plugin-only install), use `python -m clawness.cli query ...`.
+   - `.clawness/rules/` → confirm the new ID retrieves. The `clawness` CLI ships
+     with the plugin but isn't on PATH; run it via the wrapper the SessionStart
+     bootstrap writes each session:
+     `CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"`, then
+     `bash "$CLAW" query "<a prompt this should match>"` and check the ID appears.
+     (Editable/manual installs may use `python -m clawness.cli query ...`.)
    - `.claude/rules/` with `paths:` → confirm the glob matches a real file in the
      repo. It loads when Claude reads a matching file, so it cannot be proven from
      inside this turn; say that rather than implying you tested it.
@@ -131,7 +134,7 @@ retrieve is strictly worse than a paragraph in CLAUDE.md.
 ### 4. Finish
 
 - Re-measure and report the before/after.
-- If anything moved to `.clawness/rules/`, run `clawness lint` — it rejects missing
+- If anything moved to `.clawness/rules/`, run `bash "$CLAW" lint` — it rejects missing
   fields and vague phrasing, and a rule that fails lint won't survive CI in projects
   that gate on it.
 - Remind the user that new `.claude/rules/` and `.clawness/rules/` files load on the

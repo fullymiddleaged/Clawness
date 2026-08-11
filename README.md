@@ -903,7 +903,7 @@ Or just describe the task naturally, since the workflow rules tell Claude when t
 
 ## CLI Reference
 
-The CLI is optional, since everyday use needs no commands. It's installed by the **manual installer** (and by any `pip install` of the package), which puts a `clawness` command on your PATH. **Plugin-only users:** the rule injection, agents, skills, and plan gate all work without the CLI. To get the `clawness` command too, run `pip install -e <plugin-dir>` or just do a [manual install](#option-2-manual-install).
+The CLI is optional, since everyday use needs no commands. It's installed by the **manual installer** (and by any `pip install` of the package), which puts a `clawness` command on your PATH. **Plugin-only users:** the rule injection, agents, skills, and plan gate all work without the CLI — the few skills that need it (`status`, `refresh`, `claude-md`, `audit-rules`) run the bundled CLI through a small wrapper the plugin writes to `<config>/clawness/clawness-cli.sh` at the start of each session, so no install is required. To get a `clawness` command on your own PATH too, run `pip install -e <plugin-dir>` or just do a [manual install](#option-2-manual-install).
 
 ```bash
 # Retrieve rules for a task description

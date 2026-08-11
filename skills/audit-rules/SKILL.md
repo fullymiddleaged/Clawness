@@ -27,8 +27,13 @@ failure per-rule stamping exists to prevent.
 
 Run the mechanical checks first, so the review has the numbers in front of it:
 
+The `clawness` CLI ships with the plugin but isn't on your PATH; run it via the
+wrapper the SessionStart bootstrap writes each session (editable/manual installs may
+use `python -m clawness.cli` instead):
+
 ```bash
-clawness audit-rules --stale --overlap        # or: python -m clawness.cli ...
+CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
+bash "$CLAW" audit-rules --stale --overlap
 ```
 
 `--overlap` matters here specifically: near-duplicates within the domain you are
@@ -99,8 +104,8 @@ Rules on rules:
 ### 6. Verify
 
 ```bash
-clawness lint     # validates labels, ranges, and dates mechanically
-clawness eval --floor-mrr 0.85 --floor-hit 0.95
+bash "$CLAW" lint     # validates labels, ranges, and dates mechanically
+bash "$CLAW" eval --floor-mrr 0.85 --floor-hit 0.95
 ```
 
 `eval` must be unchanged: stamps are excluded from the search text, so a moved
