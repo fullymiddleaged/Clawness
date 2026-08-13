@@ -152,19 +152,22 @@ dependency**. No ML models, no services, no Docker.
      continue branch safe is the template's **`## Open questions`** section — the note
      bounds questions to what is listed there, so "don't ask" can't mean "guess". If you
      ever drop that section, restore the interview.
-   - **The session name is a SUGGESTION, and cannot be anything else (1.9.0).** An
-     unnamed session is titled from the user's first message, so every pickup reads
-     "carry on" in their history — the one phrase all pickups share. Claude Code has
-     a built-in `/rename [name]` (alias `/name`; bare, it generates a kebab name from
-     the conversation), but a slash command can only be TYPED: no hook can rename a
-     session and neither can Claude. `suggest_session_name` therefore derives a name
-     from the handoff's `# ` heading and the note asks Claude to surface the one-liner
-     once, on the pickup branch only — the heading is the wrong name for a session the
-     user opened on something else. It returns "" (and the note says nothing) when the
-     heading has no letters after cleaning, which is exactly the template's default
-     `# Handoff — {date}`: a suggestion the user has to read and reject costs more
-     than silence. Don't "improve" this by writing `name`/`nameSource` into
-     `<config>/sessions/<pid>.json` — that file is the CLI's own live state, in an
+   - **The session name is a SUGGESTION, and is now opt-in, default OFF (1.9.0;
+     gated 1.11.0).** An unnamed session is titled from the user's first message, so
+     every pickup reads "carry on" in their history — the one phrase all pickups
+     share. Claude Code has a built-in `/rename [name]` (alias `/name`; bare, it
+     generates a kebab name from the conversation), but a slash command can only be
+     TYPED: no hook can rename a session and neither can Claude. `suggest_session_name`
+     derives a name from the handoff's `# ` heading and, **when
+     `CLAW_HANDOFF_SUGGEST_NAME` is set**, the note surfaces the one-liner once, on
+     the pickup branch only — the heading is the wrong name for a session the user
+     opened on something else. Surfacing it on *every* pickup proved more nagging than
+     it was worth, so the clause is silent by default; only the note mention is gated,
+     `suggest_session_name` itself stays live and tested. It returns "" (and the note
+     says nothing) when the heading has no letters after cleaning, which is exactly the
+     template's default `# Handoff — {date}`: a suggestion the user has to read and
+     reject costs more than silence. Don't "improve" this by writing `name`/`nameSource`
+     into `<config>/sessions/<pid>.json` — that file is the CLI's own live state, in an
      undocumented shape, and it may well hold it in memory anyway.
    - Truncation keeps the **head** (budget `CLAW_HANDOFF_BUDGET`, default 2000) —
      opposite of the lessons log, because a handoff's summary and state are written at

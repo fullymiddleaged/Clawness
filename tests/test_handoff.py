@@ -197,9 +197,22 @@ def test_a_handoff_written_the_way_wf_handoff_001_asks_fits_the_default_budget()
     assert "drop the old table now or after the deploy?" in note
 
 
-def test_the_note_offers_a_session_name_on_the_pickup_branch():
+def test_the_rename_suggestion_is_off_by_default(monkeypatch):
+    # Surfacing a /rename hint on every pickup was more nagging than it was worth, so
+    # the clause is silent unless the user opts in.
+    monkeypatch.delenv("CLAW_HANDOFF_SUGGEST_NAME", raising=False)
+    note = render_handoff_note(find_handoff(_project(
+        "# Handoff — v1.9.0 release\n\n**Next:** push the tag\n")))
+    assert "/rename" not in note
+    # ...and the rest of the instruction is untouched by its absence.
+    assert "go straight to Next steps and start work" in note
+
+
+def test_the_note_offers_a_session_name_when_opted_in(monkeypatch):
     # A hook can't rename the session and neither can Claude — /rename is typed by the
-    # user — so the note's whole job here is to put the name in front of them once.
+    # user — so when opted in the note's whole job here is to put the name in front of
+    # them once.
+    monkeypatch.setenv("CLAW_HANDOFF_SUGGEST_NAME", "1")
     note = render_handoff_note(find_handoff(_project(
         "# Handoff — v1.9.0 release\n\n**Next:** push the tag\n")))
     assert "/rename v1.9.0-release" in note
@@ -207,9 +220,10 @@ def test_the_note_offers_a_session_name_on_the_pickup_branch():
     assert "Say it once" in note
 
 
-def test_a_date_only_heading_offers_no_name_rather_than_a_bad_one():
-    # SAMPLE's heading is the template's `# Handoff — <date>`. A suggestion the user
-    # has to read and reject costs more than the silence does.
+def test_a_date_only_heading_offers_no_name_rather_than_a_bad_one(monkeypatch):
+    # Even opted in: SAMPLE's heading is the template's `# Handoff — <date>`. A
+    # suggestion the user has to read and reject costs more than the silence does.
+    monkeypatch.setenv("CLAW_HANDOFF_SUGGEST_NAME", "1")
     note = render_handoff_note(find_handoff(_project(SAMPLE)))
     assert "/rename" not in note
     # ...and the rest of the instruction is untouched by its absence.

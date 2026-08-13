@@ -23,6 +23,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The handoff pickup note no longer suggests renaming the session by default.**
+  The `/rename` hint that appeared on every handoff pickup was more interruption than
+  it was worth; it is now opt-in via `CLAW_HANDOFF_SUGGEST_NAME=1` for anyone who
+  wants it back.
 - **Security red-team and blue-team agents refreshed to the OWASP Top 10 (2025).**
   The red team now maps trust boundaries first, works from the 2025 category list
   (SSRF folded into Broken Access Control, a dedicated Software Supply Chain

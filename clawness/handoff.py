@@ -228,7 +228,12 @@ def render_handoff_note(
 
     # Only on the pickup branch: if they opened with a fresh task instead, the handoff's
     # heading is the wrong name for the session they're actually in.
-    name = suggest_session_name(text)
+    #
+    # Opt-IN, default OFF (CLAW_HANDOFF_SUGGEST_NAME): surfacing a `/rename` suggestion
+    # on every pickup was more nagging than it was worth, so the clause is silent unless
+    # a user turns it on. `suggest_session_name` stays fully functional for anyone who
+    # does — this gates only whether the note mentions it.
+    name = suggest_session_name(text) if os.environ.get("CLAW_HANDOFF_SUGGEST_NAME") else ""
     if name:
         instruction += (
             " One aside, on the pickup branch only: an unnamed session takes its "
