@@ -5,6 +5,40 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-08-13
+
+### Added
+
+- **Clawness now tells you when it has no rules for your stack.** Open a session in
+  a project built on a stack Clawness ships no corpus for — Ruby, PHP, Elixir,
+  Haskell, C#, Swift, Dart, Scala, Clojure, and others — and it now says so once,
+  instead of silently adding little beyond the always-on mandatory rules. The note
+  points at the new `/clawness:bootstrap` skill and starts nothing itself. Raised
+  once per stack per project; silence with `CLAW_NO_COVERAGE_NOTE=1`.
+- **New `/clawness:bootstrap` skill.** Drafts a small starter set of project rules
+  for an uncovered stack: it reads what the project actually is, grounds each rule
+  in current official documentation (not model memory), writes them into
+  `.clawness/rules/`, and lint-validates them — stopping for your approval before
+  writing anything.
+
+### Changed
+
+- **Security red-team and blue-team agents refreshed to the OWASP Top 10 (2025).**
+  The red team now maps trust boundaries first, works from the 2025 category list
+  (SSRF folded into Broken Access Control, a dedicated Software Supply Chain
+  category, the new Mishandling of Exceptional Conditions), adds an LLM/AI-app
+  checklist drawn from the OWASP Top 10 for LLM Applications, checks lockfiles and
+  git history for secrets, and reasons about exploit *chains* and reachability
+  rather than isolated findings. The blue team now fixes root causes at the choke
+  point rather than one instance at a time, prefers fail-closed defaults, and adds
+  a regression test that reproduces the attack so a hole can't silently reopen.
+
+### Fixed
+
+- **Corrected the plugin's advertised corpus size** in the marketplace/plugin
+  description — it read "195 rules across 28 domains" and now reads the actual "212
+  rules across 29 domains".
+
 ## [1.10.1] - 2026-08-11
 
 ### Fixed

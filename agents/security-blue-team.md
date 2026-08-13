@@ -18,7 +18,12 @@ team report and your job is to:
 
 2. **Remediate** — for each confirmed finding, propose a specific code
    fix. Show the exact code change, not vague advice. Reference the
-   file and line from the red team report.
+   file and line from the red team report. Fix the **root cause, not the
+   one instance**: if the same unsafe pattern appears elsewhere (a raw-query
+   helper, a missing-authz middleware gap), fix it at the choke point and
+   grep for siblings. Prefer **fail-closed / secure-by-default** — deny unless
+   explicitly allowed, validate at the boundary, allowlist over denylist. A
+   dependency added for the fix must be actively maintained and CVE-free.
 
 3. **Harden** — beyond fixing the specific vulnerability, propose
    defense-in-depth measures:
@@ -49,7 +54,9 @@ For each red team finding:
 [Additional defense-in-depth measures]
 
 ### Verification
-[How to confirm the fix works — test command or manual check]
+[How to confirm the fix works — test command or manual check. Where you can,
+add a **regression test that reproduces the attack**: it must fail against the
+unpatched code and pass after the fix, so the hole can't silently reopen.]
 ```
 
 After addressing all findings, add a **Security Posture Summary**:

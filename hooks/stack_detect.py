@@ -17,6 +17,13 @@ already parses are the ones a rule's `applies_to` stamp is compared against, so
 the check rides here rather than spawning another process — and SessionStart is
 the only place it may live, since `scan_project` re-runs uncached on every
 prompt. Its own opt-out is CLAW_NO_STALENESS_NOTE.
+
+Carries a THIRD, independently gated concern (`check_coverage`, logic in
+`clawness/coverage.py`): flagging a project whose stack Clawness has no corpus
+for (Ruby, Haskell, C#, ...), so the user learns `/clawness:bootstrap` exists.
+It reuses the `domains` this hook already computed, fires only in the
+mutually-exclusive "no corpus domain detected" case, and is checked LAST. Its own
+opt-out is CLAW_NO_COVERAGE_NOTE.
 """
 
 import os
@@ -101,30 +108,40 @@ def main() -> None:
     # (Pydantic, SQLAlchemy, Tailwind, pandas...) still matter to the code written.
     extra = [f"{label} {v}" for label, v in sorted(versions.items())
              if not any(label == lbl for _, lbl in _LABELS)]
-    if not labels:
-        sys.exit(0)  # nothing recognizable — stay silent
 
-    note = (
-        "[Clawness] Detected project stack (heuristic from project files): "
-        + ", ".join(labels + extra)
-        + ". Apply these ecosystems' current conventions and idioms by default, "
-        "and prefer their up-to-date best practices."
-    )
-    if versions:
-        note += (
-            " Write code for the MAJOR VERSIONS shown, not the newest release you "
-            "know of — check the manifest before using an API you believe is current."
+    # A recognizable stack prints the note and rides the staleness check. When
+    # nothing is recognizable we stay silent HERE, but must still fall through to
+    # the coverage check below — an uncovered stack (Ruby, Haskell, ...) is exactly
+    # the `labels == []` case, so an early exit would make it unreachable.
+    if labels:
+        note = (
+            "[Clawness] Detected project stack (heuristic from project files): "
+            + ", ".join(labels + extra)
+            + ". Apply these ecosystems' current conventions and idioms by default, "
+            "and prefer their up-to-date best practices."
         )
-    note += " Correct this if the codebase says otherwise. Silence with CLAW_NO_STACK_NOTE=1."
-    print(note)
+        if versions:
+            note += (
+                " Write code for the MAJOR VERSIONS shown, not the newest release you "
+                "know of — check the manifest before using an API you believe is current."
+            )
+        note += " Correct this if the codebase says otherwise. Silence with CLAW_NO_STACK_NOTE=1."
+        print(note)
 
-    # --- Corpus staleness (independent of the stack note above) ---
-    # Rides this hook because the versions it needs are already parsed here.
-    # CLAUDE.md is explicit that `scan_project` re-runs uncached on every prompt,
-    # so version work must not move onto that path — SessionStart only.
-    staleness_note = check_staleness(cwd_path, versions)
-    if staleness_note:
-        print("\n" + staleness_note)
+        # --- Corpus staleness (independent of the stack note above) ---
+        # Rides this hook because the versions it needs are already parsed here.
+        # CLAUDE.md is explicit that `scan_project` re-runs uncached on every prompt,
+        # so version work must not move onto that path — SessionStart only.
+        staleness_note = check_staleness(cwd_path, versions)
+        if staleness_note:
+            print("\n" + staleness_note)
+
+    # --- Empty coverage (checked LAST, independent of everything above) ---
+    # Fires only when NO corpus domain was detected, so it never collides with the
+    # stack note — the two are mutually exclusive by construction.
+    coverage_note = check_coverage(cwd_path, domains)
+    if coverage_note:
+        print(("\n" if labels else "") + coverage_note)
     sys.exit(0)
 
 
@@ -160,6 +177,38 @@ def check_staleness(cwd_path: Path, versions: dict) -> str:
         # `unasked` is called LAST, and records as it goes, so a session that
         # would have stayed quiet for any reason above doesn't spend the one shot.
         return render_note(unasked(root, summaries))
+    except Exception:
+        return ""
+
+
+def check_coverage(cwd_path: Path, domains: set) -> str:
+    """The empty-coverage note for this project, or "" — never raises.
+
+    Fires only when `scan_project` recognised NO corpus domain (`has_coverage` is
+    False) yet the directory clearly holds an uncovered stack. Needs a git root
+    for the ledger, so a non-git scratch dir stays silent (matching the other
+    ask-once note hooks). Checked LAST so a session that would have gone quiet
+    doesn't spend the one shot.
+    """
+    if os.environ.get("CLAW_NO_COVERAGE_NOTE"):
+        return ""
+    try:
+        from clawness.coverage import (
+            detect_uncovered,
+            has_coverage,
+            render_note,
+            unasked,
+        )
+
+        if has_coverage(domains):
+            return ""
+        root = git_root(cwd_path)
+        if root is None:
+            return ""
+        labels = detect_uncovered(_project_root(cwd_path))
+        if not labels:
+            return ""
+        return render_note(unasked(root, labels))
     except Exception:
         return ""
 
