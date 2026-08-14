@@ -195,6 +195,17 @@ cd ~/.claude/clawness
 bash install.sh
 ```
 
+### Option 3: OpenClaw (experimental)
+
+Clawness also runs inside [OpenClaw](https://openclaw.ai) through a thin TypeScript
+adapter in [`openclaw/`](openclaw/) that shells out to the same Python engine, rules
+corpus, and access guard — so there is one source of truth, not a second corpus. This
+first cut covers rule + memory injection, the SessionStart notes, and the access guard;
+the Claude-specific subsystems (context watch, plan gate, model advisor) stay dormant for
+now. It still needs a live-session smoke test against the OpenClaw SDK before it's
+considered stable. Setup and the exact API assumptions are documented in
+[`openclaw/README.md`](openclaw/README.md).
+
 ### What the Manual Installer Does (7 steps)
 
 | Step | What | Why |

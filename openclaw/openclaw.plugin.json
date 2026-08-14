@@ -1,0 +1,12 @@
+{
+  "id": "clawness",
+  "name": "Clawness",
+  "description": "Puts the right coding rules in context on every prompt, plus per-project memory, session notes, and an access guard. Runs the bundled Python engine — requires Python 3.10+ on PATH.",
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false
+  }
+}

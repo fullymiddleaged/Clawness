@@ -5,6 +5,21 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Experimental OpenClaw support.** Clawness now runs inside
+  [OpenClaw](https://openclaw.ai) as well as Claude Code, via a thin TypeScript
+  adapter in `openclaw/` that shells out to the same Python engine, rules corpus,
+  and access guard — one source of truth, no second corpus to maintain. The
+  adapter maps OpenClaw's `before_prompt_build`, `session_start`, and
+  `before_tool_call`/`after_tool_call` hooks onto the existing Python hook scripts.
+  This first cut covers rule + memory injection, the SessionStart notes, and the
+  access guard (block/ask); the Claude-specific subsystems (context watch, plan
+  gate, model advisor) stay dormant for now. See `openclaw/README.md`. Requires a
+  live-session smoke test against the OpenClaw SDK before it is considered stable.
+
 ## [1.11.0] - 2026-08-13
 
 ### Added

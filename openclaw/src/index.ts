@@ -1,0 +1,158 @@
+/**
+ * index.ts — OpenClaw plugin entry. The ONLY file that touches the OpenClaw API.
+ *
+ * Deliberately thin and defensive: every handler wraps its work in try/catch and
+ * fails toward doing nothing, mirroring Clawness's fail-open/fail-silent design.
+ * All real logic is in bridge/translate/notes, which are host-agnostic and tested
+ * against the real Python. The exact ctx/event field names OpenClaw passes are
+ * read with fallbacks because they aren't fully pinned in the public docs (see
+ * README) — correcting a field name here never touches the tested core.
+ */
+import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
+import { runPythonHook, PLUGIN_DIR } from "./bridge.js";
+import {
+  buildPromptPayload,
+  buildPreToolPayload,
+  buildPostToolPayload,
+  mapToolCall,
+  parseGuardStdout,
+  type MappedTool,
+} from "./translate.js";
+import { runSessionNotes } from "./notes.js";
+
+const NO_PYTHON_NOTE =
+  "[Clawness] Python 3.10+ was not found on PATH, so Clawness's rules, memory, " +
+  "and access guard are inactive. Point the user at the Installing Python section " +
+  "of https://github.com/fullymiddleaged/clawness — do not install Python for them.";
+
+/** Pull the working directory from whatever field the host provides. */
+function resolveCwd(event: any, ctx: any): string {
+  return (
+    event?.cwd ?? ctx?.cwd ?? ctx?.workspace?.root ?? ctx?.projectRoot ?? process.cwd()
+  );
+}
+
+/** A stable per-session id so session_state and the .clawness/ ledgers key right. */
+function resolveSessionId(event: any, ctx: any): string {
+  return String(ctx?.sessionKey ?? event?.sessionKey ?? ctx?.sessionId ?? ctx?.agentId ?? "");
+}
+
+export default definePluginEntry({
+  id: "clawness",
+  name: "Clawness",
+  description: "Retrieval-ranked coding rules, project memory, and an access guard.",
+  register(api: OpenClawPluginApi) {
+    const log = api.logger;
+    let warnedNoPython = false;
+
+    const noteNoPython = (): string | null => {
+      if (warnedNoPython) return null;
+      warnedNoPython = true;
+      return NO_PYTHON_NOTE;
+    };
+
+    // --- Rules + memory injection, every prompt ---------------------------
+    api.on("before_prompt_build", async (event: any, ctx: any) => {
+      try {
+        const prompt = event?.prompt ?? "";
+        if (!prompt) return {};
+        const result = await runPythonHook(
+          "hooks/claude_hook.py",
+          buildPromptPayload({
+            prompt,
+            cwd: resolveCwd(event, ctx),
+            sessionId: resolveSessionId(event, ctx),
+          }),
+        );
+        if (result.noPython) {
+          const note = noteNoPython();
+          return note ? { appendContext: note } : {};
+        }
+        const text = result.stdout.trim();
+        return text ? { appendContext: text } : {};
+      } catch (err) {
+        log?.warn?.(`clawness before_prompt_build failed: ${String(err)}`);
+        return {};
+      }
+    });
+
+    // --- SessionStart notes ----------------------------------------------
+    api.on("session_start", async (event: any, ctx: any) => {
+      try {
+        const { notes, noPython } = await runSessionNotes({
+          cwd: resolveCwd(event, ctx),
+          sessionId: resolveSessionId(event, ctx),
+        });
+        const enqueue = api.session?.workflow?.enqueueNextTurnInjection;
+        if (noPython) {
+          const note = noteNoPython();
+          if (note && enqueue) enqueue({ idempotencyKey: "clawness:no-python", appendContext: note });
+          return;
+        }
+        if (!enqueue) {
+          if (notes.length) log?.debug?.("clawness: no enqueueNextTurnInjection; notes dropped");
+          return;
+        }
+        for (const note of notes) {
+          enqueue({ idempotencyKey: `clawness:${note.hook}`, appendContext: note.text });
+        }
+      } catch (err) {
+        log?.warn?.(`clawness session_start failed: ${String(err)}`);
+      }
+    });
+
+    // --- Access guard: block/ask before a tool runs ----------------------
+    api.on("before_tool_call", async (event: any, ctx: any) => {
+      try {
+        const mapped = mapToolCall(event?.toolName ?? "", event?.params);
+        if (!mapped) return {};
+        const result = await runPythonHook(
+          "hooks/access_guard.py",
+          buildPreToolPayload(mapped, {
+            cwd: resolveCwd(event, ctx),
+            sessionId: resolveSessionId(event, ctx),
+          }),
+        );
+        if (result.noPython) return {}; // guard inactive without Python — fail open
+        const decision = parseGuardStdout(result.stdout);
+        if (decision.action === "deny") {
+          return { block: true, blockReason: decision.reason };
+        }
+        if (decision.action === "ask") {
+          return {
+            requireApproval: {
+              title: "Clawness: approval required",
+              description: decision.reason,
+              severity: "warning" as const,
+            },
+          };
+        }
+        return {};
+      } catch (err) {
+        log?.warn?.(`clawness before_tool_call failed: ${String(err)}`);
+        return {}; // fail open
+      }
+    });
+
+    // --- Settle the guard's ask-ledger once a call has actually run ------
+    api.on("after_tool_call", async (event: any, ctx: any) => {
+      try {
+        const mapped: MappedTool | null = mapToolCall(event?.toolName ?? "", event?.params);
+        if (!mapped) return;
+        await runPythonHook(
+          "hooks/access_guard.py",
+          buildPostToolPayload(mapped, {
+            cwd: resolveCwd(event, ctx),
+            sessionId: resolveSessionId(event, ctx),
+            toolResponse: event?.result ?? event?.output ?? {},
+          }),
+        );
+      } catch (err) {
+        log?.warn?.(`clawness after_tool_call failed: ${String(err)}`);
+      }
+    });
+
+    log?.debug?.(`clawness OpenClaw adapter registered (plugin dir ${PLUGIN_DIR})`);
+  },
+});
