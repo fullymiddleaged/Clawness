@@ -19,6 +19,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   access guard (block/ask); the Claude-specific subsystems (context watch, plan
   gate, model advisor) stay dormant for now. See `openclaw/README.md`. Requires a
   live-session smoke test against the OpenClaw SDK before it is considered stable.
+- **New `/clawness:openclaw-audit` skill.** Trims an OpenClaw workspace's base
+  system prompt — the files injected into every turn (`SOUL.md`, `AGENTS.md`,
+  `IDENTITY.md`, `USER.md`, `MEMORY.md`). Measures their per-turn cost, then works
+  through them section by section: cutting what the tools or codebase already say,
+  moving durable conventions to `.clawness/rules/` and one-line traps to
+  `.clawness/memory.md`, and leaving load-bearing persona and identity in place.
+  The OpenClaw sibling of `/clawness:claude-md`. (Workspace filenames and limits are
+  docs-derived; confirm against a live OpenClaw before acting.)
+- **New `/clawness:eval-set` skill.** Author and run a project-specific retrieval
+  eval so rule or base-prompt changes are scored, not eyeballed. Mirrors
+  `tests/ground_truth.json` + `clawness eval`: you write prompt→expected-rule cases
+  in `.clawness/eval/cases.json` (a template ships with the skill) and measure
+  MRR@k + hit-rate before and after an edit. Harness-agnostic; it is the
+  verification step `openclaw-audit`/`claude-md` point at when moving content into
+  ranked retrieval.
 
 ## [1.11.0] - 2026-08-13
 

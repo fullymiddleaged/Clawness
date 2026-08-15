@@ -1,0 +1,17 @@
+{
+  "_comment": "Your project's retrieval eval set. Same shape as tests/ground_truth.json. Each entry maps a natural-language prompt someone on this project would actually type to the ranked rule ID(s) that SHOULD appear in the top-k. Run it with: clawness eval --data .clawness/eval/cases.json --floor-mrr <m> --floor-hit <h>. Measures MRR@k + hit-rate over RANKED rules only (mandatory rules are always injected, so they are not scored here). Replace the examples below with your own cases; keep the list stable as you edit rules so regressions are visible. NOTE: files under .clawness/ are gitignored by Clawness's default allowlist — add '!.clawness/eval/' to .gitignore if you want this committed and shared.",
+  "queries": [
+    {
+      "q": "example: replace with a prompt your team would type, e.g. 'how should I structure error handling in our service layer'",
+      "expect": [
+        "YOUR-RULE-ID-001"
+      ]
+    },
+    {
+      "q": "example: a prompt that should surface a house-style convention you moved out of the base prompt into .clawness/rules/",
+      "expect": [
+        "YOUR-RULE-ID-002"
+      ]
+    }
+  ]
+}
