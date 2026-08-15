@@ -21,3 +21,4 @@
 - Smoke-test the OpenClaw adapter offline via `npm run plugin:check` (@openclaw/plugin-inspector); never pull the 87MB `openclaw` pkg for plugin-test-api.
 - Verify OpenClaw SDK type shapes via throwaway `npm i openclaw`+tsc against real .d.ts (not a build dep); plugin-test-api is excluded from the npm pkg.
 - OpenClaw git install reads the clone ROOT only (no subdir); the subdir plugin needs root package.json+openclaw.plugin.json + committed openclaw/dist/src.
+- OpenClaw 2026.3.11 `plugins install` has NO git source (path/archive/npm/-l link only); git-source install is a newer-version feature — test old versions via `-l ~/clone/openclaw`.
