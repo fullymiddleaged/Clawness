@@ -17,8 +17,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `before_tool_call`/`after_tool_call` hooks onto the existing Python hook scripts.
   This first cut covers rule + memory injection, the SessionStart notes, and the
   access guard (block/ask); the Claude-specific subsystems (context watch, plan
-  gate, model advisor) stay dormant for now. See `openclaw/README.md`. Requires a
-  live-session smoke test against the OpenClaw SDK before it is considered stable.
+  gate, model advisor) stay dormant for now. Installs from GitHub with
+  `openclaw plugins install git:github.com/fullymiddleaged/Clawness` (Node ≥22.22.3,
+  Python 3.10+): the repo root carries the OpenClaw plugin manifest pointing at the
+  prebuilt adapter, and the clone brings the Python engine along, so there's no
+  second copy to maintain and nothing to compile. See `openclaw/README.md`. Requires
+  a live-session smoke test against the OpenClaw SDK before it is considered stable.
 - **New `/clawness:openclaw-audit` skill.** Trims an OpenClaw workspace's base
   system prompt — the files injected into every turn (`SOUL.md`, `AGENTS.md`,
   `IDENTITY.md`, `USER.md`, `MEMORY.md`). Measures their per-turn cost, then works

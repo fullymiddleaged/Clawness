@@ -3,6 +3,9 @@ __pycache__/
 *.pyo
 *.egg-info/
 dist/
+# ...but the OpenClaw adapter ships its prebuilt entry (git installs don't build).
+# Re-include the directory so openclaw/.gitignore can expose dist/src (only).
+!openclaw/dist/
 build/
 .eggs/
 *.egg

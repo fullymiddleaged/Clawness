@@ -1,3 +1,6 @@
 node_modules/
-dist/
+# dist/src is committed (git installs don't build; the host loads the prebuilt
+# entry). Ignore everything else under dist — dist/test isn't needed at runtime.
+dist/*
+!dist/src/
 reports/

@@ -19,31 +19,51 @@ needs a live host*.
 - A **git-tracked project** to run the test prompt in (this repo works; any repo with
   Python reachable is fine).
 
-## Setup
+## Setup — test the REAL install a user would run
+
+The plugin is git-installable from this repo: the repo root carries the OpenClaw
+discovery files (`package.json`'s `openclaw` block + `openclaw.plugin.json`) pointing at
+the committed prebuilt entry `openclaw/dist/src/index.js`, and the clone brings the Python
+engine (`hooks/`, `rules/`, `clawness/`) along with it. **Test that path, not `--link`** —
+`--link` runs from your working copy inside the full checkout and hides packaging bugs.
 
 ```bash
-# 1. Build the adapter (produces dist/src/index.js, the manifest's entry).
-cd openclaw
-npm install
-npm run build
-
-# 2. Install OpenClaw and onboard (enter the API key when prompted).
+# 1. Install OpenClaw and onboard (enter the API key when prompted).
 npm i -g openclaw
 openclaw onboard
 
-# 3. Link this directory as a plugin (run from the repo root, one level up).
-cd ..
-openclaw plugins install --link ./openclaw
+# 2. Install Clawness the way a user would — from GitHub.
+openclaw plugins install git:github.com/fullymiddleaged/Clawness
 
-# 4. Restart the gateway and prove the runtime registrations.
+# 3. Restart the gateway and prove the runtime registrations.
 openclaw gateway restart
 openclaw plugins inspect clawness --runtime --json
 ```
 
-Step 4's `inspect --runtime` loads the module and lists the surfaces it actually
+Step 3's `inspect --runtime` loads the module and lists the surfaces it actually
 registered. **Confirm all four hooks appear**: `before_prompt_build`, `session_start`,
 `before_tool_call`, `after_tool_call` — plus `onStartup` activation. Save that JSON; paste
 it back.
+
+> **Dev fallback only:** `cd openclaw && npm install && npm run build`, then from the repo
+> root `openclaw plugins install --link ./openclaw`. Use this to iterate on the adapter —
+> it does NOT prove the packaged install, so don't sign the release off on it.
+
+### ⚠️ The load-bearing packaging unknown — check this FIRST
+
+The whole "no engine vendoring" design rests on one runtime fact offline checks can't
+settle: **does the installed plugin still contain the sibling Python engine?** The adapter
+shells out to `../hooks/claude_hook.py` relative to its own location
+([bridge.ts](src/bridge.ts) `REPO_ROOT`). That works only if the installer keeps the whole
+clone as the plugin directory. If OpenClaw instead prunes the install to just the declared
+entry (dropping `hooks/`, `rules/`, `clawness/`), every hook spawn fails silently and the
+plugin does nothing — the same silent-failure signature as a Python-less box.
+
+So before the checklist below, from the installed plugin directory confirm the engine is
+present: `openclaw plugins inspect clawness --runtime --json` should show it loaded, and if
+you can locate the install dir, check that `hooks/` and `rules/` sit one level above
+`openclaw/dist/src/`. If they're gone, the fix is to vendor the engine into the package
+(the rejected "dedicated repo" option) — report that and stop; the other items are moot.
 
 ## The checklist — run ONE session, one prompt, in the git project
 

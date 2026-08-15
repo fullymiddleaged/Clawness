@@ -1,0 +1,4 @@
+# The OpenClaw adapter ships its prebuilt entry (git installs don't build), so the
+# committed JS is build output. Pin it to LF so a Windows checkout doesn't rewrite
+# line endings and make the CI "dist in sync" diff fail on EOL alone.
+openclaw/dist/src/*.js text eol=lf

@@ -68,3 +68,10 @@ jobs:
       - name: Check plugin compatibility against the OpenClaw SDK (offline)
         working-directory: openclaw
         run: npm run plugin:check
+
+      - name: Verify committed dist/src is in sync with source
+        working-directory: openclaw
+        run: |
+          npm run build
+          git diff --exit-code dist/src \
+            || { echo "openclaw/dist/src is stale. Run 'npm run build' in openclaw/ and commit dist/src (git installs load the prebuilt entry)."; exit 1; }

@@ -11,6 +11,21 @@ one test-gated Python contract.
 > live host live in [CLAUDE.md](CLAUDE.md) (loaded automatically when working in this
 > subtree). Read it before changing the adapter.
 
+## Install (experimental)
+
+Requires **Node ≥ 22.22.3** (OpenClaw's floor) and **Python 3.10+** on PATH.
+
+```bash
+openclaw plugins install git:github.com/fullymiddleaged/Clawness
+openclaw gateway restart
+```
+
+The install clones the whole repo, so the plugin manifest at the repo root points the host
+at the prebuilt adapter (`openclaw/dist/src/index.js`) and the Python engine (`hooks/`,
+`rules/`, `clawness/`) rides along for the adapter to shell out to — one engine, one
+corpus, no vendored copy. The adapter ships prebuilt; there is nothing to compile. This
+path is being validated against a live host — see [LIVE-TEST.md](LIVE-TEST.md).
+
 ## What works today (core scope)
 
 | Clawness feature | Claude Code hook | OpenClaw hook | Adapter |

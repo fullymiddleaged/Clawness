@@ -78,3 +78,37 @@ the values the host PASSES, and whether the host honours what we return):
   parameter field names, and extend the keyword/field tables if they differ.
 - **Node engine.** OpenClaw requires Node ≥22.22.3; this package builds/tests on ≥22.19,
   but the host runtime floor is OpenClaw's.
+
+## Distribution — git install (don't undo the root-level files)
+
+Users install with `openclaw plugins install git:github.com/fullymiddleaged/Clawness`.
+That shape drove four decisions that look odd in isolation; each is load-bearing.
+
+- **There is a `package.json` and an `openclaw.plugin.json` at the REPO ROOT, not just
+  here.** OpenClaw's git installer clones the repo and reads the plugin manifest at the
+  **clone root** — the docs describe no subdirectory/monorepo support — so a manifest that
+  lives only in `openclaw/` is never found. The root `package.json`'s `openclaw.extensions`
+  points at `./openclaw/dist/src/index.js`; the root `openclaw.plugin.json` is a byte copy
+  of this dir's. `tests/test_openclaw_manifest.py` fails CI if the two copies drift or the
+  entry path changes. **Don't "clean up" the root `package.json` as stray Node cruft in a
+  Python repo — deleting it makes the plugin uninstallable.** The subdir `package.json`
+  stays too: it's the dev/build/test package (tsc, node --test, the inspector devDep).
+- **`openclaw/dist/src/*.js` is COMMITTED.** Git installs load prebuilt JS and do **not**
+  run a build/prepare step (the docs: "TypeScript source entries are only for source
+  checkouts and local development paths"). So the entry must be in the clone. The root
+  `.gitignore` still ignores `dist/` (that's the *Python* sdist/wheel output) but carves
+  out `!openclaw/dist/`, and `openclaw/.gitignore` uses `dist/*` + `!dist/src/` to expose
+  only `dist/src` (runtime), never `dist/test`. A `.gitattributes` pins those files to
+  `eol=lf` so a Windows checkout doesn't rewrite them. The CI `openclaw` job rebuilds and
+  `git diff --exit-code dist/src` to catch a stale commit — **rebuild and commit `dist/src`
+  whenever you touch `src/`**, or CI fails.
+- **No engine vendoring — and that is the point of git-install over npm.** The clone brings
+  `hooks/`, `rules/`, `clawness/` with it, so `bridge.ts`'s `../hooks/...` resolves against
+  the real engine: one source of truth, no second copy to sync. An npm package of just
+  `openclaw/` could not carry the sibling engine (files outside the package dir), which is
+  why that option was rejected. The cost is the committed `dist/src` above.
+- **Open — the packaging fact only a live host settles:** does the installer keep the
+  **whole clone** as the plugin dir (so `../hooks` exists at runtime), or prune it to the
+  declared entry? If it prunes, every hook spawn fails silently — same signature as a
+  Python-less box — and the fix is to vendor the engine after all. This is the FIRST thing
+  the live pass checks; see `LIVE-TEST.md`.

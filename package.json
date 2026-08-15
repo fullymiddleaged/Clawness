@@ -1,0 +1,16 @@
+{
+  "name": "clawness-openclaw",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenClaw plugin discovery manifest for Clawness. A git install (openclaw plugins install git:github.com/fullymiddleaged/Clawness) clones the whole repo, so this root package.json + openclaw.plugin.json point the host at the prebuilt adapter entry, while the Python engine (hooks/, clawness/, rules/) sits right here for the adapter to shell out to. All dev/build/test for the adapter lives in openclaw/.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.3"
+  },
+  "openclaw": {
+    "extensions": ["./openclaw/dist/src/index.js"],
+    "plugin": {
+      "json": "openclaw.plugin.json"
+    }
+  }
+}
