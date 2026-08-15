@@ -61,12 +61,15 @@ changing anything we send to the host.**
 the values the host PASSES, and whether the host honours what we return):
 
 - **Does a rule actually reach the model?** The load-bearing chain is: host calls
-  `before_prompt_build` → we read `event.prompt` → Python prints the block → we return
+  `before_prompt_build` → we read the prompt → Python prints the block → we return
   `{appendContext}` → host injects it into the model prompt. Links 3–4 are verified; links
-  1 and 5 are not. We read `event?.prompt` with a fallback and return `{}` when empty, so a
-  differently-named field (`userPrompt`, `text`, …) makes rules **silently** never fire.
-- **Event/ctx field names.** We read `event.prompt`, `event.toolName`, `event.params`, and
-  resolve `cwd`/`sessionKey` from several candidate fields with a `process.cwd()` fallback.
+  1 and 5 are not. `resolvePromptText` (translate.ts, tested) reads the first non-empty of
+  `prompt`/`userPrompt`/`text`/`input`/`message`, so the common alternate names are covered;
+  a name outside that list still makes rules **silently** never fire, so the live pass must
+  confirm the real field — add it to the head of that list if it differs.
+- **Event/ctx field names.** We read the prompt via `resolvePromptText`, plus
+  `event.toolName`, `event.params`, and resolve `cwd`/`sessionKey` from several candidate
+  fields with a `process.cwd()` fallback.
 - **`before_tool_call` runtime block/approval semantics** (the inspector's open proof-gap).
 - **Injection `placement`.** `PluginNextTurnInjection.placement` is an unexported optional
   enum; we omit it and take the host default. Confirm the note renders where intended.

@@ -7,7 +7,38 @@ import {
   buildPreToolPayload,
   buildPostToolPayload,
   buildNextTurnInjection,
+  resolvePromptText,
 } from "../src/translate.js";
+
+test("resolvePromptText: reads event.prompt when present", () => {
+  assert.equal(resolvePromptText({ prompt: "hello" }), "hello");
+});
+
+test("resolvePromptText: event.prompt wins over other candidates", () => {
+  assert.equal(resolvePromptText({ prompt: "a", userPrompt: "b", text: "c" }), "a");
+});
+
+test("resolvePromptText: falls back to alternate field names in order", () => {
+  assert.equal(resolvePromptText({ userPrompt: "u" }), "u");
+  assert.equal(resolvePromptText({ text: "t" }), "t");
+  assert.equal(resolvePromptText({ input: "i" }), "i");
+  assert.equal(resolvePromptText({ message: "m" }), "m");
+  // ordering: userPrompt before text before input before message
+  assert.equal(resolvePromptText({ text: "t", input: "i", userPrompt: "u" }), "u");
+});
+
+test("resolvePromptText: skips empty/whitespace candidates to the next", () => {
+  assert.equal(resolvePromptText({ prompt: "   ", userPrompt: "real" }), "real");
+  assert.equal(resolvePromptText({ prompt: "", text: "real" }), "real");
+});
+
+test("resolvePromptText: returns '' for missing/non-string/empty input", () => {
+  assert.equal(resolvePromptText({}), "");
+  assert.equal(resolvePromptText(undefined), "");
+  assert.equal(resolvePromptText(null), "");
+  assert.equal(resolvePromptText({ prompt: 42 }), "");
+  assert.equal(resolvePromptText({ prompt: "  " }), "");
+});
 
 test("buildNextTurnInjection uses the SDK's required sessionKey + text fields", () => {
   const inj = buildNextTurnInjection({ sessionId: "s1", text: "hello", idempotencyKey: "clawness:x" });

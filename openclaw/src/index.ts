@@ -18,6 +18,7 @@ import {
   buildNextTurnInjection,
   mapToolCall,
   parseGuardStdout,
+  resolvePromptText,
   type MappedTool,
 } from "./translate.js";
 import { runSessionNotes } from "./notes.js";
@@ -56,7 +57,7 @@ export default definePluginEntry({
     // --- Rules + memory injection, every prompt ---------------------------
     api.on("before_prompt_build", async (event: any, ctx: any) => {
       try {
-        const prompt = event?.prompt ?? "";
+        const prompt = resolvePromptText(event);
         if (!prompt) return {};
         const result = await runPythonHook(
           "hooks/claude_hook.py",

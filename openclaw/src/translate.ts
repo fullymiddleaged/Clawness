@@ -14,6 +14,24 @@ export interface ClawPayload {
   tool_response?: unknown;
 }
 
+/**
+ * Read the user's prompt out of the `before_prompt_build` event. The host's field
+ * name isn't pinned in the public docs (see README), and a miss fails SILENTLY —
+ * an empty prompt makes the handler return {} and rules never inject, with no
+ * error — so we take the first non-empty string among the plausible candidates,
+ * `prompt` first so a host already on that field is unaffected. Pure and testable;
+ * index.ts (which can't be imported without the host) just calls this. The live
+ * pass confirms the real name; add it to the head of the list if it differs.
+ */
+export function resolvePromptText(event: unknown): string {
+  const e = (event ?? {}) as Record<string, unknown>;
+  const candidates = [e.prompt, e.userPrompt, e.text, e.input, e.message];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c;
+  }
+  return "";
+}
+
 /** Build the UserPromptSubmit-shaped payload for claude_hook.py. */
 export function buildPromptPayload(args: {
   prompt: string;
