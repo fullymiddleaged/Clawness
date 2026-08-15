@@ -64,3 +64,7 @@ jobs:
         run: |
           npm install
           npm test
+
+      - name: Check plugin compatibility against the OpenClaw SDK (offline)
+        working-directory: openclaw
+        run: npm run plugin:check
