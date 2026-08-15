@@ -30,11 +30,17 @@ declare module "openclaw/plugin-sdk/plugin-entry" {
     appendContext?: string;
   }
 
+  // Verified against the real SDK type PluginNextTurnInjection (openclaw
+  // 2026.7.x, via tsc against the installed package): sessionKey + text are
+  // required, the rest optional. The content field is `text`, NOT appendContext
+  // (appendContext is the before_prompt_build RESULT — see PromptBuildResult).
   export interface NextTurnInjection {
+    sessionKey: string;
+    text: string;
+    placement?: string;
     idempotencyKey?: string;
-    prependContext?: string;
-    appendContext?: string;
-    expiresAtMs?: number;
+    ttlMs?: number;
+    metadata?: Record<string, unknown>;
   }
 
   export interface OpenClawPluginApi {

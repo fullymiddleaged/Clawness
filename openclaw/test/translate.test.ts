@@ -6,7 +6,23 @@ import {
   buildPromptPayload,
   buildPreToolPayload,
   buildPostToolPayload,
+  buildNextTurnInjection,
 } from "../src/translate.js";
+
+test("buildNextTurnInjection uses the SDK's required sessionKey + text fields", () => {
+  const inj = buildNextTurnInjection({ sessionId: "s1", text: "hello", idempotencyKey: "clawness:x" });
+  assert.equal(inj.sessionKey, "s1");
+  assert.equal(inj.text, "hello");
+  assert.equal(inj.idempotencyKey, "clawness:x");
+});
+
+test("buildNextTurnInjection omits idempotencyKey when not given, and never emits appendContext", () => {
+  const inj = buildNextTurnInjection({ sessionId: "s2", text: "note" });
+  assert.deepEqual(Object.keys(inj).sort(), ["sessionKey", "text"]);
+  // Regression guard: the pre-fix bug sent {idempotencyKey, appendContext} with
+  // no sessionKey/text, which the real host silently dropped.
+  assert.equal((inj as unknown as Record<string, unknown>).appendContext, undefined);
+});
 
 test("buildPromptPayload carries prompt/cwd/session_id in Claude shape", () => {
   const p = buildPromptPayload({ prompt: "hi", cwd: "/proj", sessionId: "s1" });

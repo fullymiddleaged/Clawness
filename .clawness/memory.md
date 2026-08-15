@@ -19,3 +19,4 @@
 - ${CLAUDE_PLUGIN_ROOT} is EMPTY in skill/command Bash (only set in hook/MCP JSON; upstream #9354); skills reach the CLI via ensure_deps' stashed clawness-cli.sh.
 - agents/ and skills/ .md carry version-pinned standards (OWASP edition, framework checks) invisible to the staleness mechanism (rules/ only) — review by hand.
 - Smoke-test the OpenClaw adapter offline via `npm run plugin:check` (@openclaw/plugin-inspector); never pull the 87MB `openclaw` pkg for plugin-test-api.
+- Verify OpenClaw SDK type shapes via throwaway `npm i openclaw`+tsc against real .d.ts (not a build dep); plugin-test-api is excluded from the npm pkg.

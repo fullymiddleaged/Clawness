@@ -32,6 +32,32 @@ export function buildSessionPayload(args: {
 }
 
 /**
+ * OpenClaw's next-turn injection payload. Field names VERIFIED against the real
+ * SDK type `PluginNextTurnInjection` (openclaw 2026.7.x): `sessionKey` and `text`
+ * are required; `idempotencyKey`/`placement`/`ttlMs`/`metadata` are optional.
+ * Note the content field is `text` — NOT `appendContext`. `appendContext` belongs
+ * to the `before_prompt_build` RESULT, a different shape; conflating the two meant
+ * SessionStart notes carried no `text` and no `sessionKey` and were dropped by the
+ * host. `placement` is an unexported enum, so we omit it and take the default.
+ */
+export interface NextTurnInjection {
+  sessionKey: string;
+  text: string;
+  idempotencyKey?: string;
+}
+
+/** Build a next-turn injection in the shape the OpenClaw SDK actually requires. */
+export function buildNextTurnInjection(args: {
+  sessionId: string;
+  text: string;
+  idempotencyKey?: string;
+}): NextTurnInjection {
+  const out: NextTurnInjection = { sessionKey: args.sessionId, text: args.text };
+  if (args.idempotencyKey) out.idempotencyKey = args.idempotencyKey;
+  return out;
+}
+
+/**
  * A guarded tool call in the shape `clawness/guard.py::classify_tool_call`
  * expects, or null when the tool isn't one the guard reasons about.
  */

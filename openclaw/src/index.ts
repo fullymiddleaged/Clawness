@@ -15,6 +15,7 @@ import {
   buildPromptPayload,
   buildPreToolPayload,
   buildPostToolPayload,
+  buildNextTurnInjection,
   mapToolCall,
   parseGuardStdout,
   type MappedTool,
@@ -80,14 +81,17 @@ export default definePluginEntry({
     // --- SessionStart notes ----------------------------------------------
     api.on("session_start", async (event: any, ctx: any) => {
       try {
+        const sessionId = resolveSessionId(event, ctx);
         const { notes, noPython } = await runSessionNotes({
           cwd: resolveCwd(event, ctx),
-          sessionId: resolveSessionId(event, ctx),
+          sessionId,
         });
         const enqueue = api.session?.workflow?.enqueueNextTurnInjection;
         if (noPython) {
           const note = noteNoPython();
-          if (note && enqueue) enqueue({ idempotencyKey: "clawness:no-python", appendContext: note });
+          if (note && enqueue) {
+            enqueue(buildNextTurnInjection({ sessionId, text: note, idempotencyKey: "clawness:no-python" }));
+          }
           return;
         }
         if (!enqueue) {
@@ -95,7 +99,7 @@ export default definePluginEntry({
           return;
         }
         for (const note of notes) {
-          enqueue({ idempotencyKey: `clawness:${note.hook}`, appendContext: note.text });
+          enqueue(buildNextTurnInjection({ sessionId, text: note.text, idempotencyKey: `clawness:${note.hook}` }));
         }
       } catch (err) {
         log?.warn?.(`clawness session_start failed: ${String(err)}`);
