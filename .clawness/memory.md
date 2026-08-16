@@ -24,3 +24,7 @@
 - OpenClaw 2026.3.11 `plugins install` has NO git source (path/archive/npm/-l link only); git-source install is a newer-version feature — test old versions via `-l ~/clone/openclaw`.
 - OpenClaw `definePluginEntry`/plugin-entry SDK needs host >=2026.3.24-beta.2; 2026.3.11 lacks it entirely (nowhere in dist) — host too old, not an import bug.
 - Import OpenClaw SDK from focused subpath `openclaw/plugin-sdk/plugin-entry`; the root `openclaw/plugin-sdk` barrel is deprecated per its CHANGELOG (scheduled removal).
+- OpenClaw `git:` install takes `@<ref>`/`#<ref>` (branch/tag/commit); test a branch via `git:owner/repo@branch`. `-l` link can't test clone-pruning (check A) — only a real git install can.
+- Live pass: OpenClaw HONORS before_tool_call `block` (tool doesn't run, blockReason reaches model) and `requireApproval`; checks C+D+E green (A green earlier).
+- OpenClaw tool events: write=`{toolName:"write",params:{path,content}}`, read=`{toolName:"read",params:{path}}` — translate.ts mapToolCall guesses map them correctly.
+- Can't model-bait an OpenClaw deny probe: opus-4-8 refuses IMDS/exfil/escape actions before before_tool_call fires. Prove `block` via forced-block A/B on a BENIGN write (file created without vs absent with).

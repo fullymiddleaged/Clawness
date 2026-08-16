@@ -5,7 +5,7 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.12.0] - 2026-08-16
 
 ### Added
 
@@ -24,8 +24,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   older hosts are rejected at install; Node ≥22.22.3,
   Python 3.10+): the repo root carries the OpenClaw plugin manifest pointing at the
   prebuilt adapter, and the clone brings the Python engine along, so there's no
-  second copy to maintain and nothing to compile. See `openclaw/README.md`. Requires
-  a live-session smoke test against the OpenClaw SDK before it is considered stable.
+  second copy to maintain and nothing to compile. See `openclaw/README.md`.
+  Live-verified on OpenClaw 2026.7.1: rule + memory injection reaches the model, and
+  the access guard's `before_tool_call` block/ask plus `after_tool_call` ledger are
+  honored by the host (a returned `block` stops the tool and surfaces its reason). The
+  SessionStart-note path is verified against the SDK types but not yet on a live
+  interactive channel — the one-shot agent CLI doesn't surface next-turn injection.
 - **New `/clawness:openclaw-audit` skill.** Trims an OpenClaw workspace's base
   system prompt — the files injected into every turn (`SOUL.md`, `AGENTS.md`,
   `IDENTITY.md`, `USER.md`, `MEMORY.md`). Measures their per-turn cost, then works
