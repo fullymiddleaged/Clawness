@@ -44,8 +44,9 @@ Two offline layers plus one owed live pass:
    the *deprecated* barrel, scheduled for removal), and the floor is declared as
    `openclaw.compat.pluginApi` / `install.minHostVersion` `>=2026.3.24-beta.2` in BOTH
    package.json files so a too-old host is rejected at install instead of failing to load.
-3. **Live smoke test** — still owed; only a running host confirms the runtime facts below.
-   Run it against a host `>=2026.3.24-beta.2`; anything older cannot load this API.
+3. **Live smoke test** — DONE (OpenClaw 2026.7.1, git install, real agent turns). Results
+   under *What's confirmed vs open* below. Re-run against any host `>=2026.3.24-beta.2`;
+   anything older cannot load this API.
 
 ## What's confirmed vs open
 
@@ -68,25 +69,32 @@ the verified `NextTurnInjection` shape so the in-tree build enforces it. **Lesso
 ambient stub is only as good as its last verification — re-run the type-check pass after
 changing anything we send to the host.**
 
-**Open — needs a live host** (types confirm the shapes we RETURN; only a live run confirms
-the values the host PASSES, and whether the host honours what we return):
+**Confirmed live** (OpenClaw 2026.7.1, git install, real agent turns):
 
-- **Does a rule actually reach the model?** The load-bearing chain is: host calls
-  `before_prompt_build` → we read the prompt → Python prints the block → we return
-  `{appendContext}` → host injects it into the model prompt. Links 3–4 are verified; links
-  1 and 5 are not. `resolvePromptText` (translate.ts, tested) reads the first non-empty of
-  `prompt`/`userPrompt`/`text`/`input`/`message`, so the common alternate names are covered;
-  a name outside that list still makes rules **silently** never fire, so the live pass must
-  confirm the real field — add it to the head of that list if it differs.
-- **Event/ctx field names.** We read the prompt via `resolvePromptText`, plus
-  `event.toolName`, `event.params`, and resolve `cwd`/`sessionKey` from several candidate
-  fields with a `process.cwd()` fallback.
-- **`before_tool_call` runtime block/approval semantics** (the inspector's open proof-gap).
-- **Injection `placement`.** `PluginNextTurnInjection.placement` is an unexported optional
-  enum; we omit it and take the host default. Confirm the note renders where intended.
-- **Built-in tool names.** `translate.ts` maps by intent-keyword tokens
-  (`bash`/`run_command`/`writeFile`/`read-file` …). Confirm OpenClaw's actual tool names and
-  parameter field names, and extend the keyword/field tables if they differ.
+- **Rules reach the model.** `before_prompt_build` fires and the host injects our
+  `{appendContext}` into the model prompt — the mandatory block appears verbatim. The
+  prompt arrives under `prompt`, `resolvePromptText`'s first candidate, so no reorder was
+  needed.
+- **Access guard is honoured.** `before_tool_call` fires on real tool calls; a returned
+  `{block}` stops the tool and surfaces `blockReason` to the model, and `{requireApproval}`
+  round-trips. `after_tool_call` settles the ask-ledger (a repeated out-of-project write
+  goes ask→allow).
+- **Tool names/params.** Real events: write=`{toolName:"write",params:{path,content}}`,
+  read=`{toolName:"read",params:{path}}`; the `translate.ts` keyword/field tables map both
+  correctly. The shell tool's name went unobserved — the model refuses the deny-tier baits
+  before running a shell command, which is why `block` was proved via a forced-block A/B on
+  a benign write (file created un-forced, absent when blocked), not a real malicious command.
+
+**Still open — one path, plus the engine floor:**
+
+- **SessionStart notes don't surface through the one-shot `openclaw agent` CLI.** The
+  `session_start` → `enqueueNextTurnInjection` call is real and awaited but returns
+  `undefined`, and the note text never appears across turns. Root-caused as a CLI-harness
+  limit, not our bug — next-turn injection is presumably delivered on an interactive
+  channel, which the CLI can't exercise. Verify once on a real channel. It **fails silent**
+  (a dropped note costs nothing), and the load-bearing no-Python warning also rides
+  `before_prompt_build`, so it lands regardless. `placement` stays unconfirmed for the same
+  reason (we omit it and take the host default).
 - **Node engine.** OpenClaw requires Node ≥22.22.3; this package builds/tests on ≥22.19,
   but the host runtime floor is OpenClaw's.
 
