@@ -5,9 +5,9 @@ tags: [comments, documentation, readability, dead-code, why-not-what]
 triggers: [comment, "//", "/*", docstring, TODO]
 when: Writing or reviewing comments.
 rule: >
-  Comment the why, not the what — the code already shows what it does. Keep
-  comments short and current; one that restates the code is noise and rots
-  out of date. Delete commented-out code (version control remembers it).
+  Comment the why, not the what unless the code block is nebulous — the code already
+  shows what it does. Keep comments short and current; one that restates the code
+  is noise and rots out of date. Delete commented-out code (version control remembers it).
   Prefer a self-explanatory name over a comment that excuses a bad one.
 violation: "i++;  // increment i        (plus blocks of commented-out old code)"
 correct: "// Retry once: the upstream API returns a transient 503 on cold start"
