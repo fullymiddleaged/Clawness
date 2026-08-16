@@ -9,12 +9,12 @@
 
 Clawness is a plugin for **Claude Code and OpenClaw**, for people who work across many codebases. It puts the relevant rules into context on every prompt — shipping code or doing research — so you never have to mention them. What's in the box:
 
-- **213 rules** across 29 domains: coding, plus scientific computing, machine learning, research method, and building with LLMs. Only the ones matching your task get injected.
+- **214 rules** across 29 domains: coding, plus scientific computing, machine learning, research method, and building with LLMs. Only the ones matching your task get injected.
 - **7 adversarial review sub-agents**: security red/blue team, code critic, architecture challenger.
 - **A plan-approval gate** before the first edit of a session, on by default.
 - **Session security**: an access guard on dangerous tool calls, plus a trust ledger for skills, agents and MCP servers.
 - **Session continuity**: a per-project lessons memory, a warning when your context window is filling up, and a handoff the next session picks up on its own.
-- **Low token cost.** Only the matching rules are injected, never the whole set, so a typical turn costs about 1,700 tokens instead of the ~35,600 that dumping all 213 rules into CLAUDE.md would cost *every turn*. [How the cost breaks down →](#retrieval-engine)
+- **Low token cost.** Only the matching rules are injected, never the whole set, so a typical turn costs about 1,700 tokens instead of the ~35,800 that dumping all 214 rules into CLAUDE.md would cost *every turn*. [How the cost breaks down →](#retrieval-engine)
 
 Install it once and it works across every project on your machine. Under 1 MB, no services, no models, about 3 ms per prompt.
 
@@ -61,7 +61,7 @@ Take coding rules: *"parameterized SQL only," "async I/O end-to-end," "API respo
 
 The same hook carries the rest of what's [in the box](#clawness): a lessons memory that's **searched, not dumped**, a plan-first gate, session-security guards, output compression, context-and-handoff continuity, adversarial review agents, and a model-tier check. Each is covered in detail under [Using It](#using-it) below.
 
-**Make them *your* standards.** The 213 built-in rules are a starting point. Add your own in seconds: run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/rules/` and `.clawness/memory.md` and your whole team shares the same rules and lessons. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
+**Make them *your* standards.** The 214 built-in rules are a starting point. Add your own in seconds: run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/rules/` and `.clawness/memory.md` and your whole team shares the same rules and lessons. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
 
 > **Tripwire, not a sandbox.** The guard works by pattern-matching the agent's own tool calls. It catches honest mistakes, copy-pasted `curl … | sh`, reads of secrets outside your project, and data sent to a server that appears nowhere in your code, and it breaks the habit of approving everything without reading it. Someone determined can still disguise a command to get past it. The real protection is a container with a list of servers it's allowed to reach. It stays out of normal work: reading your own `.env`, plain API GETs, and traffic to your own machine aren't prompted. A call to an outside server that carries data or a token asks once per server. Disable with `CLAW_NO_ACCESS_GUARD=1`.
 
@@ -972,7 +972,7 @@ clawness --rules-dir /path/to/rules stats
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Rules** | 213 across 29 domains | Coding, science, machine learning, research and LLM standards, injected per-prompt |
+| **Rules** | 214 across 29 domains | Coding, science, machine learning, research and LLM standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 9 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status`, `/clawness:claude-md`, `/clawness:refresh`, `/clawness:audit-rules` |
 | **Hooks** | 12 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory & gitignore bootstrap, handoff pickup, stack & version detection & rule-staleness check, changelog check, CLAUDE.md size check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |

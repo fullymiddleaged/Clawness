@@ -1,0 +1,17 @@
+id: GEN-DOCSYNC-001
+domain: general
+severity: warning
+tags: [documentation, claude-md, nested-docs, staleness, upkeep, subdirectory]
+triggers: [claude.md, nested docs, subdirectory readme, module docs, doc drift, area docs, keep docs current]
+when: Changing code or behaviour in a subtree that carries its own docs — a nested CLAUDE.md, a module or package README, or area-specific notes.
+rule: >
+  Update the area's own doc in the same change that makes it stale. A nested
+  CLAUDE.md (or subdir README) loads automatically for work in that subtree and
+  states the "why" for it, so a change that contradicts it silently misleads the
+  next session. Correct or delete the affected lines — don't only append around
+  them; a stale claim outlives the code it described. Keep the fact in the
+  NEAREST doc to the change: subtree-specific detail belongs in the subtree's
+  doc, not the root CLAUDE.md. Don't create a doc just to hold one line — a
+  one-line lesson goes to .clawness/memory.md instead.
+violation: "A change alters an API documented in that package's CLAUDE.md, but only the code is updated — the doc now describes the old behaviour"
+correct: "The same change updates or prunes the nested CLAUDE.md line so it matches the new behaviour"

@@ -12,6 +12,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **New rule `GEN-CONCISE-001`.** Enforces terse, to-the-point prose in READMEs,
   docs, changelog entries, and comments — lead with the point, cut restatement and
   hedging, one idea per sentence. Complements the comment-specific `GEN-COMMENT-001`.
+- **New rule `GEN-DOCSYNC-001`.** Keep a subtree's own docs current: when you change
+  code in an area with a nested `CLAUDE.md` (or module README), correct or prune that
+  doc in the same change, rather than letting it drift into describing the old behaviour.
 - **Experimental OpenClaw support.** Clawness now runs inside
   [OpenClaw](https://openclaw.ai) as well as Claude Code, via a thin TypeScript
   adapter in `openclaw/` that shells out to the same Python engine, rules corpus,
