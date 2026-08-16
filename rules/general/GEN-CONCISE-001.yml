@@ -1,0 +1,14 @@
+id: GEN-CONCISE-001
+domain: general
+severity: warning
+tags: [writing, docs, readme, changelog, verbosity, clarity, brevity]
+triggers: [readme, documentation, docs, changelog entry, write-up, verbose, concise, wordy, prose, explain]
+when: Writing prose for a reader — a README, docs, a changelog entry, a PR or commit description, or a detailed code comment.
+rule: >
+  Lead with the point or founding logic, then stop. Prefer short sentences and one
+  idea each; if a paragraph can be a sentence, make it a sentence. Don't narrate
+  what the code, command, or heading already shows. Clear and checkable beats
+  complete-but-unread: a changelog line says what changed and what to do about
+  it, any other context with it must be at most one additional line.
+violation: "A README paragraph restating its own heading, or a changelog entry re-arguing the feature's motivation across three sentences"
+correct: "One line: what changed and what the reader does now. Each section only as long as its non-obvious content."

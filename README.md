@@ -7,14 +7,14 @@
 
 **Install once. Your coding agent gets the right rules for every task, without you having to mention them.**
 
-Clawness is a Claude Code plugin aimed at people who often work across common codebases. It dynamically puts relevant rules into context on every prompt, whether you're shipping code or carrying out research. What's in the box:
+Clawness is a plugin for **Claude Code and OpenClaw**, for people who work across many codebases. It puts the relevant rules into context on every prompt — shipping code or doing research — so you never have to mention them. What's in the box:
 
-- **212 rules** across 29 domains: coding, plus scientific computing, machine learning, research method, and building with LLMs. Only the ones matching your task get injected.
+- **213 rules** across 29 domains: coding, plus scientific computing, machine learning, research method, and building with LLMs. Only the ones matching your task get injected.
 - **7 adversarial review sub-agents**: security red/blue team, code critic, architecture challenger.
 - **A plan-approval gate** before the first edit of a session, on by default.
 - **Session security**: an access guard on dangerous tool calls, plus a trust ledger for skills, agents and MCP servers.
 - **Session continuity**: a per-project lessons memory, a warning when your context window is filling up, and a handoff the next session picks up on its own.
-- **Low token cost.** Only the matching rules are injected, never the whole set, so a typical turn costs about 1,700 tokens instead of the ~35,400 that dumping all 212 rules into CLAUDE.md would cost *every turn*. [How the cost breaks down →](#retrieval-engine)
+- **Low token cost.** Only the matching rules are injected, never the whole set, so a typical turn costs about 1,700 tokens instead of the ~35,600 that dumping all 213 rules into CLAUDE.md would cost *every turn*. [How the cost breaks down →](#retrieval-engine)
 
 Install it once and it works across every project on your machine. Under 1 MB, no services, no models, about 3 ms per prompt.
 
@@ -53,15 +53,15 @@ If it describes the injected rule block, you're live. (`/clawness:status` also w
 
 ## What Problem Does This Solve?
 
-Clawness makes Claude Code work the way you do: **the right rules in context on every prompt, without you mentioning them, and without paying for the ones that don't apply.** The same retrieval method surfaces your project's own recorded lessons, so that file can grow for years without costing you more per prompt, and the plan gate, access guard and review agents all ride the same hook. One install, about 2 ms of overhead, no infrastructure — across code and research alike.
+Clawness makes your agent work the way you do: **the right rules in context on every prompt, without you mentioning them, and without paying for the ones that don't apply.** The same retrieval surfaces your project's recorded lessons, so that file can grow for years at no extra per-prompt cost, and the plan gate, guard and review agents ride the same hook. One install, ~2 ms overhead, no infrastructure — code and research alike.
 
-None of that is built in. Vanilla Claude Code forgets your conventions between turns, trusts every tool call you've ever allow-listed, and gives you no cheap way to enforce a standard or rein in a runaway edit. Clawness fills each gap, per prompt.
+None of that is built in: on its own, the agent forgets your conventions between turns, trusts every tool call you've allow-listed, and gives you no cheap way to enforce a standard or rein in a runaway edit. Clawness fills each gap, per prompt.
 
 Take coding rules: *"parameterized SQL only," "async I/O end-to-end," "API responses use the envelope format."* Without Clawness you either dump them all into CLAUDE.md (wastes tokens, dilutes attention every turn) or mention them by hand (you forget, Claude forgets). Clawness scores every rule against your task and injects only the few that fit, plus an always-on mandatory set — so a full-stack developer moving between frontend, backend and SQL in one session always has the right rules and never the rest.
 
 The same hook carries the rest of what's [in the box](#clawness): a lessons memory that's **searched, not dumped**, a plan-first gate, session-security guards, output compression, context-and-handoff continuity, adversarial review agents, and a model-tier check. Each is covered in detail under [Using It](#using-it) below.
 
-**Make them *your* standards.** The 195 built-in rules are a starting point. Add your own in seconds: run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/rules/` and `.clawness/memory.md` and your whole team shares the same rules and lessons. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
+**Make them *your* standards.** The 213 built-in rules are a starting point. Add your own in seconds: run `/clawness:add describe your rule` and Clawness writes the tagged YAML for you (asking before it saves), or drop `.yml` files in `.clawness/rules/`. Commit `.clawness/rules/` and `.clawness/memory.md` and your whole team shares the same rules and lessons. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
 
 > **Tripwire, not a sandbox.** The guard works by pattern-matching the agent's own tool calls. It catches honest mistakes, copy-pasted `curl … | sh`, reads of secrets outside your project, and data sent to a server that appears nowhere in your code, and it breaks the habit of approving everything without reading it. Someone determined can still disguise a command to get past it. The real protection is a container with a list of servers it's allowed to reach. It stays out of normal work: reading your own `.env`, plain API GETs, and traffic to your own machine aren't prompted. A call to an outside server that carries data or a token asks once per server. Disable with `CLAW_NO_ACCESS_GUARD=1`.
 
@@ -116,7 +116,7 @@ Pure Python, one dependency (PyYAML). No ML models, no embeddings, no services, 
 - **Mandatory rules** are always injected; the rest are ranked and capped by a token budget.
 - **Your project memory is searched the same way.** `.clawness/memory.md` isn't pasted into context. It goes through the same search described above, so only the lessons that match your prompt are injected and a long log stays a few lines per turn. See [Project Memory](#project-memory-lessons-learned).
 
-**Measured quality.** Run `clawness eval`: against 59 test questions with known right answers, **MRR@5 = 0.983** and **hit-rate = 1.000**, meaning every question found its expected rule, usually as the first result. CI enforces minimums on both, so search quality can't get worse unnoticed as rules are added.
+**Measured quality.** Run `clawness eval`: against 246 test questions with known right answers, **MRR@5 = 0.990** and **hit-rate = 1.000**, meaning every question found its expected rule, usually as the first result. CI enforces minimums on both, so search quality can't get worse unnoticed as rules are added.
 
 **Cost.** About **2 ms per prompt**, and roughly 850 tokens of always-on mandatory rules, plus the few matched rules. The mandatory ones are written out in full on the first prompt and every fifth prompt after that; in between they're shortened to a single line listing their ids, since they haven't changed. Run `clawness stats` for your exact per-turn estimate.
 
@@ -199,12 +199,24 @@ bash install.sh
 
 Clawness also runs inside [OpenClaw](https://openclaw.ai) through a thin TypeScript
 adapter in [`openclaw/`](openclaw/) that shells out to the same Python engine, rules
-corpus, and access guard — so there is one source of truth, not a second corpus. This
-first cut covers rule + memory injection, the SessionStart notes, and the access guard;
-the Claude-specific subsystems (context watch, plan gate, model advisor) stay dormant for
-now. It still needs a live-session smoke test against the OpenClaw SDK before it's
-considered stable. Setup and the exact API assumptions are documented in
-[`openclaw/README.md`](openclaw/README.md).
+corpus, and access guard — one source of truth, not a second corpus. It covers rule +
+memory injection, the SessionStart notes, and the access guard; the Claude-specific
+subsystems (context watch, plan gate, model advisor) stay dormant. Live-verified on
+OpenClaw 2026.7.1: rules reach the model, and a guard `block`/`ask` on a tool call is
+honored by the host.
+
+**Requires** Node ≥ 22.22.3, Python 3.10+, and **OpenClaw ≥ 2026.3.24-beta.2** — the
+first release whose plugin SDK ships the API the adapter targets. An older OpenClaw is
+rejected *at install* (the floor is declared in the plugin manifest), so you get a clear
+error, not a silent no-op; upgrade with `npm i -g openclaw`. Without Python on PATH the
+plugin installs but injects a "Python not found" note instead of rules.
+
+```bash
+openclaw plugins install git:github.com/fullymiddleaged/Clawness
+openclaw gateway restart
+```
+
+Full setup and the API assumptions are in [`openclaw/README.md`](openclaw/README.md).
 
 ### What the Manual Installer Does (7 steps)
 
@@ -960,7 +972,7 @@ clawness --rules-dir /path/to/rules stats
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Rules** | 212 across 29 domains | Coding, science, machine learning, research and LLM standards, injected per-prompt |
+| **Rules** | 213 across 29 domains | Coding, science, machine learning, research and LLM standards, injected per-prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 9 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status`, `/clawness:claude-md`, `/clawness:refresh`, `/clawness:audit-rules` |
 | **Hooks** | 12 (rule injection, context watch & model-tier check, output compression, plan gate, access guard, trust ledger, git check, memory & gitignore bootstrap, handoff pickup, stack & version detection & rule-staleness check, changelog check, CLAUDE.md size check, dependency bootstrap) | Automatic context management, workflow enforcement & session security |

@@ -9,6 +9,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **New rule `GEN-CONCISE-001`.** Enforces terse, to-the-point prose in READMEs,
+  docs, changelog entries, and comments — lead with the point, cut restatement and
+  hedging, one idea per sentence. Complements the comment-specific `GEN-COMMENT-001`.
 - **Experimental OpenClaw support.** Clawness now runs inside
   [OpenClaw](https://openclaw.ai) as well as Claude Code, via a thin TypeScript
   adapter in `openclaw/` that shells out to the same Python engine, rules corpus,
@@ -45,6 +48,12 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   MRR@k + hit-rate before and after an edit. Harness-agnostic; it is the
   verification step `openclaw-audit`/`claude-md` point at when moving content into
   ranked retrieval.
+
+### Changed
+
+- **README now leads with dual-host support** (Claude Code *and* OpenClaw) and the
+  OpenClaw section reflects the live-verified status; trimmed the most verbose intro
+  passages.
 
 ## [1.11.0] - 2026-08-13
 
