@@ -35,14 +35,25 @@ Two offline layers plus one owed live pass:
    the real types. The verification is a *throwaway*: `npm i openclaw` in a scratch dir +
    `tsc --noEmit` of `src/` against the real types, with our ambient `openclaw.d.ts`
    removed. Disposable step, not a dependency — and it earned its keep (see below).
+   **It pins to the LATEST `openclaw` on npm, so it cannot catch that an OLDER host
+   lacks the API entirely.** `definePluginEntry` and the whole `plugin-sdk/plugin-entry`
+   subpath do not exist before `2026.3.24-beta.2` (verified: absent everywhere in a
+   pinned `npm i openclaw@2026.3.11` — the first live install target, which is why it
+   was discovered but failed to load). That is a version *floor*, not an import-path bug:
+   the import stays the focused subpath the docs mandate (root `openclaw/plugin-sdk` is
+   the *deprecated* barrel, scheduled for removal), and the floor is declared as
+   `openclaw.compat.pluginApi` / `install.minHostVersion` `>=2026.3.24-beta.2` in BOTH
+   package.json files so a too-old host is rejected at install instead of failing to load.
 3. **Live smoke test** — still owed; only a running host confirms the runtime facts below.
+   Run it against a host `>=2026.3.24-beta.2`; anything older cannot load this API.
 
 ## What's confirmed vs open
 
 **Confirmed offline** (inspector + the type-check pass):
 - The four hook names resolve: `before_prompt_build`, `session_start`, `before_tool_call`,
   `after_tool_call`; plus `definePluginEntry`/`register()` shapes, the manifest, and the
-  SDK import subpaths.
+  `plugin-sdk/plugin-entry` import subpath — **on the latest SDK only** (the offline
+  check pins latest; the API floor is `>=2026.3.24-beta.2`, declared in the manifests).
 - Our returns are valid against the real hook result types: `before_prompt_build`
   `{appendContext}`; `before_tool_call` `{block, blockReason}` / `{requireApproval}` /
   `{params}`.

@@ -18,7 +18,10 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   This first cut covers rule + memory injection, the SessionStart notes, and the
   access guard (block/ask); the Claude-specific subsystems (context watch, plan
   gate, model advisor) stay dormant for now. Installs from GitHub with
-  `openclaw plugins install git:github.com/fullymiddleaged/Clawness` (Node ≥22.22.3,
+  `openclaw plugins install git:github.com/fullymiddleaged/Clawness` (OpenClaw
+  ≥2026.3.24-beta.2 — the first release whose plugin SDK ships the `plugin-entry`
+  API the adapter targets, declared as the manifest's `compat.pluginApi` floor so
+  older hosts are rejected at install; Node ≥22.22.3,
   Python 3.10+): the repo root carries the OpenClaw plugin manifest pointing at the
   prebuilt adapter, and the clone brings the Python engine along, so there's no
   second copy to maintain and nothing to compile. See `openclaw/README.md`. Requires

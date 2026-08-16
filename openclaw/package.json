@@ -13,6 +13,12 @@
   },
   "openclaw": {
     "extensions": ["dist/src/index.js"],
+    "compat": {
+      "pluginApi": ">=2026.3.24-beta.2"
+    },
+    "install": {
+      "minHostVersion": ">=2026.3.24-beta.2"
+    },
     "plugin": {
       "json": "openclaw.plugin.json"
     }

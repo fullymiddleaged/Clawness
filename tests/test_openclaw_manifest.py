@@ -50,6 +50,31 @@ def test_committed_entry_exists():
     )
 
 
+def test_version_floors_agree_and_are_declared():
+    """Both package.json openclaw blocks must declare the same install/API floor.
+
+    A git install reads the ROOT package.json, so its compat.pluginApi (enforced
+    at install for non-bundled sources) is what actually gates a too-old host.
+    The subdir dev copy mirrors it; drift would let one claim support the other
+    doesn't. The floor is >=2026.3.24-beta.2, the first version whose plugin-sdk
+    ships the definePluginEntry / plugin-entry API this adapter is built against.
+    """
+    root_oc = _json("package.json")["openclaw"]
+    sub_oc = _json("openclaw/package.json")["openclaw"]
+    for block in (root_oc, sub_oc):
+        assert block.get("compat", {}).get("pluginApi"), (
+            "package.json openclaw.compat.pluginApi is missing; declare the "
+            "plugin-sdk API floor so a too-old host is rejected at install."
+        )
+    assert root_oc["compat"] == sub_oc["compat"], (
+        f"compat drift: root={root_oc['compat']!r}, subdir={sub_oc['compat']!r}"
+    )
+    assert root_oc.get("install") == sub_oc.get("install"), (
+        f"install-hint drift: root={root_oc.get('install')!r}, "
+        f"subdir={sub_oc.get('install')!r}"
+    )
+
+
 def test_adapter_versions_agree():
     """Both adapter package.json versions (root + subdir) must match."""
     root_v = _json("package.json")["version"]

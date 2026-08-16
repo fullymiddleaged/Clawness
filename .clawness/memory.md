@@ -22,4 +22,5 @@
 - Verify OpenClaw SDK type shapes via throwaway `npm i openclaw`+tsc against real .d.ts (not a build dep); plugin-test-api is excluded from the npm pkg.
 - OpenClaw git install reads the clone ROOT only (no subdir); the subdir plugin needs root package.json+openclaw.plugin.json + committed openclaw/dist/src.
 - OpenClaw 2026.3.11 `plugins install` has NO git source (path/archive/npm/-l link only); git-source install is a newer-version feature — test old versions via `-l ~/clone/openclaw`.
-- OpenClaw 2026.3.11 SDK exports only `openclaw/plugin-sdk` (index); the `/plugin-entry` subpath is newer-only. Import from the index; offline tsc against latest openclaw masks this drift.
+- OpenClaw `definePluginEntry`/plugin-entry SDK needs host >=2026.3.24-beta.2; 2026.3.11 lacks it entirely (nowhere in dist) — host too old, not an import bug.
+- Import OpenClaw SDK from focused subpath `openclaw/plugin-sdk/plugin-entry`; the root `openclaw/plugin-sdk` barrel is deprecated per its CHANGELOG (scheduled removal).
