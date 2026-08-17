@@ -8,10 +8,10 @@
 **Install once. Your coding agent gets the right rules for every task, without you having to mention them.**
 
 Clawness is a plugin for **Claude Code and [OpenClaw](https://openclaw.ai)** (OpenClaw
-support is experimental). On every prompt it works out which of your coding rules matter
-for the task in front of you and puts just those into context, so you never have to repeat
-your standards or dump them all into a config file. It works across every project on your
-machine.
+support is currently experimental). On every prompt it works out which of your coding rules matter
+for the current task and puts just those into context, so you never have to repeat
+your standards or dump them all into a flat config file per repo. So it works across every project on your
+machine. But it also does loads more!
 
 What you get:
 
