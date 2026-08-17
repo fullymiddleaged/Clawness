@@ -7,7 +7,7 @@
 
 **Install once. Your coding agent gets the right rules for every task, without you having to mention or explain them.**
 
-Clawness is a plugin for **Claude Code and [OpenClaw](https://openclaw.ai)** (OpenClaw
+Clawness is a Python backed plugin compatible with **Claude Code and [OpenClaw](https://openclaw.ai)** (OpenClaw
 support is currently experimental). It's designed for full stack devs or researchers 
 who often work across various code bases at short notice, it works out (per prompt) 
 which of your coding rules matter for the current task and puts just those into context, 
@@ -58,8 +58,7 @@ infrastructure to pure Python.
 
 ### Claude Code
 
-Two commands plus a restart. The plugin downloads its Python backend on first launch, so
-it isn't fully live until step 3.
+Two commands plus a session (or IDE) restart. We assume here you already have Python 3.10+ available on your PATH.
 
 **1. Install** (from any Claude Code session):
 
@@ -71,7 +70,7 @@ claude plugin install clawness@clawness
 **2. Restart Claude Code** (or run `/reload-plugins`) so the hooks load.
 
 **3. Let first-run setup finish.** On your first session, a background hook installs the
-one dependency (**PyYAML**). This needs **Python 3.10+ on your PATH** and takes a few
+one Python dependency (**PyYAML**). This needs **Python 3.10+ on your PATH** and takes a few
 seconds. There are no models to download.
 
 **4. Verify** by asking Claude *"what clawness rules do you see in your context?"*, or run
