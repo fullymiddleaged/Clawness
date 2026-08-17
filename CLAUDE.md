@@ -629,9 +629,12 @@ dependency**. No ML models, no services, no Docker.
 - **`marketplace.json` sets `"source": "./"`, so a push to `main` IS a release.** Users
   get whatever `main` holds on their next `claude plugin update` — the tag and GitHub
   release are markers for humans, not the delivery mechanism. Consequence: `main` must
-  never sit ahead of the version it declares. Anything user-visible that lands there
-  (rules, hooks, README, manifest copy) needs a version bump in the same push, or the
-  work belongs on a branch until you're ready to release.
+  never sit ahead of the version it declares. Anything that changes shipped *behaviour*
+  (rules, hooks, code, manifest copy) needs a version bump in the same push, or the work
+  belongs on a branch until you're ready to release. Pure docs polish (README/CHANGELOG
+  wording, typo fixes) is exempt: it changes nothing users run, and forcing a release for
+  it is noise. Bump when the docs describe a new or changed feature, not when they just
+  read better.
 - **Every version in CHANGELOG.md gets exactly one tag and one GitHub release.** Don't
   leave an entry untagged, and don't stack several unreleased bumps — collapse the
   batch into one version instead. (v1.2.0 shipped that way: three features, one minor.)
