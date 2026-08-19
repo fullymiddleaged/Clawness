@@ -36,3 +36,4 @@
 - So add/refresh can't be faithfully ported as commands: body-rewrite impossible; runtimeContext.llm is OPTIONAL + side-generates (no file tools/approval/doc-research); agentPromptGuidance is always-on system-prompt cost.
 - Live: `openclaw plugins inspect clawness --runtime --json` confirms `commands:["clawness-status"]` registers. To live-test a dist change, copy dist/src/*.js into the install clone `~/.openclaw/git/git-93ab38b0bc060a29/repo/openclaw/dist/src`.
 - `openclaw agent --local` does NOT run the plugin-command interceptor — `/clawness-status` went to the LLM (it paraphrased injected context). Same CLI gap as SessionStart notes; verify command reply on a real channel.
+- OpenClaw SDK levers past our 4 hooks: registerContextEngine, registerCompactionProvider(+before/after_compaction), registerMemoryPromptSection/Capability, before_install — homes for our retrieval/handoff/memory/trust.
