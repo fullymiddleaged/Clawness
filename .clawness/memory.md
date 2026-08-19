@@ -30,3 +30,6 @@
 - Can't model-bait an OpenClaw deny probe: opus-4-8 refuses IMDS/exfil/escape actions before before_tool_call fires. Prove `block` via forced-block A/B on a BENIGN write (file created without vs absent with).
 - OpenClaw plugins register hooks/commands/tools, not skills/agents; port CLI skills as commands (openclaw/COMMANDS-PLAN.md).
 - Git install keeps the whole clone (hooks/rules/clawness present at install root), so no engine vendoring needed — clone-pruning fear resolved.
+- OpenClaw plugin command: `api.registerCommand(def)`, invoked as bare `/name` in a GLOBAL namespace (no auto `clawness:` prefix) — prefix ours `clawness-`.
+- OpenClaw reserves command names (`status`,`context`,`model`,`config`,`skill`,`help`…); `status` is blocked. Set `acceptsArgs:true` or the matcher drops any args.
+- OpenClaw command result `{continueAgent:true}` continues the turn to the LLM (handler may rewrite body); handler also has `ctx.runtimeContext.llm.complete` — so add/refresh CAN be commands.
