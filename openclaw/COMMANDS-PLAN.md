@@ -1,8 +1,11 @@
 # Plan — OpenClaw-native commands for Clawness
 
-**Status: PROPOSAL, not yet implemented.** This is a design + implementation plan for
-giving OpenClaw users the CLI-backed Clawness skills as native OpenClaw commands. No
-command code exists yet; the adapter is still hook-only.
+**Status: Phases 1–2 SHIPPED; Phase 3 CLOSED as not viable.** The read-only commands
+`/clawness-status`, `/clawness-query`, `/clawness-audit-rules` exist end-to-end (see
+`src/commands.ts`). Phase 3 (`add`/`refresh`) was investigated and **cannot be faithfully
+ported to the plugin-command surface** — the mechanism Phase 0 assumed does not hold for
+external plugins (verified against the real runtime; see Phase 3 below). `add`/`refresh`
+remain Claude-Code-only skills.
 
 ## Why
 
@@ -25,13 +28,16 @@ by reusing the Claude `SKILL.md` files.
 - `stats` / `query` — surface the CLI query/stats directly (read-only).
 - `audit-rules` — maintainer corpus check (runs `clawness audit-rules`).
 
-**Feasible (Phase 0 resolved the gate) — scheduled for Phase 3:**
+**NOT viable as commands (Phase 3 finding — was thought feasible after Phase 0):**
 
-- `add` (author a rule from NL) and `refresh` (version-gap fix) rely on the *model* writing
-  YAML. Phase 0 confirmed a command result **can** continue the agent turn
-  (`continueAgent: true` + body rewrite) or call the LLM directly
-  (`ctx.runtimeContext.llm`), so both are possible as commands. Do them in Phase 3 after
-  the read-only shape is proven.
+- `add` (author a rule from NL) and `refresh` (version-gap fix) rely on the *model* doing
+  multi-step work with its own file tools (research docs, grep the codebase, propose, get
+  approval, write YAML). Phase 0 read the runtime and concluded a `continueAgent:true`
+  command could rewrite the agent's turn body to feed it that workflow. **Re-verified in
+  Phase 3: it cannot** — an external plugin handler gets a *copy* of `commandBody` and no
+  handle to mutate the body the agent sees, so `continueAgent:true` continues the agent on
+  the ORIGINAL body and the handler's `text` is discarded. `add`/`refresh` stay
+  Claude-Code-only. See Phase 3.
 
 **Out of scope — agent-spawning skills** (`audit`, `review`, `perf`, `test`): they
 orchestrate Claude Code sub-agents. OpenClaw has its own subagent system
@@ -78,12 +84,14 @@ and `ReplyPayload.text` is the plain-text reply body. Runtime semantics (traced 
    - `continueAgent: true` → `{ kind: "continue", cleanedBody }`: processing **continues
      to the LLM agent**, and the handler may first rewrite the body the agent sees
      (`sessionCtx.BodyStripped` / `command.commandBodyNormalized`).
-   So a command **can** feed the agent a turn. **This unblocks Phase 3:** `add`/`refresh`
-   are feasible either by (a) rewriting the body into a generation instruction +
-   `continueAgent:true` (lets the normal agent write YAML through its file tools — mirrors
-   how the Claude `SKILL.md` works), or (b) calling `ctx.runtimeContext.llm.complete(...)`
-   directly in the handler. Prefer (a): it reuses the agent's own file tools and approval
-   path rather than side-generating.
+   So a command **can** cause the agent to run a turn. **At the time this read like it
+   unblocked Phase 3** via (a) rewriting the body into a generation instruction +
+   `continueAgent:true`, or (b) calling `ctx.runtimeContext.llm.complete(...)` in-handler.
+   **Phase 3 re-verification overturned (a)** (see below): the `cleanedBody` rewrite path
+   (`command.commandBodyNormalized` / `sessionCtx.BodyStripped`) belongs to *bundled*
+   command handlers that hold those objects; an *external plugin* handler is handed a
+   string copy of `commandBody` and cannot mutate what the agent sees. So `continueAgent`
+   only continues the agent on the user's ORIGINAL body — it cannot inject a workflow.
 
 **3. Invocation + namespacing — bare `/name`, GLOBAL namespace, collision-prone.**
 Invoked in-session as `/name` (`matchPluginCommand` matches `/<name>` with `_`↔`-`
@@ -121,10 +129,32 @@ dist-rebuild cycle — prove it with the actual Phase 1 command instead.
 
 Add `stats`, `query`, `audit-rules` the same way once Phase 1's shape is proven.
 
-## Phase 3 — decide on `add` / `refresh`
+## Phase 3 — `add` / `refresh` — CLOSED, not viable as commands
 
-Only if Phase 0 shows a command can inject agent instructions. Otherwise document them as
-Claude-Code-only and have OpenClaw users run the CLI directly.
+**Finding (verified against openclaw 2026.6.34 runtime + types):** an external plugin
+command handler **cannot** inject an instruction the agent runs. The three levers were
+checked and each fails for this use:
+
+- **`continueAgent:true` + body rewrite (the Phase 0 plan):** impossible. `handlePluginCommand`
+  builds the handler's `PluginCommandContext` from *copied* fields (`commandBody:
+  command.commandBodyNormalized` — a string) and never writes back. In `get-reply`, the
+  continue path sets `cleanedBody` from `command.commandBodyNormalized` / `sessionCtx.BodyStripped`
+  — neither of which a plugin handler can touch — so the agent continues on the ORIGINAL
+  body and the handler's `reply.text` is dropped on the continue branch.
+- **`ctx.runtimeContext.llm.complete` (side-generate in-handler):** possible but wrong for
+  this. `runtimeContext.llm` is *optional* (may be absent), and it generates without the
+  agent's file tools, approval step, or doc research. That directly violates `refresh`'s
+  design (research official docs, never write from memory, stop for approval) and skips
+  `add`'s save/confirm/test steps.
+- **`agentPromptGuidance`:** static system-prompt text injected on *every* agent turn while
+  the command is registered — the always-on token cost Clawness's budgeted retrieval exists
+  to avoid. Fine for a one-line pointer, not for a multi-step workflow.
+
+**Decision:** `add`/`refresh` remain Claude-Code skills. OpenClaw users author/refresh rules
+by running that workflow with their agent directly (or, later, via an OpenClaw *skill* —
+`openclaw skills install` is a separate distribution channel from plugin commands, so the
+ambition isn't dead, it just can't ride the plugin; that port is unscoped). The OpenClaw
+plugin-command surface is complete at the three read-only commands.
 
 ## Tests (ENF-TEST-001, TST-FAILFIRST-001)
 
@@ -146,9 +176,12 @@ Claude-Code-only and have OpenClaw users run the CLI directly.
 
 ## Open questions
 
-1. ~~Can a `PluginCommandResult` inject agent instructions / trigger a turn?~~ **Resolved
-   in Phase 0: yes** — `continueAgent: true` continues the turn to the LLM (and lets the
-   handler rewrite the body), and `ctx.runtimeContext.llm.complete` is available in-handler.
+1. ~~Can a `PluginCommandResult` inject agent instructions / trigger a turn?~~ **Answered
+   across Phase 0 + Phase 3: it can trigger a turn but CANNOT inject an instruction.**
+   `continueAgent: true` continues the turn to the LLM, but on the ORIGINAL body — an
+   external plugin handler cannot rewrite what the agent sees (Phase 0's "rewrite the body"
+   read applied to bundled handlers, not plugins). `ctx.runtimeContext.llm.complete` exists
+   but is optional and side-generates. This is why Phase 3 is closed as not viable.
 2. ~~How are plugin commands invoked and namespaced?~~ **Resolved in Phase 0:** bare `/name`
    in a global namespace, no auto-prefix, `status` (and many words) reserved → we prefix
    `clawness-`.

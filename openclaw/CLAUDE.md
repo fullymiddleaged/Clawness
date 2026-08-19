@@ -20,6 +20,39 @@ on the root CLAUDE.md.
 - **We shell out to the exact `../hooks/` scripts** — no reimplementation. One engine,
   one rules corpus, one test-gated Python contract shared with the Claude Code path.
 
+## Native commands — read-only only, and that is a hard SDK limit
+
+`src/commands.ts` defines host-agnostic command specs; `index.ts` maps each onto
+`api.registerCommand`. Three ship, all backed by the bundled `clawness` CLI via
+`runPythonCli`: `/clawness-status` (`stats`), `/clawness-query <prompt>` (`query`,
+prompt forwarded as ONE positional so spaces survive), `/clawness-audit-rules [flags]`
+(`audit-rules`, raw args split into flag tokens). Every command is `clawness-` prefixed
+because plugin commands share one GLOBAL namespace with no auto-prefix and many plain
+words (`status`, …) are reserved by core; `acceptsArgs:true` is mandatory or the matcher
+drops args. `formatCliOutput` surfaces stderr on non-zero exit so a broken invocation is
+visible, not silent.
+
+- **`add`/`refresh` are NOT ported, and cannot be — this is verified, don't retry it.**
+  They need the *model* to do multi-step work with its own file tools (research docs,
+  grep the codebase, propose, get approval, write YAML). An external plugin command
+  **cannot inject an instruction the agent runs**: `handlePluginCommand` hands the handler
+  a *copy* of `commandBody` (a string) and no handle to `command`/`sessionCtx`, so
+  `continueAgent:true` continues the agent on the user's ORIGINAL body and the handler's
+  `reply.text` is dropped on the continue branch (traced through `commands-handlers.runtime`
+  + `get-reply` in openclaw 2026.6.34). `runtimeContext.llm.complete` is optional and
+  side-generates without file tools/approval/doc-lookup — wrong for `refresh` by design.
+  `agentPromptGuidance` is static system-prompt text on *every* turn — the always-on cost
+  Clawness avoids. So `add`/`refresh` stay Claude-Code skills; the full write-up and the
+  runtime evidence are in [COMMANDS-PLAN.md](COMMANDS-PLAN.md) Phase 3.
+- **OpenClaw *skills* are a separate channel from plugin commands** (`openclaw skills
+  install`), so the ambition of "give OpenClaw users add/refresh" isn't dead — it just
+  can't ride the plugin. That port is unscoped; don't assume its file format or git-install
+  support without verifying against the SDK.
+- **The command *reply path* is still owed a live pass.** `openclaw plugins inspect`
+  confirms registration, but `openclaw agent --local` routes `/clawness-*` to the LLM
+  (same one-shot-CLI gap as SessionStart notes), so the actual reply must be confirmed on
+  a real interactive host.
+
 ## How we verify against the real SDK, without depending on it
 
 Two offline layers plus one owed live pass:
