@@ -43,6 +43,39 @@ declare module "openclaw/plugin-sdk/plugin-entry" {
     metadata?: Record<string, unknown>;
   }
 
+  // Verified against the real SDK (openclaw 2026.7.x): a command handler returns
+  // a ReplyPayload (whose text field is `text`) plus continueAgent/suppressReply.
+  // Omitting continueAgent delivers `text` and STOPS the turn — the read-only
+  // path. continueAgent:true continues the turn to the LLM agent.
+  export interface PluginCommandResult {
+    text?: string;
+    continueAgent?: boolean;
+    suppressReply?: boolean;
+  }
+
+  export interface PluginCommandContext {
+    /** Raw argument string after the command name (present iff acceptsArgs). */
+    args?: string;
+    commandBody?: string;
+    sessionKey?: string;
+    sessionId?: string;
+    channel?: string;
+    isAuthorizedSender?: boolean;
+    [key: string]: unknown;
+  }
+
+  export interface PluginCommandDefinition {
+    /** Invocation name without the leading slash (global namespace, no prefix). */
+    name: string;
+    description: string;
+    acceptsArgs?: boolean;
+    requireAuth?: boolean;
+    nativeNames?: Record<string, string> & { default?: string };
+    handler: (
+      ctx: PluginCommandContext,
+    ) => PluginCommandResult | Promise<PluginCommandResult>;
+  }
+
   export interface OpenClawPluginApi {
     id: string;
     name: string;
@@ -56,6 +89,8 @@ declare module "openclaw/plugin-sdk/plugin-entry" {
         enqueueNextTurnInjection?: (injection: NextTurnInjection) => unknown;
       };
     };
+    // Optional: absent on hosts older than the command API — index.ts guards it.
+    registerCommand?: (command: PluginCommandDefinition) => void;
     on(event: string, handler: (event: any, ctx: any) => unknown): void;
   }
 

@@ -33,3 +33,5 @@
 - OpenClaw plugin command: `api.registerCommand(def)`, invoked as bare `/name` in a GLOBAL namespace (no auto `clawness:` prefix) — prefix ours `clawness-`.
 - OpenClaw reserves command names (`status`,`context`,`model`,`config`,`skill`,`help`…); `status` is blocked. Set `acceptsArgs:true` or the matcher drops any args.
 - OpenClaw command result `{continueAgent:true}` continues the turn to the LLM (handler may rewrite body); handler also has `ctx.runtimeContext.llm.complete` — so add/refresh CAN be commands.
+- Live: `openclaw plugins inspect clawness --runtime --json` confirms `commands:["clawness-status"]` registers. To live-test a dist change, copy dist/src/*.js into the install clone `~/.openclaw/git/git-93ab38b0bc060a29/repo/openclaw/dist/src`.
+- `openclaw agent --local` does NOT run the plugin-command interceptor — `/clawness-status` went to the LLM (it paraphrased injected context). Same CLI gap as SessionStart notes; verify command reply on a real channel.

@@ -8,7 +8,7 @@
  */
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { dirname, resolve, join } from "node:path";
+import { dirname, resolve, join, delimiter } from "node:path";
 // dist/src/bridge.js  → dist/src → dist → openclaw → <repo root>
 // src/bridge.ts (tsx) → src → openclaw → <repo root>
 // Either way the repo root is two levels above this file's parent directory's
@@ -31,7 +31,7 @@ export async function runPythonHook(scriptRelPath, payload, timeoutMs = 12000) {
     const script = join(REPO_ROOT, scriptRelPath);
     const input = JSON.stringify(payload);
     for (const interpreter of INTERPRETERS) {
-        const result = await trySpawn(interpreter, script, input, timeoutMs);
+        const result = await trySpawn(interpreter, [script], input, timeoutMs, undefined);
         if (result === "ENOENT")
             continue; // interpreter not on PATH — try the next
         return { stdout: result.stdout, code: result.code, noPython: false };
@@ -40,7 +40,34 @@ export async function runPythonHook(scriptRelPath, payload, timeoutMs = 12000) {
     // decides whether to surface a one-line "Python not found" note.
     return { stdout: "", code: null, noPython: true };
 }
-function trySpawn(interpreter, script, input, timeoutMs) {
+/**
+ * Run the bundled `clawness` CLI: `python -m clawness.cli <args>`.
+ *
+ * Unlike the hooks (which self-insert their parent onto sys.path), `-m
+ * clawness.cli` needs the package importable, so we put REPO_ROOT on PYTHONPATH
+ * — the clone root holds the `clawness/` package, exactly as it holds `hooks/`
+ * and `rules/`, so no pip install is required. Same interpreter picker and
+ * noPython contract as runPythonHook.
+ *
+ * @param args CLI argv after the module, e.g. ["stats"] or ["query", "..."]
+ */
+export async function runPythonCli(args, timeoutMs = 20000) {
+    const argv = ["-m", "clawness.cli", ...args];
+    const env = { ...process.env, PYTHONPATH: pythonPathWithRoot() };
+    for (const interpreter of INTERPRETERS) {
+        const result = await trySpawn(interpreter, argv, null, timeoutMs, env);
+        if (result === "ENOENT")
+            continue;
+        return { stdout: result.stdout, stderr: result.stderr, code: result.code, noPython: false };
+    }
+    return { stdout: "", stderr: "", code: null, noPython: true };
+}
+/** REPO_ROOT prepended to any inherited PYTHONPATH, so a host-set one survives. */
+function pythonPathWithRoot() {
+    const existing = process.env.PYTHONPATH;
+    return existing ? `${REPO_ROOT}${delimiter}${existing}` : REPO_ROOT;
+}
+function trySpawn(interpreter, args, input, timeoutMs, env) {
     return new Promise((resolvePromise) => {
         let settled = false;
         const done = (outcome) => {
@@ -51,12 +78,13 @@ function trySpawn(interpreter, script, input, timeoutMs) {
         };
         let child;
         try {
-            child = spawn(interpreter, [script], {
+            child = spawn(interpreter, args, {
                 cwd: REPO_ROOT,
                 stdio: ["pipe", "pipe", "pipe"],
-                // A hook resolving `clawness` relies on sys.path; the scripts insert
-                // their own parent, so no PYTHONPATH is required. We still set cwd to
-                // the repo root for predictable relative resolution.
+                // Hooks resolve `clawness` via sys.path (they insert their own parent),
+                // so no env is needed there; the CLI path passes PYTHONPATH=REPO_ROOT.
+                // cwd stays the repo root for predictable relative resolution.
+                ...(env ? { env } : {}),
             });
         }
         catch {
@@ -64,6 +92,7 @@ function trySpawn(interpreter, script, input, timeoutMs) {
             return;
         }
         let stdout = "";
+        let stderr = "";
         const timer = setTimeout(() => {
             try {
                 child.kill();
@@ -71,27 +100,40 @@ function trySpawn(interpreter, script, input, timeoutMs) {
             catch {
                 /* ignore */
             }
-            done({ stdout, code: null });
+            done({ stdout, stderr, code: null });
         }, timeoutMs);
         child.on("error", (err) => {
             clearTimeout(timer);
             // ENOENT means this interpreter name isn't on PATH → let the caller try
             // the next one. Any other spawn error, fail silent as empty output.
-            done(err.code === "ENOENT" ? "ENOENT" : { stdout, code: null });
+            done(err.code === "ENOENT" ? "ENOENT" : { stdout, stderr, code: null });
         });
         child.stdout?.on("data", (chunk) => {
             stdout += chunk.toString("utf8");
         });
+        child.stderr?.on("data", (chunk) => {
+            stderr += chunk.toString("utf8");
+        });
         child.on("close", (code) => {
             clearTimeout(timer);
-            done({ stdout, code });
+            done({ stdout, stderr, code });
         });
-        try {
-            child.stdin?.write(input, "utf8");
-            child.stdin?.end();
+        if (input !== null) {
+            try {
+                child.stdin?.write(input, "utf8");
+                child.stdin?.end();
+            }
+            catch {
+                /* the error/close handlers will settle */
+            }
         }
-        catch {
-            /* the error/close handlers will settle */
+        else {
+            try {
+                child.stdin?.end();
+            }
+            catch {
+                /* ignore */
+            }
         }
     });
 }

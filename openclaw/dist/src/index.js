@@ -12,6 +12,7 @@ import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import { runPythonHook, PLUGIN_DIR } from "./bridge.js";
 import { buildPromptPayload, buildPreToolPayload, buildPostToolPayload, buildNextTurnInjection, mapToolCall, parseGuardStdout, resolvePromptText, } from "./translate.js";
 import { runSessionNotes } from "./notes.js";
+import { CLAWNESS_COMMANDS } from "./commands.js";
 const NO_PYTHON_NOTE = "[Clawness] Python 3.10+ was not found on PATH, so Clawness's rules, memory, " +
     "and access guard are inactive. Point the user at the Installing Python section " +
     "of https://github.com/fullymiddleaged/clawness — do not install Python for them.";
@@ -136,6 +137,36 @@ export default definePluginEntry({
                 log?.warn?.(`clawness after_tool_call failed: ${String(err)}`);
             }
         });
+        // --- Native commands (read-only CLI surface) -------------------------
+        // Commands share one global namespace and `status` is reserved, so ours are
+        // `clawness-` prefixed. A host too old to expose registerCommand simply gets
+        // no commands — fail toward nothing, like every other handler here.
+        if (typeof api.registerCommand === "function") {
+            for (const cmd of CLAWNESS_COMMANDS) {
+                try {
+                    api.registerCommand({
+                        name: cmd.name,
+                        description: cmd.description,
+                        acceptsArgs: cmd.acceptsArgs,
+                        handler: async (cctx) => {
+                            try {
+                                const out = await cmd.run(String(cctx?.args ?? ""));
+                                // A user who typed the command is owed the reason on no-Python,
+                                // so surface the note unconditionally (not the deduped session one).
+                                return { text: out.noPython ? NO_PYTHON_NOTE : out.text };
+                            }
+                            catch (err) {
+                                log?.warn?.(`clawness command /${cmd.name} failed: ${String(err)}`);
+                                return { text: "Clawness command failed; see host logs." };
+                            }
+                        },
+                    });
+                }
+                catch (err) {
+                    log?.warn?.(`clawness registerCommand(/${cmd.name}) failed: ${String(err)}`);
+                }
+            }
+        }
         log?.debug?.(`clawness OpenClaw adapter registered (plugin dir ${PLUGIN_DIR})`);
     },
 });
