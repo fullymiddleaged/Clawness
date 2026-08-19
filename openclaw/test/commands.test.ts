@@ -80,6 +80,26 @@ test("clawness-status is registered and takes no args", () => {
   assert.equal(status!.acceptsArgs, false);
 });
 
+test("clawness-query and clawness-audit-rules are registered and accept args", () => {
+  for (const name of ["clawness-query", "clawness-audit-rules"]) {
+    const cmd = CLAWNESS_COMMANDS.find((c) => c.name === name);
+    assert.ok(cmd, `${name} command missing`);
+    // OpenClaw's matcher drops args for a command whose acceptsArgs is false.
+    assert.equal(cmd!.acceptsArgs, true, `${name} must accept args`);
+  }
+});
+
+// --- arg handling (pure — no Python needed) ----------------------------------
+
+test("clawness-query with empty args returns a usage line, not a CLI call", async () => {
+  const query = CLAWNESS_COMMANDS.find((c) => c.name === "clawness-query")!;
+  for (const empty of ["", "   ", "\t\n"]) {
+    const out = await query.run(empty);
+    assert.equal(out.noPython, false);
+    assert.match(out.text, /^Usage: \/clawness-query/);
+  }
+});
+
 // --- integration: real CLI through the bridge --------------------------------
 
 async function hasPython(): Promise<boolean> {
@@ -103,4 +123,32 @@ test("clawness-status command run() surfaces the stats block", async (t) => {
   assert.equal(out.noPython, false);
   assert.match(out.text, /Ranked rules/);
   assert.match(out.text, /Retrieval/);
+});
+
+test("clawness-query command run() surfaces retrieved rules for a prompt", async (t) => {
+  if (!(await hasPython())) return t.skip("no Python interpreter on PATH");
+  const query = CLAWNESS_COMMANDS.find((c) => c.name === "clawness-query")!;
+  const out = await query.run("add JWT auth to an order endpoint");
+  assert.equal(out.noPython, false);
+  assert.match(out.text, /CLAWNESS RULES/);
+  assert.match(out.text, /MANDATORY/);
+});
+
+test("clawness-audit-rules command run() surfaces the corpus report", async (t) => {
+  if (!(await hasPython())) return t.skip("no Python interpreter on PATH");
+  const audit = CLAWNESS_COMMANDS.find((c) => c.name === "clawness-audit-rules")!;
+  const out = await audit.run("");
+  assert.equal(out.noPython, false);
+  assert.match(out.text, /finding\(s\) across/);
+});
+
+test("clawness-audit-rules forwards flag args (--stale) to the CLI", async (t) => {
+  if (!(await hasPython())) return t.skip("no Python interpreter on PATH");
+  const audit = CLAWNESS_COMMANDS.find((c) => c.name === "clawness-audit-rules")!;
+  const out = await audit.run("--stale");
+  assert.equal(out.noPython, false);
+  // --stale runs only the stale check, so its section header must appear and
+  // the coverage/overlap/reachability headers must not.
+  assert.match(out.text, /\[stale\]/);
+  assert.doesNotMatch(out.text, /\[coverage\]/);
 });
