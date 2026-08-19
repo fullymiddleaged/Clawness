@@ -28,3 +28,5 @@
 - Live pass: OpenClaw HONORS before_tool_call `block` (tool doesn't run, blockReason reaches model) and `requireApproval`; checks C+D+E green (A green earlier).
 - OpenClaw tool events: write=`{toolName:"write",params:{path,content}}`, read=`{toolName:"read",params:{path}}` — translate.ts mapToolCall guesses map them correctly.
 - Can't model-bait an OpenClaw deny probe: opus-4-8 refuses IMDS/exfil/escape actions before before_tool_call fires. Prove `block` via forced-block A/B on a BENIGN write (file created without vs absent with).
+- OpenClaw plugins register hooks/commands/tools, not skills/agents; port CLI skills as commands (openclaw/COMMANDS-PLAN.md).
+- Git install keeps the whole clone (hooks/rules/clawness present at install root), so no engine vendoring needed — clone-pruning fear resolved.
