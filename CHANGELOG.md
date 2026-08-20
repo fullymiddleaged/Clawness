@@ -20,6 +20,29 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   command body and no handle to rewrite the agent's turn), and the agent-spawning skills
   (`audit`, `review`, `perf`, `test`) orchestrate Claude Code sub-agents. See
   `openclaw/COMMANDS-PLAN.md`.
+- **OpenClaw: install-time trust vetting.** Clawness now vets a skill/plugin/agent for
+  prompt-injection and exfil tells the moment OpenClaw installs it (the `before_install`
+  hook), reusing the same scanner as `clawness audit-skills`. Findings surface on the
+  install; a clearly hostile artifact (agent-hijack phrasing, webhook/metadata exfil,
+  decode-and-execute) is blocked, with an escape hatch (`CLAW_NO_INSTALL_BLOCK=1`) for a
+  trusted security tool that legitimately mentions those. Opt out entirely with
+  `CLAW_NO_INSTALL_SCAN=1`. OpenClaw-only — Claude Code has no install-time hook.
+- **OpenClaw: context re-orientation after compaction.** When OpenClaw compacts a session
+  (squashing older detail out of context), Clawness re-injects the orientation that
+  compaction drops — a short notice plus the handoff and stack-detection notes — so a
+  mid-task session recovers its footing. Rules and ranked memory already self-heal on the
+  next turn, so those aren't repeated. This is the native counterpart to Claude Code's
+  context-pressure watch, which can only estimate when the window is filling. Opt out with
+  `CLAW_NO_STACK_NOTE`/`CLAW_NO_HANDOFF` (the underlying notes) — the re-orientation adds
+  nothing beyond them.
+- **OpenClaw: `.clawness/memory.md` as a searchable memory corpus.** Project lessons are
+  now discoverable through OpenClaw's native memory search, ranked by the same engine that
+  injects them each turn — additive, not a replacement for the per-turn block. Opt out with
+  `CLAW_NO_MEMORY_CORPUS=1`.
+- We evaluated exposing rules retrieval as a native OpenClaw *context engine* and chose not
+  to: that surface is an exclusive, whole-transcript store-and-assemble engine, and the
+  existing per-prompt injection already delivers the rules cheaply without taking over the
+  host's context handling. See `openclaw/EXTENSIONS-PLAN.md`.
 
 ## [1.12.0] - 2026-08-16
 

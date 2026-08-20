@@ -23,6 +23,9 @@ import {
 } from "./translate.js";
 import { runSessionNotes } from "./notes.js";
 import { CLAWNESS_COMMANDS } from "./commands.js";
+import { runInstallScan, toInstallResult } from "./install.js";
+import { buildReorientation } from "./compaction.js";
+import { makeMemoryCorpusSupplement } from "./memory.js";
 
 const NO_PYTHON_NOTE =
   "[Clawness] Python 3.10+ was not found on PATH, so Clawness's rules, memory, " +
@@ -49,6 +52,12 @@ export default definePluginEntry({
     const log = api.logger;
     let warnedNoPython = false;
 
+    // The memory corpus supplement's search/get carry no cwd, so we track the most
+    // recent session/prompt cwd and hand it to the Python ranker. Falls back to the
+    // process cwd before any event has arrived. (Known limit under multi-workspace;
+    // see src/memory.ts + EXTENSIONS-PLAN.md.)
+    let lastCwd = process.cwd();
+
     const noteNoPython = (): string | null => {
       if (warnedNoPython) return null;
       warnedNoPython = true;
@@ -60,11 +69,13 @@ export default definePluginEntry({
       try {
         const prompt = resolvePromptText(event);
         if (!prompt) return {};
+        const cwd = resolveCwd(event, ctx);
+        lastCwd = cwd;
         const result = await runPythonHook(
           "hooks/claude_hook.py",
           buildPromptPayload({
             prompt,
-            cwd: resolveCwd(event, ctx),
+            cwd,
             sessionId: resolveSessionId(event, ctx),
           }),
         );
@@ -84,8 +95,10 @@ export default definePluginEntry({
     api.on("session_start", async (event: any, ctx: any) => {
       try {
         const sessionId = resolveSessionId(event, ctx);
+        const cwd = resolveCwd(event, ctx);
+        lastCwd = cwd;
         const { notes, noPython } = await runSessionNotes({
-          cwd: resolveCwd(event, ctx),
+          cwd,
           sessionId,
         });
         const enqueue = api.session?.workflow?.enqueueNextTurnInjection;
@@ -158,6 +171,61 @@ export default definePluginEntry({
         log?.warn?.(`clawness after_tool_call failed: ${String(err)}`);
       }
     });
+
+    // --- After compaction: re-inject the orientation the host squashed -----
+    // The native home for Clawness's context-watch + handoff. Rules and ranked
+    // memory self-heal on the next before_prompt_build, so we re-state only the
+    // SessionStart-only orientation (handoff + stack) plus a notice. Fail silent.
+    api.on("after_compaction", async (event: any, ctx: any) => {
+      try {
+        const enqueue = api.session?.workflow?.enqueueNextTurnInjection;
+        if (!enqueue) return;
+        const sessionId = resolveSessionId(event, ctx);
+        const cwd = resolveCwd(event, ctx);
+        lastCwd = cwd;
+        // A stable marker per compaction so retries de-dupe but the next compaction
+        // re-fires: previousSessionId is unique per rotation; fall back to a count/time.
+        const marker = String(
+          event?.previousSessionId ?? event?.compactedCount ?? event?.messageCount ?? Date.now(),
+        );
+        const messages = await buildReorientation({ cwd, sessionId, marker });
+        for (const m of messages) {
+          enqueue(buildNextTurnInjection({ sessionId, text: m.text, idempotencyKey: `clawness:compaction:${m.key}` }));
+        }
+      } catch (err) {
+        log?.warn?.(`clawness after_compaction failed: ${String(err)}`);
+      }
+    });
+
+    // --- Before install: vet the artifact for injection/exfil tells --------
+    // OpenClaw hands us the artifact's sourcePath and accepts {findings, block}.
+    // We scan via clawness.trust; findings always surface, a block arms only on a
+    // CRITICAL tell (and only when not opted out). Fail open — never block on error.
+    if (process.env.CLAW_NO_INSTALL_SCAN !== "1") {
+      api.on("before_install", async (event: any, _ctx: any) => {
+        try {
+          const sourcePath = String(event?.sourcePath ?? event?.source_path ?? "");
+          if (!sourcePath) return {};
+          const scan = await runInstallScan(sourcePath);
+          return toInstallResult(scan, { allowBlock: process.env.CLAW_NO_INSTALL_BLOCK !== "1" });
+        } catch (err) {
+          log?.warn?.(`clawness before_install failed: ${String(err)}`);
+          return {}; // fail open
+        }
+      });
+    }
+
+    // --- Memory corpus: .clawness/memory.md as native searchable memory ----
+    // Additive/non-exclusive: the ranked block still injects every turn; this makes
+    // the same lessons discoverable through OpenClaw's memory search. Guarded — a
+    // host without the API simply gets no supplement.
+    if (process.env.CLAW_NO_MEMORY_CORPUS !== "1" && typeof api.registerMemoryCorpusSupplement === "function") {
+      try {
+        api.registerMemoryCorpusSupplement(makeMemoryCorpusSupplement(() => lastCwd));
+      } catch (err) {
+        log?.warn?.(`clawness registerMemoryCorpusSupplement failed: ${String(err)}`);
+      }
+    }
 
     // --- Native commands (read-only CLI surface) -------------------------
     // Commands share one global namespace and `status` is reserved, so ours are

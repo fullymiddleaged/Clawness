@@ -34,10 +34,24 @@ path is being validated against a live host — see [LIVE-TEST.md](LIVE-TEST.md)
 | SessionStart notes | `SessionStart` | `session_start` | seven note hooks → `enqueueNextTurnInjection` |
 | Access guard (block/ask) | `PreToolUse` | `before_tool_call` | `hooks/access_guard.py` → `block` / `requireApproval` |
 | Guard ask-ledger settle | `PostToolUse` | `after_tool_call` | `hooks/access_guard.py` (PostToolUse) |
+| Native commands | `/clawness:*` skills | `registerCommand` | `src/commands.ts` → `clawness-status` / `clawness-query` / `clawness-audit-rules` |
+
+**OpenClaw-native, beyond the shared hooks** (no Claude Code equivalent; OpenClaw-only
+code in `src/` + `pyhooks/`, reusing `clawness.*` read-only):
+
+| Capability | OpenClaw hook / API | Adapter | Opt-out |
+|---|---|---|---|
+| Install-time trust vetting | `before_install` | `src/install.ts` + `pyhooks/install_scan.py` → `{findings, block}` | `CLAW_NO_INSTALL_SCAN`, `CLAW_NO_INSTALL_BLOCK` |
+| Re-orientation after compaction | `after_compaction` | `src/compaction.ts` → re-inject handoff + stack notice | (rides `CLAW_NO_HANDOFF`/`CLAW_NO_STACK_NOTE`) |
+| `.clawness/memory.md` as searchable corpus | `registerMemoryCorpusSupplement` | `src/memory.ts` + `pyhooks/memory_corpus.py` | `CLAW_NO_MEMORY_CORPUS` |
+
+See [EXTENSIONS-PLAN.md](EXTENSIONS-PLAN.md) for the SDK-contract findings behind these,
+including why a native *context engine* was evaluated and declined.
 
 **Deferred** (they read Claude-specific state and stay dormant, failing silent):
-context watch (parses Claude's transcript JSONL), plan gate (rides Claude's native plan
-mode + `permission_mode`), model advisor (reads Claude's `settings.json`), and the
+context watch (parses Claude's transcript JSONL — superseded on OpenClaw by the
+`after_compaction` re-orientation above), plan gate (rides Claude's native plan mode +
+`permission_mode`), model advisor (reads Claude's `settings.json`), and the
 skills-bootstrap wrapper.
 
 ## Layout
@@ -48,7 +62,13 @@ skills-bootstrap wrapper.
 - `src/translate.ts` — pure shape translation: OpenClaw ctx → Claude payload, OpenClaw
   tool name/params → the `{tool_name, tool_input}` the guard classifier expects, and the
   guard's `permissionDecision` → OpenClaw's block/approval return. No I/O, no OpenClaw imports.
-- `src/notes.ts` — runs the seven SessionStart note hooks and collects their output.
+- `src/notes.ts` — runs the SessionStart note hooks and collects their output; also the
+  compaction re-orientation subset.
+- `src/compaction.ts` / `src/install.ts` / `src/memory.ts` — host-agnostic logic for the
+  three OpenClaw-native capabilities (see the table above). Unit-tested; no OpenClaw imports.
+- `pyhooks/*.py` — OpenClaw-only Python (`install_scan.py`, `memory_corpus.py`) that reuse
+  `clawness.trust`/`clawness.memory` read-only. Self-locate the repo root, run via the
+  bridge. They never run on the Claude Code path.
 - `src/index.ts` — the **only** file that touches the OpenClaw API. Deliberately thin and
   defensive: every handler wraps its work in try/catch and fails toward doing nothing.
 - `src/openclaw.d.ts` — minimal ambient types for the SDK (OpenClaw isn't a dependency).

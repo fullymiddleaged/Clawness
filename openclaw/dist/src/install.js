@@ -1,0 +1,83 @@
+/**
+ * install.ts — host-agnostic logic for OpenClaw's `before_install` trust vetting.
+ *
+ * OpenClaw fires `before_install` with the artifact's on-disk `sourcePath` and
+ * accepts `{ findings, block, blockReason }` back. We scan the artifact with the
+ * bundled `openclaw/pyhooks/install_scan.py` (which reuses `clawness.trust`) and
+ * translate its JSON into that result. Pure/translation code lives here so it is
+ * unit-testable; index.ts owns the only OpenClaw contact. Fails toward doing
+ * nothing — a broken scan never blocks an install.
+ *
+ * This is an OpenClaw-only surface: Claude Code has no install-time hook, so none
+ * of this runs there and the shared engine is untouched.
+ */
+import { runPythonHook } from "./bridge.js";
+const INSTALL_SCAN_HOOK = "openclaw/pyhooks/install_scan.py";
+const VALID_SEVERITY = new Set(["info", "warn", "critical"]);
+/**
+ * Parse install_scan.py stdout into a validated scan. Any malformed field drops
+ * that finding rather than the whole result, and non-JSON yields an empty scan —
+ * defensive because this decides whether an install proceeds.
+ */
+export function parseInstallScan(stdout) {
+    const text = (stdout ?? "").trim();
+    if (!text)
+        return { findings: [], critical: 0 };
+    let obj;
+    try {
+        obj = JSON.parse(text);
+    }
+    catch {
+        return { findings: [], critical: 0 };
+    }
+    const rawFindings = obj?.findings;
+    if (!Array.isArray(rawFindings))
+        return { findings: [], critical: 0 };
+    const findings = [];
+    for (const f of rawFindings) {
+        const r = f;
+        const severity = String(r?.severity ?? "warn");
+        if (!VALID_SEVERITY.has(severity))
+            continue;
+        if (typeof r?.message !== "string" || !r.message)
+            continue;
+        findings.push({
+            ruleId: typeof r.ruleId === "string" ? r.ruleId : "clawness/injection-tell",
+            severity: severity,
+            file: typeof r.file === "string" ? r.file : "",
+            line: Number.isFinite(r.line) ? r.line : 0,
+            message: r.message,
+        });
+    }
+    const critical = findings.filter((f) => f.severity === "critical").length;
+    return { findings, critical };
+}
+/**
+ * Turn a scan into a before_install result. Findings are always surfaced; a block
+ * is armed only when `allowBlock` and at least one CRITICAL (agent-hijack / exfil)
+ * tell is present — the dual-use warns (curl, .env) never block. Returns {} when
+ * there is nothing to report, so a clean artifact adds no noise.
+ */
+export function toInstallResult(scan, opts) {
+    if (!scan.findings.length)
+        return {};
+    const result = { findings: scan.findings };
+    if (opts.allowBlock && scan.critical > 0) {
+        result.block = true;
+        const n = scan.critical;
+        result.blockReason =
+            `Clawness blocked this install: ${n} critical prompt-injection/exfil ` +
+                `tell${n === 1 ? "" : "s"} in the artifact (see findings). If this is a ` +
+                `trusted security tool, set CLAW_NO_INSTALL_BLOCK=1 and retry.`;
+    }
+    return result;
+}
+/** Run the bundled scanner over an artifact path. Empty scan when Python is absent. */
+export async function runInstallScan(sourcePath) {
+    if (!sourcePath)
+        return { findings: [], critical: 0 };
+    const result = await runPythonHook(INSTALL_SCAN_HOOK, { sourcePath });
+    if (result.noPython)
+        return { findings: [], critical: 0 };
+    return parseInstallScan(result.stdout);
+}

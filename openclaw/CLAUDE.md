@@ -53,6 +53,51 @@ visible, not silent.
   (same one-shot-CLI gap as SessionStart notes), so the actual reply must be confirmed on
   a real interactive host.
 
+## OpenClaw-native extensions beyond the shared hooks (1.13.0)
+
+Three capabilities with no Claude Code equivalent, built under one hard constraint:
+**nothing changes Claude Code / shared-engine behaviour.** All logic is OpenClaw-only —
+`src/{compaction,install,memory}.ts` (host-agnostic, unit-tested) wired by `index.ts`, plus
+`pyhooks/*.py` that reuse `clawness.{trust,memory}` **read-only**. The pyhooks self-locate
+the repo root (`parents[2]`) and run through the same bridge as the shared hooks; they never
+run on the Claude Code path. Each fails toward doing nothing. Contracts were read from the
+real installed SDK (openclaw 2026.7.1-2); the findings are in `EXTENSIONS-PLAN.md`.
+
+- **`after_compaction` re-orientation (`src/compaction.ts`).** The native home for the
+  context-watch + handoff. The compaction hooks are **observe-only** (`=> void`), so a hook
+  cannot author a rich handoff (no model in the loop) — don't try to make it. What it CAN
+  do: rules + ranked memory self-heal on the next `before_prompt_build`, so we re-inject only
+  the SessionStart-only orientation a compaction drops — a notice + the handoff and stack
+  notes (the `REORIENTATION_NOTE_HOOKS` subset in `notes.ts`). **Do NOT re-run the full
+  session-note set here:** the once-per-project nags (changelog/claude_md/trust/git/
+  memory_init) key their ledgers on the session id, which a compaction can ROTATE, so
+  re-running them re-asks answered questions. The idempotency key embeds a per-compaction
+  marker (`previousSessionId`), so retries de-dupe but the next compaction re-fires.
+  `registerCompactionProvider` is deliberately unused — it replaces the summarizer, not our
+  goal.
+- **`before_install` trust vetting (`src/install.ts` + `pyhooks/install_scan.py`).** The
+  event carries the artifact's on-disk `sourcePath`; the result `{findings, block, blockReason}`
+  lets us surface findings AND block. We reuse `scan_injection_tells` line-by-line for real
+  line numbers. **Block arms only on a CRITICAL tell** (agent-hijack / exfil-host / metadata
+  / decode-execute) — the dual-use tells (curl, `.env`, base64, zero-width) warn but never
+  block, because a real security skill legitimately mentions them. Escape hatches:
+  `CLAW_NO_INSTALL_BLOCK` (warn, don't block), `CLAW_NO_INSTALL_SCAN` (off). This is the same
+  harm-reduction framing as the access guard: widen block conservatively, prefer surfacing.
+- **Memory corpus supplement (`src/memory.ts` + `pyhooks/memory_corpus.py`).** ADDITIVE, not
+  a replacement: the ranked block still injects every turn via `before_prompt_build`; this
+  makes the same lessons discoverable through OpenClaw's native memory search.
+  `registerMemoryPromptSection`/`…Supplement`'s builder is **sync, returns `string[]`, and
+  gets no prompt** — a dead end (can't call our async ranker, can't rank the turn). The fit is
+  `registerMemoryCorpusSupplement({search, get})`, which is async + query-bearing +
+  "additive (non-exclusive)". **Known limit:** `search`/`get` carry no cwd, so the supplement
+  resolves the project from the most-recent session cwd (`lastCwd` in `index.ts`) — correct
+  for single-workspace; a multi-workspace live pass is owed.
+- **Context engine (`registerContextEngine`) — evaluated and DECLINED.** It is an
+  **exclusive** whole-transcript store (`bootstrap`/`ingest`/`assemble`/…). Using it means
+  reimplementing OpenClaw's context storage and DISPLACING the host default, to do what
+  `before_prompt_build` already does by appending. More risk, no user-visible gain, and it
+  collides with the no-core-regression constraint. Don't revisit without a new reason.
+
 ## How we verify against the real SDK, without depending on it
 
 Two offline layers plus one owed live pass:

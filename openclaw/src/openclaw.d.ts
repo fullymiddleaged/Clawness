@@ -91,6 +91,13 @@ declare module "openclaw/plugin-sdk/plugin-entry" {
     };
     // Optional: absent on hosts older than the command API — index.ts guards it.
     registerCommand?: (command: PluginCommandDefinition) => void;
+    // Optional: register `.clawness/memory.md` as a searchable memory corpus. The
+    // supplement is a { search, get } object (see src/memory.ts); typed loosely here
+    // per this stub's policy of never claiming a shape we haven't verified live.
+    registerMemoryCorpusSupplement?: (supplement: {
+      search: (params: { query: string; maxResults?: number; agentSessionKey?: string }) => unknown;
+      get: (params: { lookup: string; agentSessionKey?: string }) => unknown;
+    }) => void;
     on(event: string, handler: (event: any, ctx: any) => unknown): void;
   }
 

@@ -22,6 +22,16 @@ export const SESSION_NOTE_HOOKS = [
   "hooks/trust_ledger.py",
 ] as const;
 
+// The subset worth re-running AFTER a compaction (see compaction.ts). Deliberately
+// NOT the full set: the once-per-project nags (changelog, claude_md, trust, git,
+// memory_init) key their ledgers on the session id, which a compaction can rotate —
+// re-running them would re-ask questions already answered this session. handoff and
+// stack are pure orientation with no ledger, so they re-state safely.
+export const REORIENTATION_NOTE_HOOKS = [
+  "hooks/handoff_check.py",
+  "hooks/stack_detect.py",
+] as const;
+
 export interface SessionNote {
   hook: string;
   text: string;
@@ -35,11 +45,12 @@ export interface SessionNote {
 export async function runSessionNotes(args: {
   cwd: string;
   sessionId: string;
+  hooks?: readonly string[];
 }): Promise<{ notes: SessionNote[]; noPython: boolean }> {
   const payload = buildSessionPayload(args);
   const notes: SessionNote[] = [];
 
-  for (const hook of SESSION_NOTE_HOOKS) {
+  for (const hook of args.hooks ?? SESSION_NOTE_HOOKS) {
     const result = await runPythonHook(hook, { ...payload });
     if (result.noPython) return { notes, noPython: true };
     const text = result.stdout.trim();

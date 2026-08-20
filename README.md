@@ -100,9 +100,17 @@ sub-agents, so instead of the `/clawness:*` skills you get three OpenClaw-native
 **commands** — `/clawness-status`, `/clawness-query`, and `/clawness-audit-rules` —
 implemented in the adapter over the same Python CLI. The rest of the skills, including
 `add` and `refresh`, stay Claude-Code-only (they need the model driving its own file tools,
-which the plugin-command surface can't provide). A few Claude Code features also stay
-dormant because they read Claude-specific state: the context watch, the plan gate, and the
-model-tier advisor. Full setup is in [`openclaw/README.md`](openclaw/README.md).
+which the plugin-command surface can't provide).
+
+OpenClaw also gets three capabilities with no Claude Code equivalent, riding hooks Claude
+Code doesn't have: **install-time trust vetting** (a skill/plugin is scanned for injection
+and exfil tells as it installs, and a clearly hostile one is blocked), **re-orientation
+after compaction** (when OpenClaw squashes context, Clawness re-injects the handoff and
+stack notes so a mid-task session recovers), and **`.clawness/memory.md` as a searchable
+memory corpus**. A few Claude Code features stay dormant on OpenClaw because they read
+Claude-specific state: the plan gate and the model-tier advisor (and the context watch,
+whose job the compaction re-orientation now does natively). Full setup is in
+[`openclaw/README.md`](openclaw/README.md).
 
 ---
 
