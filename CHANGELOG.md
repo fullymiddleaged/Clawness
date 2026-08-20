@@ -5,6 +5,22 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-08-20
+
+### Added
+
+- **Three OpenClaw-native commands.** OpenClaw plugins can't contribute Claude Code
+  skills or sub-agents, so the `/clawness:*` skills don't surface there. Instead the
+  adapter now registers three read-only OpenClaw commands over the same Python CLI:
+  `/clawness-status` (loaded rule counts + token cost), `/clawness-query` (surface the
+  ranked rules for a prompt), and `/clawness-audit-rules` (maintainer corpus check).
+  They bypass the LLM and reply directly. The remaining skills stay Claude-Code-only:
+  `add` and `refresh` need the model driving its own file tools across a multi-step
+  workflow, which the plugin-command surface can't provide (a handler gets a copy of the
+  command body and no handle to rewrite the agent's turn), and the agent-spawning skills
+  (`audit`, `review`, `perf`, `test`) orchestrate Claude Code sub-agents. See
+  `openclaw/COMMANDS-PLAN.md`.
+
 ## [1.12.0] - 2026-08-16
 
 ### Added

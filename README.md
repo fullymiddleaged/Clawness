@@ -95,9 +95,14 @@ openclaw gateway restart
 ```
 
 **What works on OpenClaw today:** rule and memory injection, the session-start notes, and
-the access guard (block/ask). A few Claude Code features stay dormant on OpenClaw because
-they read Claude-specific state: the context watch, the plan gate, and the model-tier
-advisor. Full setup is in [`openclaw/README.md`](openclaw/README.md).
+the access guard (block/ask). OpenClaw plugins can't contribute Claude Code skills or
+sub-agents, so instead of the `/clawness:*` skills you get three OpenClaw-native
+**commands** — `/clawness-status`, `/clawness-query`, and `/clawness-audit-rules` —
+implemented in the adapter over the same Python CLI. The rest of the skills, including
+`add` and `refresh`, stay Claude-Code-only (they need the model driving its own file tools,
+which the plugin-command surface can't provide). A few Claude Code features also stay
+dormant because they read Claude-specific state: the context watch, the plan gate, and the
+model-tier advisor. Full setup is in [`openclaw/README.md`](openclaw/README.md).
 
 ---
 
