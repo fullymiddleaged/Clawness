@@ -58,7 +58,7 @@ infrastructure to pure Python.
 
 ### Claude Code
 
-Two commands plus a session (or IDE) restart. We assume here you already have Python 3.10+ available on your PATH.
+Two commands plus a session (or IDE) restart. Here, we assume you already have Python 3.10+ available on your PATH.
 
 **1. Install** (from any Claude Code session):
 
