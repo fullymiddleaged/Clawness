@@ -440,6 +440,11 @@ clawness scan status          # coverage without re-scanning
 clawness scan --fail-on high  # opt-in CI gate on unresolved findings (report-only otherwise)
 ```
 
+> **Plugin install (most users): you don't type these.** The `clawness` CLI ships only
+> with the manual install; on the plugin path you run the audit through **`/clawness:audit`**
+> (below), which invokes the scan for you via the bundled wrapper. The commands above are
+> for the manual-install CLI and for CI.
+
 **`/clawness:audit`** ties it together and Claude reaches for it on its own when you ask
 for a security review: it runs the scan, then the **red team** adjudicates only the *new*
 candidates (and hunts for what the enumerator can't see — logic flaws, auth bypass, CVEs
