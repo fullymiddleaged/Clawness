@@ -23,8 +23,9 @@ What you get:
 - **7 review sub-agents**: security red/blue team, code critic, architecture challenger,
   and more.
 - **A plan-approval gate** before the first edit of a session, on by default.
-- **Session security**: a guard on risky tool calls, plus a trust ledger for skills,
-  agents, and MCP servers.
+- **Security**: a deterministic vulnerability scan with an accumulating findings ledger
+  (so an audit converges in 1-2 passes, not 5-10), a red/blue-team `/clawness:audit`, a
+  guard on risky tool calls, and a trust ledger for skills, agents, and MCP servers.
 - **Session continuity**: a per-project lessons memory, a warning when your context window
   is filling up, and a handoff the next session picks up on its own.
 - **Low token cost.** Only the matching rules are injected, never the whole set. A typical
@@ -415,6 +416,45 @@ files without asking.
   every turn), a note tells Claude to give you the number and point you at the tools that
   fix it. It asks once per project. Off: `CLAW_NO_CLAUDE_MD_CHECK=1`.
 
+### Security audit (deterministic scan + accumulating findings ledger)
+
+An LLM security scan is non-deterministic: run it five times and you get five different
+subsets, because the model *wanders* to different files and free-associates about risk
+each run. Teams paper over this by re-scanning 5-10 times. The variance is almost all in
+**discovery, not judgment** — so Clawness makes discovery deterministic and reduces the
+model to adjudicating a fixed list.
+
+**`clawness scan`** is a regex/lexical enumerator (zero LLM tokens, identical every run)
+that finds sink/source candidates — SQL and command injection, unsafe deserialization,
+code eval, XSS, path traversal, broken object authz, hardcoded secrets, weak crypto, SSRF
+— each tagged with a CWE, a mapped rule, and a **stable id**. Every scan merges into an
+accumulating ledger (`.clawness/security/findings.json`): a candidate stays `new` until
+you adjudicate it, a removed sink becomes `gone` (remembering its verdict so it is never
+re-litigated), and a **coverage** signal tells you when every candidate has been looked at.
+That convergence — not a fixed number of re-runs — is when to stop.
+
+```bash
+clawness scan                 # enumerate + accumulate the ledger, print coverage
+clawness scan --new-only      # just what hasn't been adjudicated yet
+clawness scan status          # coverage without re-scanning
+clawness scan --fail-on high  # opt-in CI gate on unresolved findings (report-only otherwise)
+```
+
+**`/clawness:audit`** ties it together and Claude reaches for it on its own when you ask
+for a security review: it runs the scan, then the **red team** adjudicates only the *new*
+candidates (and hunts for what the enumerator can't see — logic flaws, auth bypass, CVEs
+this month), the **blue team** proposes fixes, and both write verdicts back to the ledger.
+Run it twice and the second pass only looks at what's new.
+
+It's a **tripwire, not a SAST engine** (not CodeQL/Semgrep): it over-reports and misses
+cross-file taint, which is exactly why a human/LLM adjudication pass and the ledger sit on
+top. The ledger is **gitignored by default** — it records where the vulnerabilities are.
+Opt out of the enumerator with `CLAW_NO_SCAN=1`.
+
+The corpus also ships a `security/` rule domain (SQLi, XSS, SSRF, path traversal, authz,
+crypto, dependency safety) plus the mandatory `ENF-SEC-*` rules, injected automatically on
+security-shaped prompts.
+
 ### Session security (access guard + trust ledger, on by default)
 
 Two hooks defend the session against the agent's own tool calls: text hidden in a file or
@@ -754,6 +794,12 @@ clawness query "handle null values" --domain typescript
 clawness init /path/to/project
 clawness init . --write
 
+# Security scan (deterministic; accumulates a findings ledger)
+clawness scan                              # enumerate + coverage (report-only)
+clawness scan --new-only                   # only candidates awaiting adjudication
+clawness scan status                       # ledger + coverage without re-scanning
+clawness scan --fail-on high               # opt-in CI gate on unresolved findings
+
 # Manage the rule set
 clawness stats             # rule counts by domain + per-turn token estimate
 clawness lint              # validate rule files (incl. vague-phrasing check)
@@ -789,7 +835,7 @@ clawness agents-md --write
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 13 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status`, `/clawness:user-docs`, `/clawness:claude-md`, `/clawness:refresh`, `/clawness:audit-rules`, `/clawness:bootstrap`, `/clawness:eval-set`, `/clawness:openclaw-audit` |
 | **Hooks** | 12 | Rule injection, context watch, model-tier check, output compression, plan gate, access guard, trust ledger, and the session-start checks |
-| **CLI** | 10 commands | query, init, stats, lint, bench, eval, plan, agents-md, audit-rules, audit-skills |
+| **CLI** | 11 commands | query, init, stats, lint, bench, eval, scan, plan, agents-md, audit-rules, audit-skills |
 | **Installers** | bash + PowerShell | With matching uninstallers, for Windows/macOS/Linux |
 
 ### Rule domains

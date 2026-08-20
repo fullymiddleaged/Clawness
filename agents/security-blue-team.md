@@ -37,12 +37,22 @@ team report and your job is to:
    CVE, search the web for the recommended patch or workaround as of
    this month. Use queries like: `[CVE-ID] mitigation [framework]`
 
+5. **Update the findings ledger** — each red team finding carries a **Ledger id**
+   (from `clawness scan`). Report, per finding, the id and the status the
+   orchestrator should record: `fixed` once you have supplied a patch,
+   `false-positive` if your triage overturns the red team, or leave `confirmed` if
+   real but not yet patched. The orchestrator writes it back with
+   `clawness scan --set <id> <status> --notes "..."`, so a fixed hole isn't
+   re-surfaced next run.
+
 ## Output Format
 
 For each red team finding:
 ```
 ## Response to: [Finding Title]
 
+**Ledger id:** <the candidate id from the red team finding>
+**Ledger status to record:** fixed | confirmed | false-positive
 **Red Team Severity:** HIGH → **Blue Team Assessment:** MEDIUM
 **Reason for adjustment:** [if any]
 **Validity:** CONFIRMED (a real, reachable issue) | FALSE-POSITIVE (with reason) | UNVERIFIED (caller should check)

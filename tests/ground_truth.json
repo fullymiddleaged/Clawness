@@ -247,6 +247,12 @@
       ]
     },
     {
+      "q": "scan this codebase for vulnerabilities",
+      "expect": [
+        "WF-SECURITY-AUDIT-001"
+      ]
+    },
+    {
       "q": "review my changes before i merge this pull request",
       "expect": [
         "WF-CODE-REVIEW-001"

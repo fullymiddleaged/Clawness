@@ -1,16 +1,20 @@
 id: WF-SECURITY-AUDIT-001
 domain: workflows
 severity: error
-tags: [security, audit, red-team, blue-team, review, penetration, vulnerability]
-triggers: [security audit, security review, pen test, vulnerability, harden, red team, blue team, CVE, OWASP]
-when: Performing a security review or hardening pass on code.
+tags: [security, audit, red-team, blue-team, review, penetration, vulnerability, scan, findings, ledger]
+triggers: [security audit, security review, pen test, vulnerability, scan for vulnerabilities, harden, red team, blue team, CVE, OWASP, findings ledger]
+when: Performing a security review, vulnerability scan, or hardening pass on code.
 rule: >
-  Run a red team / blue team security audit using sub-agents. First,
-  delegate to the security-red-team agent to probe for vulnerabilities
-  with current-month CVE awareness. Then delegate the red team report
-  to the security-blue-team agent for triage, remediation, and
-  hardening. Synthesize both reports into a prioritized action plan.
-  Never skip the red team step — a single-pass review misses adversarial
+  Enumerate the attack surface deterministically before adjudicating. Run the
+  /clawness:audit skill (it runs `clawness scan` first) so sink candidates are
+  listed with zero run-to-run variance and persisted to the
+  .clawness/security/findings.json ledger; then adjudicate only the NEW candidates
+  and target uncovered surface instead of re-scanning blind. For judgment, run a
+  red team / blue team pass with sub-agents: the security-red-team agent probes the
+  candidates with current-month CVE awareness, then the security-blue-team agent
+  triages and proposes fixes, both writing verdicts back to the ledger. Synthesize
+  into a prioritized action plan and report coverage so you know when it has
+  converged. Never skip the red team step — a single-pass review misses adversarial
   attack paths.
-violation: "Reviewing security as a single checklist pass"
-correct: "Red team finds attack vectors, blue team proposes fixes, you prioritize and apply"
+violation: "Re-scanning the whole tree by hand each pass and reviewing security as a single checklist read"
+correct: "clawness scan enumerates the surface once, the ledger accumulates verdicts, red team finds attack paths, blue team fixes them, coverage tells you when to stop"

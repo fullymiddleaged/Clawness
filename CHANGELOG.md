@@ -5,6 +5,43 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0] - 2026-08-20
+
+### Added
+
+- **`clawness scan` — deterministic attack-surface enumerator.** A regex/lexical
+  sink+source finder (SQL/command injection, unsafe deserialization, code eval,
+  XSS, path traversal, broken object authz, hardcoded secrets, weak crypto, SSRF)
+  that returns the *same* sorted candidate list every run, with zero LLM tokens.
+  It exists to cut security scans from 5-10 stochastic frontier passes to 1-2: the
+  variance in an LLM scan is almost all in *discovery*, so making discovery
+  reproducible reduces the model to adjudicating a fixed short list. Report-only by
+  default; `--fail-on <severity>` opts into a CI gate. A **tripwire, not a SAST
+  engine** — it routes attention, it is not CodeQL/Semgrep. Opt out with
+  `CLAW_NO_SCAN`.
+- **Accumulating findings ledger** (`.clawness/security/findings.json`). Each scan
+  merges into a per-candidate ledger keyed by a stable id, so runs *accumulate*
+  instead of repeating: a candidate is `new` until adjudicated, a removed sink
+  becomes `gone` (remembering its verdict so it isn't re-opened if it returns), and
+  a **coverage** signal tells you when every candidate has been looked at — that
+  convergence, not a fixed re-run count, is when to stop. `clawness scan status`
+  shows it without re-scanning; `clawness scan --set <id> <status>` records a
+  verdict. Gitignored by default (it records where the vulnerabilities are).
+- **`/clawness:audit` is now stateful and auto-invoking.** It runs `clawness scan`
+  first, then the red team adjudicates only the `new` candidates and writes
+  verdicts back to the ledger (skipping anything already confirmed/false-positive/
+  fixed), the blue team fixes and marks them, and the run reports coverage. Claude
+  reaches for it on its own on security-audit / vulnerability-scan prompts — no
+  need to type the command.
+
+### Changed
+
+- **`WF-SECURITY-AUDIT-001`** now steers to enumerate deterministically before
+  adjudicating, persist findings to the ledger, adjudicate only new candidates, and
+  names the `/clawness:audit` skill.
+- The `clawness` CLI now pins UTF-8 on stdout/stderr, so em-dashes and arrows in
+  its output no longer raise on a Windows cp1252 console.
+
 ## [1.14.0] - 2026-08-20
 
 ### Added

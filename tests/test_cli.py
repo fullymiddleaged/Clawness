@@ -89,9 +89,9 @@ def _ground_truth(tmp_path: Path) -> Path:
 # --- dispatch --------------------------------------------------------------
 
 def test_every_subcommand_dispatches(tmp_path):
-    """The dispatch table in main() is hand-maintained and three subcommands are
+    """The dispatch table in main() is hand-maintained and several subcommands are
     routed by if/elif ahead of it — a rename lands as a KeyError at runtime, with
-    nothing in the suite noticing. Exercise all nine."""
+    nothing in the suite noticing. Exercise all ten."""
     project = tmp_path / "proj"
     project.mkdir()
     (project / ".git").mkdir()
@@ -102,6 +102,7 @@ def test_every_subcommand_dispatches(tmp_path):
         ("bench",),
         ("eval",),
         ("audit-skills", "--project", str(project)),
+        ("scan", "--project", str(project)),
         ("init", str(project)),
         ("plan", "--project", str(project)),
         ("agents-md", "--project", str(project)),
@@ -308,6 +309,88 @@ def test_audit_skills_fails_on_an_injected_artifact(tmp_path):
     assert r.returncode == 1, r.stdout
     assert "instruction override" in r.stdout
     assert "injection tell(s)" in r.stdout
+
+
+# --- scan (report-only by default; --fail-on is the opt-in CI gate) --------
+
+def _vuln_project(tmp_path: Path, body: str, name: str = "app.py") -> Path:
+    project = _project(tmp_path)
+    (project / name).write_text(body, encoding="utf-8")
+    return project
+
+
+def test_scan_reports_candidates_and_exits_zero_by_default(tmp_path):
+    project = _vuln_project(tmp_path, 'q = cur.execute(f"SELECT {x}")\n')
+    r = _cli("scan", "--project", str(project))
+    assert r.returncode == 0                       # report-only: never fails on its own
+    assert "sql-injection" in r.stdout
+    assert "Coverage:" in r.stdout
+
+
+def test_scan_clean_project_finds_nothing_but_still_exits_zero(tmp_path):
+    project = _vuln_project(tmp_path, 'x = os.environ["API_KEY"]\n')
+    r = _cli("scan", "--project", str(project))
+    assert r.returncode == 0
+    assert "0 candidate(s)" in r.stdout
+
+
+def test_scan_fail_on_gates_nonzero_at_or_above_severity(tmp_path):
+    project = _vuln_project(tmp_path, 'q = cur.execute(f"SELECT {x}")\n')   # critical
+    r = _cli("scan", "--project", str(project), "--fail-on", "critical")
+    assert r.returncode == 1
+    assert "unresolved finding" in r.stderr
+
+
+def test_scan_fail_on_ignores_findings_below_the_floor(tmp_path):
+    # weak-crypto is 'medium' — a critical floor must NOT trip on it.
+    project = _vuln_project(tmp_path, "h = hashlib.md5(pw).hexdigest()\n")
+    r = _cli("scan", "--project", str(project), "--fail-on", "critical")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_scan_status_without_a_ledger_is_graceful(tmp_path):
+    project = _project(tmp_path)
+    r = _cli("scan", "status", "--project", str(project))
+    assert r.returncode == 0
+    assert "run `clawness scan` first" in r.stdout
+
+
+def test_scan_disabled_by_env(tmp_path):
+    project = _vuln_project(tmp_path, 'q = cur.execute(f"SELECT {x}")\n')
+    r = _cli("scan", "--project", str(project), env_extra={"CLAW_NO_SCAN": "1"})
+    assert r.returncode == 0
+    assert "disabled" in r.stderr
+
+
+def test_scan_json_is_stable_across_runs(tmp_path):
+    project = _vuln_project(tmp_path, 'q = cur.execute(f"SELECT {x}")\n')
+    a = _cli("scan", "--project", str(project), "--json").stdout
+    b = _cli("scan", "--project", str(project), "--json").stdout
+    assert a == b and "candidates" in a
+
+
+def test_scan_set_records_a_verdict_and_it_persists(tmp_path):
+    from clawness import findings as F
+    project = _vuln_project(tmp_path, 'q = cur.execute(f"SELECT {x}")\n')
+    assert _cli("scan", "--project", str(project)).returncode == 0
+    fid = sorted(F.load_findings(project))[0]
+    r = _cli("scan", "--project", str(project), "--set", fid, "confirmed",
+             "--verdict", "real SQLi")
+    assert r.returncode == 0 and "recorded confirmed" in r.stdout
+    # a confirmed finding is UNRESOLVED, so a critical --fail-on must now trip
+    gate = _cli("scan", "--project", str(project), "--fail-on", "critical")
+    assert gate.returncode == 1
+    # and marking it fixed clears the gate
+    _cli("scan", "--project", str(project), "--set", fid, "fixed")
+    assert _cli("scan", "--project", str(project), "--fail-on", "critical").returncode == 0
+
+
+def test_scan_set_rejects_unknown_id(tmp_path):
+    project = _vuln_project(tmp_path, 'q = cur.execute(f"SELECT {x}")\n')
+    _cli("scan", "--project", str(project))
+    r = _cli("scan", "--project", str(project), "--set", "deadbeefdeadbeef", "confirmed")
+    assert r.returncode == 1
+    assert "unknown finding id" in r.stderr
 
 
 # --- agents-md -------------------------------------------------------------

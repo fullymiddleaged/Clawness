@@ -418,20 +418,83 @@ dependency**. No ML models, no services, no Docker.
      and injects a note when one changed/appeared; `clawness audit-skills` scans those
      artifacts for injection tells. Fails open, `CLAW_NO_TRUST_LEDGER`.
 
+11. **Deterministic security scan + findings ledger** (`clawness/scan.py` +
+   `clawness/findings.py`, surfaced by `clawness scan` and the `/clawness:audit` skill):
+   the discovery+memory halves of the security audit. **This is NOT a hook** — it runs
+   from the CLI/skill, never per prompt.
+   - **The premise is that LLM scan variance is in DISCOVERY, not judgment.** A model
+     re-run 5-10 times wanders to different files and free-associates about risk, so a
+     different subset surfaces each run; whether *this* line is exploitable is
+     comparatively stable. So `scan.py` makes discovery deterministic — a regex/lexical
+     sink+source finder (same DNA as `guard.py`/`audit-skills`) that returns the *same*
+     sorted candidate list every run, reducing the LLM to adjudicating a fixed short
+     list. That is the token win, and it is why the enumerator carries **zero** LLM cost.
+   - **It is a tripwire, not a SAST engine** — the identical framing to the access guard,
+     and it must stay in the docs so users don't over-trust it. It over-reports (a
+     parameterised query that only *looks* concatenated) and is blind to cross-file taint,
+     obfuscation, and logic flaws. The `confidence` field and the adjudication pass are
+     what turn a candidate into a verdict; the red team is explicitly told to *also* hunt
+     what the enumerator can't see.
+   - **The id keys on (file, line, class, normalized-snippet)** so it is stable across
+     runs on unchanged code and the ledger dedupes; it deliberately SHIFTS when the code
+     moves, at which point `merge_scan` marks the old id `gone` and adds the new one. Don't
+     "improve" this to a fuzzy/location-independent id — a moved sink genuinely needs
+     re-adjudication, and `gone` preserves the old verdict if it was a true move-in-place.
+   - **`merge_scan` never re-opens a human verdict.** A `confirmed`/`false-positive`/
+     `fixed` that disappears becomes `gone` *remembering* its adjudication (`_adjudicated`),
+     restored if the sink returns — so a fixed hole that a refactor reintroduces at the
+     same line comes back as its prior verdict, not silently `new`, and a false-positive
+     is never re-litigated. This is the whole point of the ledger: runs **accumulate**.
+     `coverage().converged` (no live candidate still `new`) is the "you can stop" signal
+     that replaces "scan 10 times and hope" — report it, don't invent a re-run count.
+   - **`clawness scan` is report-only and NOT CI-gated**, exactly like `audit-rules`:
+     every finding is a judgment call. `--fail-on <severity>` is the opt-in gate, and it
+     fires only on UNRESOLVED findings (`new`/`reviewed`/`confirmed`) at/above the floor —
+     a `false-positive` or `fixed` never fails CI. `--set <id> <status>` is the
+     verdict-writeback the audit agents call (there is no separate write tool; the
+     orchestrator runs the CLI). `--json` output excludes the ledger's timestamps so it is
+     byte-identical run-to-run (a determinism test diffs two runs → empty).
+   - **The ledger is gitignored by default** — it records *where the vulnerabilities are*,
+     so unlike memory.md it must not be committed casually. It rides the existing
+     `.clawness/*` ignore block with **no negation added**; the user can add one to share
+     team triage if they accept that trade. (Earlier plan draft leaned committed-with-
+     opt-out; the ship decision was gitignored-by-default.)
+   - `/clawness:audit` is stateful and **auto-invoking** (strengthened `description`, same
+     pattern as user-docs): it runs `scan` first, the red team adjudicates only `new`
+     candidates and writes verdicts back, the blue team fixes and marks them, and it
+     reports coverage. Auto-invocation only surfaces the offer — it still confirms before
+     fanning out sub-agents (WF-SECURITY-AUDIT-001 / the suggested-action wording).
+   - Known limits: the enumerator covers Python + JS/TS best, a handful of other langs
+     shallowly; it is line-oriented (a cross-line sink is a miss); `broken-authz` is a
+     low-confidence heuristic; SARIF/bandit/semgrep ingestion is a deferred enhancement,
+     not built. Fails open (returns [] on any error), never raises.
+
 ## Key files
 - `clawness/core.py` — engine (rules loader, tokenizer + `_CONCEPT_GROUPS`, BM25,
   TF-IDF, RRF, `Clawness` class, `rank_ids`, rendering).
 - `clawness/memory.py` — project-memory parsing + ranking (`parse_memory`,
   `rank_lessons`, `render_memory_block`). Imports the primitives from `core`, so
   `core.render_memory_block` delegates via a *deferred* import to avoid a cycle.
-- `clawness/cli.py` — `clawness` CLI: query, stats, lint, bench, eval, init, plan,
-  agents-md, audit-rules, audit-skills. **`audit-rules` is report-only and NOT
-  CI-gated**, unlike lint/eval: every check is a judgment call dressed as a number
+- `clawness/cli.py` — `clawness` CLI: query, stats, lint, bench, eval, scan, init,
+  plan, agents-md, audit-rules, audit-skills. **`scan` and `audit-rules` are
+  report-only and NOT CI-gated**, unlike lint/eval: every check is a judgment call dressed as a number
   (an overlapping pair may be two correct rules; an unstamped rule may not need a
   stamp), so `--strict` is opt-in. Its `--overlap` uses the engine's own TF-IDF doc
   vectors, so "similar" means what the retriever means. `--max-age` deliberately has
   no default — an invented cadence gets argued with instead of acted on.
 - `clawness/plan.py` — plan-gate logic (`gate_decision`, `is_plan_file`, session approval).
+- `clawness/scan.py` — deterministic attack-surface enumerator (`enumerate_candidates`,
+  `candidate_id`, `coverage_map`, `CLASS_META`). Pure regex/lexical over source files,
+  zero LLM, stable-sorted output; the discovery half of `/clawness:audit`. Modelled on
+  `guard.py`'s classifier style — a **tripwire, not SAST**. Opt-out `CLAW_NO_SCAN`.
+- `clawness/findings.py` — findings/coverage ledger (`merge_scan`, `set_verdict`,
+  `coverage`, `outstanding`, `load_findings`/`save_findings`). Keyed by candidate id at
+  `.clawness/security/findings.json`; `merge_scan` NEVER re-opens a `confirmed`/
+  `false-positive` (a disappeared sink goes `gone` remembering its verdict, restored if
+  it returns). Pure merge logic, atomic writes via `plan.atomic_write_text`. **Gitignored
+  by default** — it records where the vulns are, so it rides the existing `.clawness/*`
+  ignore (no negation added). The convergence signal (`coverage().converged`) is what
+  replaces "scan 10 times and hope".
 - `clawness/guard.py` — access-guard logic (`classify_tool_call`, `value_in_project`, ask-ledger).
 - `clawness/trust.py` — trust-ledger logic (`scan_artifacts`, `diff_ledger`, `scan_injection_tells`).
 - `clawness/session_state.py` — per-session prompt-count/memory-mtime tracking for
@@ -470,9 +533,11 @@ dependency**. No ML models, no services, no Docker.
   are stack-gated AND take the narrow floor — see `_NARROW_STACK_DOMAINS` below.
 - `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin. `skills/user-docs`
   authors user/developer documentation from a codebase scan (Diátaxis + brevity,
-  approval-gated writes); `GEN-USERDOCS-001` (ranked, general) is its nudge — the one
-  rule in the corpus that names a skill, so it lightly couples to the skill inventory;
-  its substance is the standard itself, which stands even if the skill is renamed.
+  approval-gated writes); `skills/audit` runs the stateful security audit (see §11).
+  **Two rules name a skill** — `GEN-USERDOCS-001` names `/clawness:user-docs`, and
+  `WF-SECURITY-AUDIT-001` names `/clawness:audit` — a small deliberate pattern that
+  lightly couples those rules to the skill inventory; each rule's substance is its
+  standard, which stands even if the skill is renamed.
 - `.claude-plugin/{plugin.json,marketplace.json}` — plugin + marketplace manifests.
 - `tests/ground_truth.json` — labeled eval queries (grow it when adding rule areas).
 - `tests/test_cli.py` — drives the `clawness` CLI as a subprocess. It exists because

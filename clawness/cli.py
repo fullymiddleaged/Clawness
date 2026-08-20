@@ -24,7 +24,10 @@ from pathlib import Path
 
 import yaml
 
+from . import findings as findings_mod
+from . import scan as scan_mod
 from .core import Clawness, _estimate_tokens, load_rules
+from .plan import find_project_root
 from .staleness import WATCHED_LABELS, parse_range
 
 
@@ -723,7 +726,147 @@ def cmd_audit_rules(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
+# Statuses that still demand attention for the opt-in --fail-on gate: a
+# false-positive or fixed finding is resolved and must not fail CI.
+_UNRESOLVED = {findings_mod.STATUS_NEW, findings_mod.STATUS_REVIEWED, findings_mod.STATUS_CONFIRMED}
+
+
+def _scan_status_label(entry: dict) -> str:
+    st = entry.get("status", "")
+    v = entry.get("verdict") or ""
+    return f"{st}" + (f" — {v}" if v else "")
+
+
+def _print_coverage(cov: dict) -> None:
+    if cov["converged"]:
+        tail = "converged — nothing outstanding" if cov["live"] else "no candidates"
+    else:
+        tail = f"{cov['outstanding']} outstanding"
+    print(
+        f"\nCoverage: {cov['adjudicated']}/{cov['live']} adjudicated "
+        f"({cov['pct']}%) — {tail}"
+    )
+    if cov["confirmed"] or cov["false_positive"] or cov["fixed"] or cov["gone"]:
+        print(
+            f"  confirmed={cov['confirmed']} "
+            f"false-positive={cov['false_positive']} "
+            f"fixed={cov['fixed']} gone={cov['gone']}"
+        )
+
+
+def cmd_scan(args: argparse.Namespace) -> None:
+    root = find_project_root(Path(args.project).resolve())
+
+    # `scan --set <id> <status>` records an adjudication (what the audit agents
+    # call to write a verdict back). Never enumerates; a bad id/status exits 1.
+    if args.set:
+        finding_id, status = args.set
+        ledger = findings_mod.load_findings(root)
+        try:
+            ledger = findings_mod.set_verdict(
+                ledger, finding_id, status,
+                verdict=args.verdict, severity=args.severity, notes=args.notes,
+            )
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            sys.exit(1)
+        findings_mod.save_findings(root, ledger)
+        print(f"recorded {status} on {finding_id}")
+        return
+
+    if scan_mod.scan_disabled():
+        print("clawness scan is disabled (CLAW_NO_SCAN is set).", file=sys.stderr)
+        return
+
+    # `scan status` reports the stored ledger without re-enumerating.
+    if args.action == "status":
+        ledger = findings_mod.load_findings(root)
+        cov = findings_mod.coverage(ledger)
+        if not ledger:
+            print(f"No findings ledger yet for {root} — run `clawness scan` first.")
+            return
+        print(f"[clawness scan status] {root}")
+        for cid, entry in sorted(
+            ledger.items(), key=lambda kv: (kv[1].get("file", ""), kv[1].get("line", 0))
+        ):
+            print(
+                f"  {entry.get('file')}:{entry.get('line')}  "
+                f"{entry.get('severity')}/{entry.get('confidence')}  "
+                f"{entry.get('class')} ({entry.get('cwe')})  [{_scan_status_label(entry)}]  {cid}"
+            )
+        _print_coverage(cov)
+        return
+
+    candidates = scan_mod.enumerate_candidates(root)
+    cov_map = scan_mod.coverage_map(root)
+
+    # Persist: merge this scan into the accumulating ledger, then report.
+    ledger = findings_mod.merge_scan(candidates, findings_mod.load_findings(root))
+    findings_mod.save_findings(root, ledger)
+    cov = findings_mod.coverage(ledger)
+
+    # Build the view (a filtered slice of THIS scan's candidates).
+    view = candidates
+    if args.klass:
+        view = [c for c in view if c["class"] == args.klass]
+    if args.new_only:
+        new_ids = {c["id"] for c in findings_mod.outstanding(ledger)}
+        view = [c for c in view if c["id"] in new_ids]
+
+    if args.json:
+        print(json.dumps({
+            "candidates": view,
+            "scan_coverage": cov_map,
+            "ledger_coverage": cov,
+        }, indent=2, sort_keys=True))
+    else:
+        print(f"[clawness scan] {root}")
+        print(
+            f"  {len(candidates)} candidate(s) across "
+            f"{len({c['class'] for c in candidates})} class(es), "
+            f"{cov_map['files_scanned']} file(s) scanned"
+        )
+        if args.new_only or args.klass:
+            print(f"  showing {len(view)} "
+                  f"({'new only' if args.new_only else ''}"
+                  f"{', ' if args.new_only and args.klass else ''}"
+                  f"{('class=' + args.klass) if args.klass else ''})")
+        for c in view:
+            print(
+                f"  {c['file']}:{c['line']}  {c['severity']}/{c['confidence']}  "
+                f"{c['class']} ({c['cwe']})"
+                + (f"  → {c['rule']}" if c["rule"] else "")
+            )
+        _print_coverage(cov)
+        print("\nTripwire, not a SAST engine — adjudicate these, don't trust them "
+              "blindly. Verdicts persist in .clawness/security/findings.json.")
+
+    # Opt-in CI gate: fail on any UNRESOLVED finding at/above the floor severity.
+    if args.fail_on:
+        blocking = [
+            e for e in ledger.values()
+            if e.get("status") in _UNRESOLVED
+            and scan_mod.severity_at_least(e.get("severity", "low"), args.fail_on)
+        ]
+        if blocking:
+            print(
+                f"\n{len(blocking)} unresolved finding(s) at or above "
+                f"'{args.fail_on}' — failing (--fail-on).",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+
 def main() -> None:
+    # The corpus + CLI output use em-dashes/arrows; bare stdout defaults to cp1252
+    # on Windows and raises UnicodeEncodeError on them. Pin UTF-8 where possible
+    # (guarded: a captured/replaced stream may not expose reconfigure).
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+        except (AttributeError, ValueError):
+            pass
+
     parser = argparse.ArgumentParser(
         prog="clawness",
         description="Lightweight hybrid rule retrieval for AI coding agents.",
@@ -799,6 +942,35 @@ def main() -> None:
     )
     p_audit.add_argument("--project", default=".", help="Project directory (default: cwd)")
 
+    # scan (deterministic attack-surface enumerator + accumulating findings ledger)
+    p_scan = sub.add_parser(
+        "scan",
+        help="Enumerate security candidates deterministically and accumulate a "
+             "findings ledger (report-only; --fail-on opts into a CI gate)",
+    )
+    p_scan.add_argument(
+        "action", nargs="?", default="scan", choices=["scan", "status"],
+        help="scan (enumerate + merge, the default) or status (show the ledger "
+             "without re-scanning)",
+    )
+    p_scan.add_argument("--project", default=".", help="Project directory (default: cwd)")
+    p_scan.add_argument("--json", action="store_true", help="Machine-readable output")
+    p_scan.add_argument("--new-only", action="store_true",
+                        help="Show only candidates still awaiting adjudication")
+    p_scan.add_argument("--class", dest="klass", default=None,
+                        help="Filter to one candidate class (e.g. sql-injection)")
+    p_scan.add_argument("--fail-on", default=None,
+                        choices=["low", "medium", "high", "critical"],
+                        help="Opt-in CI gate: exit non-zero if any UNRESOLVED "
+                             "finding is at or above this severity")
+    p_scan.add_argument("--set", nargs=2, metavar=("ID", "STATUS"), default=None,
+                        help="Record a verdict on a finding (what the audit agents "
+                             "call): STATUS in new/reviewed/confirmed/false-positive/"
+                             "fixed/gone")
+    p_scan.add_argument("--verdict", default=None, help="Verdict text for --set")
+    p_scan.add_argument("--severity", default=None, help="Override severity for --set")
+    p_scan.add_argument("--notes", default=None, help="Notes for --set")
+
     # init
     p_init = sub.add_parser("init", help="Scan project and suggest rule domains")
     p_init.add_argument("project_dir", nargs="?", default=".", help="Project directory to scan")
@@ -827,6 +999,8 @@ def main() -> None:
 
     if args.command == "init":
         cmd_init(args)
+    elif args.command == "scan":
+        cmd_scan(args)
     elif args.command == "plan":
         cmd_plan(args)
     elif args.command == "agents-md":

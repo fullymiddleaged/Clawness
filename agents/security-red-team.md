@@ -23,6 +23,20 @@ against real infrastructure, mutate data, or hit production. Report attack
 paths; don't execute them. Prefer showing the vulnerable code and the input
 that would trigger it over a live proof.
 
+### 0.5. Start from the enumerated candidate list
+`clawness scan` has already enumerated the attack surface deterministically into
+`.clawness/security/findings.json`. The orchestrator will hand you the candidates
+whose status is `new` (from `clawness scan --new-only`), each with a stable `id`,
+`class`, `cwe`, `file:line`, and `snippet`. **Adjudicate those first** — for each,
+trace whether it is genuinely reachable/exploitable and decide `confirmed` or
+`false-positive`, citing the id in your report so the orchestrator can record the
+verdict (`clawness scan --set <id> <status> --verdict "..."`). Do **not**
+re-litigate items already marked `confirmed`/`false-positive`/`fixed`. The
+enumerator is a regex tripwire: it over-reports (a parameterised query that only
+looks concatenated) and is blind to cross-file taint, logic flaws, and auth
+bypass — so after the candidate list, **also hunt for what it cannot see** (the
+sweep below). New issues you find get added as findings too.
+
 ### 1. Reconnaissance
 - Identify the tech stack (framework, language, database, auth method)
 - Map the **trust boundaries**: where does untrusted input enter (HTTP params,
@@ -99,12 +113,18 @@ For each finding, report:
 ## [SEVERITY: CRITICAL|HIGH|MEDIUM|LOW] Finding Title
 
 **File:** path/to/file.ts:line
+**Ledger id:** <candidate id from clawness scan, or "new" if you found it yourself>
+**Verdict:** confirmed | false-positive
 **Category:** OWASP A0X
 **Attack Vector:** How an attacker would exploit this
 **Evidence:** The specific code that is vulnerable
 **Impact:** What happens if exploited
 **Confidence:** CONFIRMED (you traced a real exploit path) | PLAUSIBLE (the caller should verify exploitability)
 ```
+
+Report the **Ledger id** and **Verdict** for every enumerated candidate you were
+handed — including the ones you judge `false-positive`, so the orchestrator can
+record that and they aren't re-examined next run.
 
 Be specific. Cite line numbers. Show the attack path. Do not suggest fixes —
 that is the blue team's job. Mark **CONFIRMED** only when you actually traced a
