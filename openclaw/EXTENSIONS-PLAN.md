@@ -92,11 +92,14 @@ types out of `dist/types-*.d.ts`. The 2026.6.34 types name the methods; read the
   on-disk `sourcePath`; the result type `{ findings?, block?, blockReason? }` lets us both
   contribute findings AND block. `pyhooks/install_scan.py` walks the artifact (skipping
   vendored dirs), scans each line via `clawness.trust.scan_injection_tells`, and returns
-  findings with line numbers; `src/install.ts` surfaces all findings and arms `block` only
-  on a CRITICAL (agent-hijack / exfil) tell — dual-use tells (curl, .env) warn but never
-  block. Escape hatches: `CLAW_NO_INSTALL_BLOCK=1` (warn, don't block),
-  `CLAW_NO_INSTALL_SCAN=1` (off). `registerSkillsChangeListener` (watch skills change) was
-  left for a later pass — the install-time gate is the higher-value half.
+  findings with line numbers; `src/install.ts` surfaces all findings (ADVISORY) and arms
+  `block` only when the user opts in (`CLAW_INSTALL_BLOCK=1`) AND a CRITICAL tell is present.
+  **Blocking is opt-in, not default — corrected in 1.13.1 after a live pass:** the tell scan
+  false-positives on any artifact that documents these patterns (Clawness's own repo scored
+  37 "critical" from `trust.py` + the security rules), so a block-by-default would stop
+  legitimate installs. `CLAW_NO_INSTALL_SCAN=1` turns it off. `registerSkillsChangeListener`
+  (watch skills change) was left for a later pass — the install-time gate is the higher-value
+  half.
 
 ## Constraints (unchanged from the commands work)
 - Keep `src/index.ts` the ONLY OpenClaw-touching file; logic host-agnostic + tested.

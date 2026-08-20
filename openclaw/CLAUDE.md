@@ -78,11 +78,15 @@ real installed SDK (openclaw 2026.7.1-2); the findings are in `EXTENSIONS-PLAN.m
 - **`before_install` trust vetting (`src/install.ts` + `pyhooks/install_scan.py`).** The
   event carries the artifact's on-disk `sourcePath`; the result `{findings, block, blockReason}`
   lets us surface findings AND block. We reuse `scan_injection_tells` line-by-line for real
-  line numbers. **Block arms only on a CRITICAL tell** (agent-hijack / exfil-host / metadata
-  / decode-execute) — the dual-use tells (curl, `.env`, base64, zero-width) warn but never
-  block, because a real security skill legitimately mentions them. Escape hatches:
-  `CLAW_NO_INSTALL_BLOCK` (warn, don't block), `CLAW_NO_INSTALL_SCAN` (off). This is the same
-  harm-reduction framing as the access guard: widen block conservatively, prefer surfacing.
+  line numbers. **Findings are ADVISORY and always surface; blocking is OPT-IN**
+  (`CLAW_INSTALL_BLOCK=1`), then arms only on a CRITICAL tell (agent-hijack / exfil-host /
+  metadata / decode-execute). **Why opt-in and not the reverse (learned the hard way, live):**
+  the line-by-line regex scan false-positives on any artifact that *documents* these patterns.
+  Scanning Clawness's OWN repo produced 208 findings / 37 "critical" — from `trust.py`'s
+  regexes and the security rules themselves — so a block-by-default would have blocked our own
+  `plugins update`. Same lesson as `audit-skills` being deliberately report-only. `CLAW_NO_INSTALL_SCAN`
+  turns it off entirely. This is the access-guard framing: prefer surfacing, widen block
+  conservatively — here, so conservatively that the user must ask for it.
 - **Memory corpus supplement (`src/memory.ts` + `pyhooks/memory_corpus.py`).** ADDITIVE, not
   a replacement: the ranked block still injects every turn via `before_prompt_build`; this
   makes the same lessons discoverable through OpenClaw's native memory search.

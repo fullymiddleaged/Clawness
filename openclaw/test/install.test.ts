@@ -53,14 +53,14 @@ test("toInstallResult: warn-only findings surface but never block", () => {
   assert.equal(res.block, undefined);
 });
 
-test("toInstallResult: a critical arms block when allowed", () => {
+test("toInstallResult: a critical arms block only when opted in (allowBlock)", () => {
   const scan = { findings: [{ ruleId: "r", severity: "critical" as const, file: "f", line: 1, message: "override" }], critical: 1 };
   const res = toInstallResult(scan, { allowBlock: true });
   assert.equal(res.block, true);
-  assert.match(res.blockReason ?? "", /CLAW_NO_INSTALL_BLOCK/);
+  assert.match(res.blockReason ?? "", /CLAW_INSTALL_BLOCK/);
 });
 
-test("toInstallResult: allowBlock=false surfaces findings but does not block", () => {
+test("toInstallResult: allowBlock=false (the default) surfaces findings but never blocks", () => {
   const scan = { findings: [{ ruleId: "r", severity: "critical" as const, file: "f", line: 1, message: "override" }], critical: 1 };
   const res = toInstallResult(scan, { allowBlock: false });
   assert.equal(res.findings?.length, 1);

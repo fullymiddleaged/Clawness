@@ -75,10 +75,15 @@ export function parseInstallScan(stdout: string): InstallScan {
 }
 
 /**
- * Turn a scan into a before_install result. Findings are always surfaced; a block
- * is armed only when `allowBlock` and at least one CRITICAL (agent-hijack / exfil)
- * tell is present — the dual-use warns (curl, .env) never block. Returns {} when
- * there is nothing to report, so a clean artifact adds no noise.
+ * Turn a scan into a before_install result. Findings are ALWAYS advisory and are
+ * surfaced for the user to judge; a block is armed only when `allowBlock` (opt-in,
+ * off by default — see index.ts) AND at least one CRITICAL tell is present. This
+ * mirrors `clawness audit-skills`, which is deliberately report-only: injection
+ * tells are high-signal but not proof — a security skill legitimately mentions
+ * `curl`/`.env`, and any repo that DOCUMENTS these patterns (this one included:
+ * `trust.py`'s own regexes, the security rules) would false-positive. Defaulting to
+ * block would let a broad artifact block real work, the exact failure the guard
+ * philosophy warns against. Returns {} when there is nothing to report.
  */
 export function toInstallResult(scan: InstallScan, opts: { allowBlock: boolean }): InstallResult {
   if (!scan.findings.length) return {};
@@ -88,8 +93,9 @@ export function toInstallResult(scan: InstallScan, opts: { allowBlock: boolean }
     const n = scan.critical;
     result.blockReason =
       `Clawness blocked this install: ${n} critical prompt-injection/exfil ` +
-      `tell${n === 1 ? "" : "s"} in the artifact (see findings). If this is a ` +
-      `trusted security tool, set CLAW_NO_INSTALL_BLOCK=1 and retry.`;
+      `tell${n === 1 ? "" : "s"} in the artifact (see findings). Blocking is on ` +
+      `via CLAW_INSTALL_BLOCK; unset it (or set CLAW_NO_INSTALL_SCAN=1) and retry ` +
+      `if this is a trusted tool.`;
   }
   return result;
 }

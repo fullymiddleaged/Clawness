@@ -199,15 +199,18 @@ export default definePluginEntry({
 
     // --- Before install: vet the artifact for injection/exfil tells --------
     // OpenClaw hands us the artifact's sourcePath and accepts {findings, block}.
-    // We scan via clawness.trust; findings always surface, a block arms only on a
-    // CRITICAL tell (and only when not opted out). Fail open — never block on error.
+    // We scan via clawness.trust; findings are ADVISORY and always surface. Blocking
+    // is OPT-IN (CLAW_INSTALL_BLOCK=1): the tell scan false-positives on any artifact
+    // that documents these patterns (a security skill, or this repo itself), so
+    // blocking by default would block real work — the guard philosophy forbids that.
+    // Fail open — never block on error.
     if (process.env.CLAW_NO_INSTALL_SCAN !== "1") {
       api.on("before_install", async (event: any, _ctx: any) => {
         try {
           const sourcePath = String(event?.sourcePath ?? event?.source_path ?? "");
           if (!sourcePath) return {};
           const scan = await runInstallScan(sourcePath);
-          return toInstallResult(scan, { allowBlock: process.env.CLAW_NO_INSTALL_BLOCK !== "1" });
+          return toInstallResult(scan, { allowBlock: process.env.CLAW_INSTALL_BLOCK === "1" });
         } catch (err) {
           log?.warn?.(`clawness before_install failed: ${String(err)}`);
           return {}; // fail open

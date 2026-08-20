@@ -41,7 +41,7 @@ code in `src/` + `pyhooks/`, reusing `clawness.*` read-only):
 
 | Capability | OpenClaw hook / API | Adapter | Opt-out |
 |---|---|---|---|
-| Install-time trust vetting | `before_install` | `src/install.ts` + `pyhooks/install_scan.py` → `{findings, block}` | `CLAW_NO_INSTALL_SCAN`, `CLAW_NO_INSTALL_BLOCK` |
+| Install-time trust vetting (advisory; block opt-in) | `before_install` | `src/install.ts` + `pyhooks/install_scan.py` → `{findings, block}` | `CLAW_NO_INSTALL_SCAN` (off); `CLAW_INSTALL_BLOCK=1` (opt into blocking) |
 | Re-orientation after compaction | `after_compaction` | `src/compaction.ts` → re-inject handoff + stack notice | (rides `CLAW_NO_HANDOFF`/`CLAW_NO_STACK_NOTE`) |
 | `.clawness/memory.md` as searchable corpus | `registerMemoryCorpusSupplement` | `src/memory.ts` + `pyhooks/memory_corpus.py` | `CLAW_NO_MEMORY_CORPUS` |
 

@@ -104,7 +104,8 @@ which the plugin-command surface can't provide).
 
 OpenClaw also gets three capabilities with no Claude Code equivalent, riding hooks Claude
 Code doesn't have: **install-time trust vetting** (a skill/plugin is scanned for injection
-and exfil tells as it installs, and a clearly hostile one is blocked), **re-orientation
+and exfil tells as it installs and findings are surfaced — advisory by default, with opt-in
+blocking via `CLAW_INSTALL_BLOCK=1`), **re-orientation
 after compaction** (when OpenClaw squashes context, Clawness re-injects the handoff and
 stack notes so a mid-task session recovers), and **`.clawness/memory.md` as a searchable
 memory corpus**. A few Claude Code features stay dormant on OpenClaw because they read

@@ -5,6 +5,19 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.1] - 2026-08-20
+
+### Changed
+
+- **OpenClaw install-time vetting is now advisory by default; blocking is opt-in**
+  (`CLAW_INSTALL_BLOCK=1`). Live testing showed the injection-tell scan false-positives
+  heavily on any artifact that *documents* these patterns — a security skill, or Clawness's
+  own repo (37 "critical" hits from `trust.py`'s regexes and the security rules alone) — so
+  a block-by-default could stop a legitimate install, the exact failure the guard philosophy
+  forbids. Findings still always surface for the user to judge; this matches
+  `clawness audit-skills`, which is deliberately report-only. `CLAW_NO_INSTALL_SCAN=1` still
+  turns the scan off entirely.
+
 ## [1.13.0] - 2026-08-20
 
 ### Added
