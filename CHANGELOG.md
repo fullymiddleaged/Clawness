@@ -5,6 +5,22 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2026-08-20
+
+### Added
+
+- **`/clawness:user-docs` skill** — writes user documentation from the codebase. It
+  scans the UI (screens, buttons, forms, i18n strings) and the public API/CLI to work
+  out what the software does, then drafts brief, task-first docs to the Diátaxis
+  standard (tutorial / how-to / reference / explanation) for either end-user or
+  developer audiences. It proposes an outline and writes only after you approve it, and
+  grounds every label and command in the source. Claude also reaches for it on its own
+  when you ask it to document the app or say the docs are stale — no need to type the
+  command.
+- **`GEN-USERDOCS-001` rule** — on documentation-writing prompts, steers toward
+  Diátaxis structure, brevity, and UI labels that match the code, and points at the
+  `/clawness:user-docs` skill.
+
 ## [1.13.1] - 2026-08-20
 
 ### Changed

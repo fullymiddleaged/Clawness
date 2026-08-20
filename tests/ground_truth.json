@@ -1491,6 +1491,18 @@
       "expect": [
         "MLD-REFORMS-001"
       ]
+    },
+    {
+      "q": "write end-user documentation for this app's screens and features",
+      "expect": [
+        "GEN-USERDOCS-001"
+      ]
+    },
+    {
+      "q": "our docs are out of date, generate a getting-started guide and reference",
+      "expect": [
+        "GEN-USERDOCS-001"
+      ]
     }
   ]
 }

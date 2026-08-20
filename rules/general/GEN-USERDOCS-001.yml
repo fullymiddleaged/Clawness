@@ -1,0 +1,21 @@
+id: GEN-USERDOCS-001
+domain: general
+severity: warning
+tags: [documentation, docs, guide, tutorial, reference, manual, onboarding, diataxis]
+triggers: [documentation, docs, document, guide, tutorial, manual, onboarding, howto, reference]
+when: Authoring or substantially updating a body of end-user or developer documentation — a getting-started guide, how-to guides, or a reference — as opposed to a single docstring, code comment, or changelog line.
+rule: >
+  Structure the docs by Diátaxis mode and keep each page to one mode: a tutorial
+  (one guided first task), a how-to (numbered imperative steps for one real task),
+  reference (exhaustive and consistent — every screen, setting, endpoint, command,
+  or flag), or explanation (a concept and its rationale). Never blend a tutorial
+  with reference on one page. Write for the reader in second person, active voice,
+  present tense, with sentence-case headings; lead with the task and drop narration
+  the UI or code already shows. Ground every claim in source: button labels, routes,
+  commands, flags, and env vars must match the actual strings in the code, verbatim —
+  never document a feature the code does not have. Write into the project's existing
+  docs setup rather than adding a new docs tool. To build a full set from the
+  codebase, invoke the /clawness:user-docs skill: it scans the UI and public API,
+  proposes an outline, and writes only after you approve it.
+violation: "One page mixing a walkthrough, an API dump, and background prose; a step citing a 'Save changes' button the code never renders; three sentences of motivation before the first instruction."
+correct: "Separate pages — getting-started (one guided task), how-to guides (numbered steps per task), and a reference whose screen and setting labels match the source. Each opens with the task, not preamble."

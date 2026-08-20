@@ -17,7 +17,7 @@ But it also does heaps more!
 
 What you get:
 
-- **214 rules** across 29 domains: general coding, plus scientific computing, machine
+- **215 rules** across 29 domains: general coding, plus scientific computing, machine
   learning, research method, and building with LLMs. Only the ones that match your task
   are injected.
 - **7 review sub-agents**: security red/blue team, code critic, architecture challenger,
@@ -785,9 +785,9 @@ clawness agents-md --write
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Rules** | 214 across 29 domains | Coding, science, ML, research, and LLM standards, injected per prompt |
+| **Rules** | 215 across 29 domains | Coding, science, ML, research, and LLM standards, injected per prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
-| **Skills** | 9 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status`, `/clawness:claude-md`, `/clawness:refresh`, `/clawness:audit-rules` |
+| **Skills** | 13 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status`, `/clawness:user-docs`, `/clawness:claude-md`, `/clawness:refresh`, `/clawness:audit-rules`, `/clawness:bootstrap`, `/clawness:eval-set`, `/clawness:openclaw-audit` |
 | **Hooks** | 12 | Rule injection, context watch, model-tier check, output compression, plan gate, access guard, trust ledger, and the session-start checks |
 | **CLI** | 10 commands | query, init, stats, lint, bench, eval, plan, agents-md, audit-rules, audit-skills |
 | **Installers** | bash + PowerShell | With matching uninstallers, for Windows/macOS/Linux |

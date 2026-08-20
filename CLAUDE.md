@@ -458,7 +458,7 @@ dependency**. No ML models, no services, no Docker.
   registered. Every SessionStart note hook uses it; `git_check` keeps its own *downward*
   tree scan because "is git used anywhere relevant?" is a different question from
   `git_root`'s upward walk.
-- `rules/<domain>/*.yml` — the corpus (212 rules / 29 domains; `_mandatory/` = always-on).
+- `rules/<domain>/*.yml` — the corpus (215 rules / 29 domains; `_mandatory/` = always-on).
   Beyond the language domains: `llm/` (building with models — stack-gated, detected from
   anthropic/openai/langchain deps), `ml/` (training/evaluating your OWN models — leakage,
   CV, calibration — stack-gated on modelling libs sklearn/xgboost/torch/statsmodels, so it
@@ -468,7 +468,11 @@ dependency**. No ML models, no services, no Docker.
   works in a bare or LaTeX-only directory where gating would silence them), plus
   `reliability/`, `testing/` and `ci/`. `cfd/`, `julia/`, `fortran/`, `matlab/` and `r/`
   are stack-gated AND take the narrow floor — see `_NARROW_STACK_DOMAINS` below.
-- `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin.
+- `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin. `skills/user-docs`
+  authors user/developer documentation from a codebase scan (Diátaxis + brevity,
+  approval-gated writes); `GEN-USERDOCS-001` (ranked, general) is its nudge — the one
+  rule in the corpus that names a skill, so it lightly couples to the skill inventory;
+  its substance is the standard itself, which stands even if the skill is renamed.
 - `.claude-plugin/{plugin.json,marketplace.json}` — plugin + marketplace manifests.
 - `tests/ground_truth.json` — labeled eval queries (grow it when adding rule areas).
 - `tests/test_cli.py` — drives the `clawness` CLI as a subprocess. It exists because
