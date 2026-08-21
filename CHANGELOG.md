@@ -5,6 +5,18 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.1] - 2026-08-21
+
+### Changed
+
+- **The security suggested-action nudge now describes what `/clawness:audit`
+  actually does since 1.15.0.** When a prompt looks like a security audit, the
+  offer now says the audit enumerates the attack surface deterministically first
+  (`clawness scan`, zero LLM tokens, identical every run), records findings in a
+  ledger, and has the red/blue teams adjudicate only what is *new* so repeat
+  passes converge — instead of the old "red team / blue team review" wording that
+  predated the deterministic scan and ledger.
+
 ## [1.15.0] - 2026-08-20
 
 ### Added
