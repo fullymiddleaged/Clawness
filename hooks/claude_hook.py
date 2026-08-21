@@ -133,10 +133,10 @@ def suggest_actions(prompt: str) -> str:
 
     lines: list[str] = []
     if has("security audit", "pentest", "penetration test", "red team", "blue team",
-           "vulnerabilit", "is this secure", "is it secure", "security review",
+           "vulnerability", "is this secure", "is it secure", "security review",
            "security check", "owasp", "threat model", "exploit"):
         lines.append(
-            "This resembles a security audit. Offer to run /clawness:audit — it "
+            "This resembles a security audit. Offer to run /clawness:security-audit — it "
             "enumerates the attack surface deterministically first (clawness scan, "
             "zero LLM tokens, identical every run), records findings in a ledger, "
             "then the red/blue teams adjudicate only what's NEW, so repeat passes "

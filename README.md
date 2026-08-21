@@ -24,7 +24,7 @@ What you get:
   and more.
 - **A plan-approval gate** before the first edit of a session, on by default.
 - **Security**: a deterministic vulnerability scan with an accumulating findings ledger
-  (so an audit converges in 1-2 passes, not 5-10), a red/blue-team `/clawness:audit`, a
+  (so an audit converges in 1-2 passes, not 5-10), a red/blue-team `/clawness:security-audit`, a
   guard on risky tool calls, and a trust ledger for skills, agents, and MCP servers.
 - **Session continuity**: a per-project lessons memory, a warning when your context window
   is filling up, and a handoff the next session picks up on its own.
@@ -50,7 +50,7 @@ infrastructure to pure Python.
 - [Using it](#using-it): [context watch](#context-watch-claude-code-on-by-default) · [handoff](#session-handoff-claude-code-on-by-default) · [version-gap](#version-gap-detection-on-by-default) · [plan gate](#plan-gate-claude-code-on-by-default) · [session-start checks](#session-start-checks) · [session security](#session-security-access-guard--trust-ledger-on-by-default)
 - [For researchers and scientists](#for-researchers-and-scientists)
 - [Per-project setup](#per-project-setup) · [Writing rules](#writing-rules) · [Sub-agents](#sub-agents)
-- [CLI reference](#cli-reference) · [What ships](#what-ships) · [Configuration](#configuration)
+- [Slash commands](#slash-commands) · [CLI reference](#cli-reference) · [What ships](#what-ships) · [Configuration](#configuration)
 - [How it compares](#how-it-compares) · [Troubleshooting](#troubleshooting)
 
 ---
@@ -449,11 +449,11 @@ tool need be installed; Clawness ingests the `*.sarif` output only, so PyYAML st
 one dependency.
 
 > **Plugin install (most users): you don't type these.** The `clawness` CLI ships only
-> with the manual install; on the plugin path you run the audit through **`/clawness:audit`**
+> with the manual install; on the plugin path you run the audit through **`/clawness:security-audit`**
 > (below), which invokes the scan for you via the bundled wrapper. The commands above are
 > for the manual-install CLI and for CI.
 
-**`/clawness:audit`** ties it together and Claude reaches for it on its own when you ask
+**`/clawness:security-audit`** ties it together and Claude reaches for it on its own when you ask
 for a security review: it runs the scan, then the **red team** adjudicates only the *new*
 candidates (and hunts for what the enumerator can't see — logic flaws, auth bypass, CVEs
 this month), the **blue team** proposes fixes, and both write verdicts back to the ledger.
@@ -783,11 +783,50 @@ just describe the task, since the workflow rules tell Claude when to reach for t
   is there a simpler option?*
 - Plus **test writer**, **perf auditor**, and **refactor advisor**.
 
-**Offers first.** Spawning sub-agents is expensive, so the `audit`/`review`/`perf` skills
-never auto-run. When your prompt sounds like one, Clawness nudges Claude to offer first. You
-can also run them directly: `/clawness:audit`, `/clawness:review`, `/clawness:perf`.
+**Offers first.** Spawning sub-agents is expensive, so the `security-audit`/`review`/`perf`
+skills never auto-run. When your prompt sounds like one, Clawness nudges Claude to offer
+first. You can also run them directly: `/clawness:security-audit`, `/clawness:review`,
+`/clawness:perf`. See [Slash Commands](#slash-commands) for the full list.
 
 Model and effort settings are in [Agent Model Configuration](#agent-model-configuration).
+
+---
+
+## Slash Commands
+
+Type these in any Claude Code session (terminal, VS Code, or web). All are namespaced
+`/clawness:`, so `/` autocomplete shows the set. Nothing here needs the CLI installed.
+
+**Everyday**
+
+| Command | What it does |
+|---------|--------------|
+| `/clawness:status` | Show which rules, agents, and hooks are active — confirm you're live |
+| `/clawness:add <description>` | Write a new rule from a plain-English description |
+| `/clawness:security-audit` | Stateful red/blue-team security audit with a converging findings ledger |
+| `/clawness:review` | Adversarial code review of staged changes or a file |
+| `/clawness:perf` | Performance audit (N+1s, re-renders, leaks, bundle size, slow algorithms) |
+| `/clawness:test` | Generate tests matching the project's existing style |
+| `/clawness:user-docs` | Draft task-oriented user or API docs from a codebase scan |
+
+**Project hygiene** (usually prompted by a session-start note)
+
+| Command | What it does |
+|---------|--------------|
+| `/clawness:refresh <domain>` | Update rules to the framework version you actually run |
+| `/clawness:claude-md` | Shrink an oversized CLAUDE.md into ranked retrieval |
+| `/clawness:bootstrap` | Author starter rules for a stack Clawness ships no corpus for |
+
+**Maintainers & advanced**
+
+| Command | What it does |
+|---------|--------------|
+| `/clawness:audit-rules` | Review a rule domain against current docs, write version stamps |
+| `/clawness:eval-set` | Build/run a project-specific retrieval eval (MRR@k, hit-rate) |
+| `/clawness:openclaw-audit` | Trim an OpenClaw workspace's base system prompt |
+
+> **On OpenClaw the `/clawness:*` skills don't run.** You get three OpenClaw-native agents
+> instead — see [OpenClaw (experimental)](#openclaw-experimental).
 
 ---
 
@@ -847,7 +886,7 @@ clawness agents-md --write
 |-----------|-------|---------|
 | **Rules** | 215 across 29 domains | Coding, science, ML, research, and LLM standards, injected per prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
-| **Skills** | 13 slash commands | `/clawness:audit`, `/clawness:review`, `/clawness:test`, `/clawness:perf`, `/clawness:add`, `/clawness:status`, `/clawness:user-docs`, `/clawness:claude-md`, `/clawness:refresh`, `/clawness:audit-rules`, `/clawness:bootstrap`, `/clawness:eval-set`, `/clawness:openclaw-audit` |
+| **Skills** | 13 slash commands | See [Slash Commands](#slash-commands) — `security-audit`, `review`, `test`, `perf`, `add`, `status`, `user-docs`, plus hygiene and maintainer commands |
 | **Hooks** | 12 | Rule injection, context watch, model-tier check, output compression, plan gate, access guard, trust ledger, and the session-start checks |
 | **CLI** | 11 commands | query, init, stats, lint, bench, eval, scan, plan, agents-md, audit-rules, audit-skills |
 | **Installers** | bash + PowerShell | With matching uninstallers, for Windows/macOS/Linux |

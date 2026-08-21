@@ -62,7 +62,7 @@ def test_content_read_is_not_gutted():
     blank lines (markdown/code structure) intact. The head+tail+error shape used
     to cut 137 lines of SKILL.md down to 15."""
     lines = [f"content line {i}" if i % 7 else "" for i in range(137)]
-    out = C.compress("\n".join(lines), "cat skills/audit/SKILL.md skills/review/SKILL.md")
+    out = C.compress("\n".join(lines), "cat skills/security-audit/SKILL.md skills/review/SKILL.md")
     assert out is None, "content reads under the limit must pass through untouched"
 
 

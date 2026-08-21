@@ -6,7 +6,7 @@ triggers: [security audit, security review, pen test, vulnerability, scan for vu
 when: Performing a security review, vulnerability scan, or hardening pass on code.
 rule: >
   Enumerate the attack surface deterministically before adjudicating. Run the
-  /clawness:audit skill (it runs `clawness scan` first) so sink candidates are
+  /clawness:security-audit skill (it runs `clawness scan` first) so sink candidates are
   listed with zero run-to-run variance and persisted to the
   .clawness/security/findings.json ledger; then adjudicate only the NEW candidates
   and target uncovered surface instead of re-scanning blind. For judgment, run a

@@ -1,5 +1,5 @@
 ---
-name: audit
+name: security-audit
 description: >
   Run a stateful red team / blue team security audit on the current project or a
   specific module. First enumerates the attack surface deterministically with
@@ -23,7 +23,7 @@ judgment accumulates in a ledger (`.clawness/security/findings.json`), so runs
 > run the full red team / blue team audit now?" and proceed only once they
 > confirm. Running `clawness scan` itself is cheap and deterministic — you may run
 > that first to show the surface, then ask before fanning out agents. If the user
-> explicitly invoked `/clawness:audit` or already said yes, skip the question.
+> explicitly invoked `/clawness:security-audit` or already said yes, skip the question.
 
 The CLI isn't on PATH — reach it through the stashed wrapper:
 

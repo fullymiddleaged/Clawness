@@ -5,6 +5,20 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.0] - 2026-08-21
+
+### Changed
+
+- **The security-audit command is renamed `/clawness:audit` → `/clawness:security-audit`.**
+  The bare `audit` sat next to `/clawness:audit-rules` (which audits the rule corpus, not
+  security) and gave no hint it was the vulnerability scan; the new name matches the
+  ecosystem convention (Claude's built-in `/security-review`, the Claude Security plugin's
+  `/security-scan`) and the plugin's own `security-red-team`/`security-blue-team` agents.
+  If you typed `/clawness:audit`, use `/clawness:security-audit` now — the old name is gone.
+- **The README now has a single [Slash Commands](README.md) section** listing all 13
+  commands with one-line descriptions, grouped everyday / hygiene / maintainer, instead of
+  scattering them across the doc.
+
 ## [1.16.0] - 2026-08-21
 
 ### Added

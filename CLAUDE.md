@@ -419,7 +419,7 @@ dependency**. No ML models, no services, no Docker.
      artifacts for injection tells. Fails open, `CLAW_NO_TRUST_LEDGER`.
 
 11. **Deterministic security scan + findings ledger** (`clawness/scan.py` +
-   `clawness/findings.py`, surfaced by `clawness scan` and the `/clawness:audit` skill):
+   `clawness/findings.py`, surfaced by `clawness scan` and the `/clawness:security-audit` skill):
    the discovery+memory halves of the security audit. **This is NOT a hook** — it runs
    from the CLI/skill, never per prompt.
    - **The premise is that LLM scan variance is in DISCOVERY, not judgment.** A model
@@ -459,7 +459,7 @@ dependency**. No ML models, no services, no Docker.
      `.clawness/*` ignore block with **no negation added**; the user can add one to share
      team triage if they accept that trade. (Earlier plan draft leaned committed-with-
      opt-out; the ship decision was gitignored-by-default.)
-   - `/clawness:audit` is stateful and **auto-invoking** (strengthened `description`, same
+   - `/clawness:security-audit` is stateful and **auto-invoking** (strengthened `description`, same
      pattern as user-docs): it runs `scan` first, the red team adjudicates only `new`
      candidates and writes verdicts back, the blue team fixes and marks them, and it
      reports coverage. Auto-invocation only surfaces the offer — it still confirms before
@@ -498,7 +498,7 @@ dependency**. No ML models, no services, no Docker.
   `candidate_id`, `coverage_map`, `CLASS_META`) plus SARIF ingestion (`ingest_sarif`,
   `_parse_sarif_file`, `_sarif_class`). Pure regex/lexical over source files (Python, JS/TS,
   Go, Java/Kotlin/Scala, Ruby, C#, PHP), zero LLM, stable-sorted output; the discovery half
-  of `/clawness:audit`. Modelled on `guard.py`'s classifier style — a **tripwire, not SAST**
+  of `/clawness:security-audit`. Modelled on `guard.py`'s classifier style — a **tripwire, not SAST**
   on its own, plus real SAST folded in when `*.sarif` is present. Opt-out `CLAW_NO_SCAN`.
 - `clawness/findings.py` — findings/coverage ledger (`merge_scan`, `set_verdict`,
   `coverage`, `outstanding`, `load_findings`/`save_findings`). Keyed by candidate id at
@@ -546,9 +546,9 @@ dependency**. No ML models, no services, no Docker.
   are stack-gated AND take the narrow floor — see `_NARROW_STACK_DOMAINS` below.
 - `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin. `skills/user-docs`
   authors user/developer documentation from a codebase scan (Diátaxis + brevity,
-  approval-gated writes); `skills/audit` runs the stateful security audit (see §11).
+  approval-gated writes); `skills/security-audit` runs the stateful security audit (see §11).
   **Two rules name a skill** — `GEN-USERDOCS-001` names `/clawness:user-docs`, and
-  `WF-SECURITY-AUDIT-001` names `/clawness:audit` — a small deliberate pattern that
+  `WF-SECURITY-AUDIT-001` names `/clawness:security-audit` — a small deliberate pattern that
   lightly couples those rules to the skill inventory; each rule's substance is its
   standard, which stands even if the skill is renamed.
 - `.claude-plugin/{plugin.json,marketplace.json}` — plugin + marketplace manifests.
@@ -638,7 +638,7 @@ dependency**. No ML models, no services, no Docker.
 - **Agent `model:` is split by task type, and the judgment agents must stay on
   `inherit`.** Subagent `model:` defaults to `inherit`, so pinning it is an ACTIVE
   override of the user's choice — until 1.4.0 all seven agents pinned `sonnet`, which
-  meant an Opus user's `/clawness:audit` silently ran a tier below what they picked.
+  meant an Opus user's `/clawness:security-audit` silently ran a tier below what they picked.
   `security-red-team`, `security-blue-team`, `arch-challenger` and `code-critic` now
   omit `model:` entirely; `test-writer`, `perf-auditor` and `refactor-advisor` keep
   `sonnet` (mechanical work, and `sonnet` is an alias so it won't rot). **Never
