@@ -439,7 +439,14 @@ clawness scan                 # enumerate + accumulate the ledger, print coverag
 clawness scan --new-only      # just what hasn't been adjudicated yet
 clawness scan status          # coverage without re-scanning
 clawness scan --fail-on high  # opt-in CI gate on unresolved findings (report-only otherwise)
+clawness scan --sarif out.sarif  # also fold in bandit/semgrep/CodeQL output (see below)
 ```
+
+If your project already runs a SAST tool, drop its **SARIF** output anywhere in the tree
+(or pass `--sarif <path>`) and the scan folds those findings in too — re-keyed to stable
+ids, mapped onto the same finding classes, and deduped against the native hits. No SAST
+tool need be installed; Clawness ingests the `*.sarif` output only, so PyYAML stays the
+one dependency.
 
 > **Plugin install (most users): you don't type these.** The `clawness` CLI ships only
 > with the manual install; on the plugin path you run the audit through **`/clawness:audit`**
@@ -452,9 +459,10 @@ candidates (and hunts for what the enumerator can't see — logic flaws, auth by
 this month), the **blue team** proposes fixes, and both write verdicts back to the ledger.
 Run it twice and the second pass only looks at what's new.
 
-It's a **tripwire, not a SAST engine** (not CodeQL/Semgrep): it over-reports and misses
-cross-file taint, which is exactly why a human/LLM adjudication pass and the ledger sit on
-top. The ledger is **gitignored by default** — it records where the vulnerabilities are.
+On its own it's a **tripwire, not a SAST engine** (its own enumerator over-reports and
+misses cross-file taint) — plus real SAST whenever you have SARIF output to feed it. Either
+way a human/LLM adjudication pass and the ledger sit on top. The ledger is **gitignored by
+default** — it records where the vulnerabilities are.
 Opt out of the enumerator with `CLAW_NO_SCAN=1`.
 
 The corpus also ships a `security/` rule domain (SQLi, XSS, SSRF, path traversal, authz,

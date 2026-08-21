@@ -21,6 +21,14 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   classes and CWE/severity metadata, so the ledger, coverage and `/clawness:audit`
   workflow are unchanged — there is simply more to find. Still a tripwire, not a SAST
   engine; the scan stays deterministic and zero-token.
+- **`clawness scan` ingests SARIF / SAST output.** If your project already runs
+  bandit, semgrep, CodeQL or any tool that emits SARIF, drop the `*.sarif` in the tree
+  (auto-detected) or pass `--sarif <path>`, and those findings are folded into the same
+  scan — re-keyed to Clawness's stable ids, mapped onto the native finding classes by
+  CWE tag (falling to a generic `sast-other` bucket that carries the tool's own CWE and
+  severity), and deduped against the regex enumerator's hits (native wins). No SAST tool
+  need be installed — Clawness reads the output only, so PyYAML stays the sole
+  dependency. So the scan is a tripwire on its own, and real SAST wherever you have it.
 
 ## [1.15.1] - 2026-08-21
 

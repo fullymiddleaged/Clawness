@@ -25,6 +25,7 @@ what was found so far. Opt out with ``CLAW_NO_SCAN``.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -79,6 +80,10 @@ CLASS_META: dict[str, ClassMeta] = {
     "hardcoded-secret":  ClassMeta("CWE-798", "ENF-SEC-001", "critical"),
     "weak-crypto":       ClassMeta("CWE-327", "SEC-CRYPTO-001", "medium"),
     "ssrf":              ClassMeta("CWE-918", "SEC-SSRF-001", "high"),
+    # Fallback bucket for an ingested SAST/SARIF finding that maps to no native
+    # class (item 3). Its cwe/severity come from the SARIF result itself, not from
+    # here — this row only supplies the default cwe when the tool named none.
+    "sast-other":        ClassMeta("CWE-693", "", "medium"),
 }
 
 _SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
@@ -404,15 +409,267 @@ def _scan_file(path: Path, rel_path: str) -> list[dict]:
     return out
 
 
-def enumerate_candidates(root: "str | Path") -> list[dict]:
+# --- SARIF / SAST ingestion (item 3) -------------------------------------
+# Fold real SAST output (bandit, semgrep, CodeQL, …) in as extra deterministic
+# candidates WITHOUT requiring those tools be installed — we ingest their *.sarif
+# output only. SARIF is JSON, so this stays within "PyYAML is the only dependency".
+# External ids are re-keyed through candidate_id so the ledger's dedup/`gone` logic
+# holds, and every finding is mapped onto one of the native CLASS_META classes (or
+# the `sast-other` fallback) so cwe/rule/severity handling is uniform downstream.
+
+# CWE number → native class. Kept broad: a tool may tag a related CWE in the family.
+_SARIF_CWE_TO_CLASS: dict[str, str] = {
+    "89": "sql-injection", "564": "sql-injection",
+    "77": "command-injection", "78": "command-injection", "88": "command-injection",
+    "502": "unsafe-deserialization",
+    "94": "code-eval", "95": "code-eval", "96": "code-eval",
+    "79": "xss", "80": "xss", "116": "xss",
+    "22": "path-traversal", "23": "path-traversal", "36": "path-traversal", "73": "path-traversal",
+    "284": "broken-authz", "285": "broken-authz", "639": "broken-authz",
+    "862": "broken-authz", "863": "broken-authz", "566": "broken-authz",
+    "259": "hardcoded-secret", "321": "hardcoded-secret", "798": "hardcoded-secret",
+    "326": "weak-crypto", "327": "weak-crypto", "328": "weak-crypto",
+    "330": "weak-crypto", "338": "weak-crypto", "916": "weak-crypto",
+    "918": "ssrf",
+}
+
+# Fallback when no CWE is present: substring of the tool's ruleId → class.
+_SARIF_KEYWORD_TO_CLASS: tuple[tuple[str, str], ...] = (
+    ("sqli", "sql-injection"), ("sql-injection", "sql-injection"), ("sql_injection", "sql-injection"),
+    ("command-injection", "command-injection"), ("os-command", "command-injection"),
+    ("os_command", "command-injection"), ("shell", "command-injection"), ("subprocess", "command-injection"),
+    ("deserial", "unsafe-deserialization"), ("pickle", "unsafe-deserialization"),
+    ("yaml-load", "unsafe-deserialization"), ("marshal", "unsafe-deserialization"),
+    ("code-injection", "code-eval"), ("eval", "code-eval"), ("exec-used", "code-eval"),
+    ("xss", "xss"), ("cross-site", "xss"),
+    ("path-traversal", "path-traversal"), ("pathtraversal", "path-traversal"),
+    ("path_traversal", "path-traversal"), ("directory-traversal", "path-traversal"),
+    ("ssrf", "ssrf"),
+    ("hardcoded", "hardcoded-secret"), ("secret", "hardcoded-secret"), ("password", "hardcoded-secret"),
+    ("weak-crypto", "weak-crypto"), ("weak_crypto", "weak-crypto"), ("md5", "weak-crypto"),
+    ("sha1", "weak-crypto"), ("insecure-hash", "weak-crypto"), ("insecure-random", "weak-crypto"),
+    ("authz", "broken-authz"), ("authoriz", "broken-authz"), ("idor", "broken-authz"), ("bola", "broken-authz"),
+)
+
+_CWE_RE = re.compile(r"cwe[-_ ]?(\d+)", re.IGNORECASE)
+
+
+def _sarif_flatten(value) -> list[str]:
+    """Coerce a tag/property value (str, list, or nested) to a flat list of strs."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        out: list[str] = []
+        for v in value:
+            out.extend(_sarif_flatten(v))
+        return out
+    return [str(value)]
+
+
+def _sarif_cwe_numbers(texts: Iterable[str]) -> list[str]:
+    nums: list[str] = []
+    for t in texts:
+        for m in _CWE_RE.finditer(t or ""):
+            if m.group(1) not in nums:
+                nums.append(m.group(1))
+    return nums
+
+
+def _sarif_class(rule_id: str, cwe_numbers: list[str]) -> str:
+    for n in cwe_numbers:
+        if n in _SARIF_CWE_TO_CLASS:
+            return _SARIF_CWE_TO_CLASS[n]
+    rid = (rule_id or "").lower()
+    for needle, cls in _SARIF_KEYWORD_TO_CLASS:
+        if needle in rid:
+            return cls
+    return "sast-other"
+
+
+def _sarif_severity(result: dict, rule: dict) -> str:
+    """SARIF security-severity (0-10) or level → our severity vocabulary."""
+    for holder in (result.get("properties") or {}, rule.get("properties") or {}):
+        raw = holder.get("security-severity")
+        try:
+            score = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if score >= 9.0:
+            return "critical"
+        if score >= 7.0:
+            return "high"
+        if score >= 4.0:
+            return "medium"
+        return "low"
+    level = (result.get("level") or "").lower()
+    return {"error": "high", "warning": "medium", "note": "low", "none": "low"}.get(level, "medium")
+
+
+def _sarif_relpath(uri: str, root: Path) -> str:
+    u = uri or ""
+    if u.startswith("file://"):
+        u = u[7:]
+        if re.match(r"/[A-Za-z]:", u):     # file:///C:/... → strip the leading slash
+            u = u[1:]
+    u = u.replace("\\", "/")
+    try:
+        p = Path(u)
+        if p.is_absolute():
+            return p.resolve().relative_to(root).as_posix()
+    except (ValueError, OSError):
+        pass
+    return u[2:] if u.startswith("./") else u
+
+
+def _sarif_location(result: dict) -> "tuple[str, int, str] | None":
+    for loc in (result.get("locations") or []):
+        if not isinstance(loc, dict):
+            continue
+        phys = loc.get("physicalLocation") or {}
+        uri = (phys.get("artifactLocation") or {}).get("uri")
+        region = phys.get("region") or {}
+        line = region.get("startLine")
+        if uri and isinstance(line, int):
+            snippet = (region.get("snippet") or {}).get("text") or ""
+            return uri, line, snippet
+    return None
+
+
+def _parse_sarif_file(path: Path, root: Path) -> list[dict]:
+    data = json.loads(path.read_text(encoding="utf-8", errors="ignore"))
+    out: list[dict] = []
+    for run in (data.get("runs") or []):
+        if not isinstance(run, dict):
+            continue
+        rules = (((run.get("tool") or {}).get("driver") or {}).get("rules")) or []
+        rules = [r for r in rules if isinstance(r, dict)]
+        by_id = {r.get("id"): r for r in rules}
+        for result in (run.get("results") or []):
+            if not isinstance(result, dict):
+                continue
+            rule_ref = result.get("rule") or {}
+            rule_id = result.get("ruleId") or rule_ref.get("id") or ""
+            idx = result.get("ruleIndex")
+            if idx is None:
+                idx = rule_ref.get("index")
+            rule = rules[idx] if isinstance(idx, int) and 0 <= idx < len(rules) else by_id.get(rule_id, {})
+            props = rule.get("properties") or {}
+            texts = [rule_id, rule.get("id", ""), rule.get("name", "")]
+            texts += _sarif_flatten(props.get("tags"))
+            texts += _sarif_flatten(props.get("cwe"))
+            texts += [t.get("id", "") for t in (result.get("taxa") or []) if isinstance(t, dict)]
+            cwes = _sarif_cwe_numbers(texts)
+            cls = _sarif_class(rule_id, cwes)
+
+            loc = _sarif_location(result)
+            if not loc:
+                continue
+            uri, line, snip = loc
+            rel = _sarif_relpath(uri, root)
+            snippet = snip or (result.get("message") or {}).get("text") or rule_id
+            snippet = _normalize(snippet)[:200]
+
+            meta = CLASS_META[cls]
+            if cls == "sast-other":
+                cwe = f"CWE-{cwes[0]}" if cwes else meta.cwe
+                severity = _sarif_severity(result, rule)
+            else:
+                cwe, severity = meta.cwe, meta.severity
+            out.append({
+                "id": candidate_id(rel, line, cls, snippet),
+                "file": rel,
+                "line": line,
+                "class": cls,
+                "cwe": cwe,
+                "rule": meta.rule,
+                "severity": severity,
+                "confidence": "high",     # real SAST output is higher-signal than a regex tripwire
+                "snippet": snippet,
+                "source": "sarif",
+            })
+    return out
+
+
+def _find_sarif(root: Path) -> list[Path]:
+    """Bounded, skip-dir-respecting walk for *.sarif files under *root*."""
+    out: list[Path] = []
+    frontier = [root]
+    while frontier:
+        current = frontier.pop()
+        try:
+            entries = sorted(current.iterdir(), key=lambda p: p.name)
+        except (OSError, PermissionError):
+            continue
+        for entry in entries:
+            try:
+                if entry.is_symlink():
+                    continue
+                if entry.is_dir():
+                    if entry.name not in _SKIP_DIRS:
+                        frontier.append(entry)
+                    continue
+            except OSError:
+                continue
+            if entry.suffix.lower() == ".sarif":
+                out.append(entry)
+    return sorted(out)
+
+
+def ingest_sarif(root: "str | Path", sarif_paths: "list | None" = None) -> list[dict]:
+    """Parse SAST output (*.sarif) into native-shaped candidates. Returns [] when
+    disabled, when no SARIF is present, or on any error — never raises.
+
+    sarif_paths=None auto-detects every *.sarif under *root*; a list of file/dir
+    paths ingests exactly those (the `--sarif` opt-in)."""
+    if scan_disabled():
+        return []
+    try:
+        root = Path(root).resolve()
+    except OSError:
+        return []
+    if sarif_paths is None:
+        files = _find_sarif(root) if root.is_dir() else []
+    else:
+        files = []
+        for sp in sarif_paths:
+            try:
+                spp = Path(sp)
+                if spp.is_dir():
+                    files.extend(_find_sarif(spp))
+                elif spp.is_file():
+                    files.append(spp)
+            except OSError:
+                continue
+    out: list[dict] = []
+    seen_ids: set[str] = set()
+    for f in files:
+        try:
+            cands = _parse_sarif_file(f, root)
+        except Exception:
+            continue          # a malformed .sarif is skipped, not fatal
+        for c in cands:
+            if c["id"] in seen_ids:
+                continue
+            seen_ids.add(c["id"])
+            out.append(c)
+    return out
+
+
+def enumerate_candidates(root: "str | Path", sarif: "list | bool | None" = None) -> list[dict]:
     """Enumerate every attack-surface candidate under *root*, deterministically
     sorted (file, line, class). Returns [] when disabled or on any fatal error —
     it never raises.
 
     Each candidate: ``{id, file, line, class, cwe, rule, severity, confidence,
-    snippet}``. At most one candidate per (file, line, class): the first pattern
-    of a class to match a line wins, so two SQL patterns on one line don't double
-    count.
+    snippet}`` (SARIF-sourced candidates also carry ``source: "sarif"``). At most
+    one candidate per (file, line, class): the first pattern of a class to match a
+    line wins, so two SQL patterns on one line don't double count — and a native
+    hit and an ingested SARIF hit on the same spot collapse to the native one.
+
+    ``sarif``: None auto-detects *.sarif under root; a list ingests those explicit
+    paths; False skips SARIF entirely.
     """
     if scan_disabled():
         return []
@@ -431,6 +688,16 @@ def enumerate_candidates(root: "str | Path") -> list[dict]:
         except ValueError:
             rel = path.as_posix()
         for cand in _scan_file(path, rel):
+            key = (cand["file"], cand["line"], cand["class"])
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates.append(cand)
+
+    # Fold in ingested SAST output through the SAME (file,line,class) dedup, so a
+    # native tripwire hit already recorded wins over a SARIF hit on the same spot.
+    if sarif is not False:
+        for cand in ingest_sarif(root, None if sarif is None else sarif):
             key = (cand["file"], cand["line"], cand["class"])
             if key in seen:
                 continue

@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "semgrep",
+          "rules": [
+            {
+              "id": "python.lang.security.dangerous-sql-string",
+              "name": "dangerous-sql-string",
+              "properties": { "tags": ["security", "external/cwe/cwe-89"] }
+            },
+            {
+              "id": "python.lang.security.weak-hash",
+              "name": "weak-hash",
+              "properties": {
+                "tags": ["security"],
+                "security-severity": "4.3",
+                "cwe": ["CWE-327: Use of a Broken or Risky Cryptographic Algorithm"]
+              }
+            },
+            {
+              "id": "custom.house-rule.no-todo-in-prod",
+              "name": "no-todo-in-prod",
+              "properties": { "tags": ["maintainability"], "security-severity": "2.0" }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "python.lang.security.dangerous-sql-string",
+          "level": "error",
+          "message": { "text": "Detected string-built SQL query" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "svc/orders.py" },
+                "region": { "startLine": 42, "snippet": { "text": "db.execute(\"SELECT * FROM o WHERE id=\" + oid)" } }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "python.lang.security.weak-hash",
+          "level": "warning",
+          "message": { "text": "MD5 is a weak hash" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "svc/util.py" },
+                "region": { "startLine": 7 }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "custom.house-rule.no-todo-in-prod",
+          "level": "note",
+          "message": { "text": "TODO left in production code" },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": { "uri": "svc/util.py" },
+                "region": { "startLine": 19 }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

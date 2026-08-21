@@ -797,8 +797,10 @@ def cmd_scan(args: argparse.Namespace) -> None:
         _print_coverage(cov)
         return
 
-    candidates = scan_mod.enumerate_candidates(root)
+    sarif_arg = [args.sarif] if args.sarif else None
+    candidates = scan_mod.enumerate_candidates(root, sarif=sarif_arg)
     cov_map = scan_mod.coverage_map(root)
+    sarif_n = sum(1 for c in candidates if c.get("source") == "sarif")
 
     # Persist: merge this scan into the accumulating ledger, then report.
     ledger = findings_mod.merge_scan(candidates, findings_mod.load_findings(root))
@@ -825,6 +827,7 @@ def cmd_scan(args: argparse.Namespace) -> None:
             f"  {len(candidates)} candidate(s) across "
             f"{len({c['class'] for c in candidates})} class(es), "
             f"{cov_map['files_scanned']} file(s) scanned"
+            + (f"  (+{sarif_n} from SARIF)" if sarif_n else "")
         )
         if args.new_only or args.klass:
             print(f"  showing {len(view)} "
@@ -959,6 +962,10 @@ def main() -> None:
                         help="Show only candidates still awaiting adjudication")
     p_scan.add_argument("--class", dest="klass", default=None,
                         help="Filter to one candidate class (e.g. sql-injection)")
+    p_scan.add_argument("--sarif", default=None, metavar="PATH",
+                        help="Ingest a .sarif file or directory of SAST output "
+                             "(bandit/semgrep/CodeQL); by default any *.sarif under "
+                             "the project is auto-detected and folded in")
     p_scan.add_argument("--fail-on", default=None,
                         choices=["low", "medium", "high", "critical"],
                         help="Opt-in CI gate: exit non-zero if any UNRESOLVED "

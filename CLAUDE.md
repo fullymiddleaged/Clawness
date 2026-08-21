@@ -469,8 +469,16 @@ dependency**. No ML models, no services, no Docker.
      `_GO`/`_RB`/`_JAVA`/`_CS`/`_PHP` ext groups and reusing the 10 `CLASS_META` classes —
      `_TAINT` carries each ecosystem's request idioms so the taint-gated classes fire);
      other langs are shallow. It is line-oriented (a cross-line sink is a miss);
-     `broken-authz` is a low-confidence heuristic; SARIF/bandit/semgrep ingestion is a
-     deferred enhancement, not built. Fails open (returns [] on any error), never raises.
+     `broken-authz` is a low-confidence heuristic. **SARIF/SAST ingestion is built
+     (1.16.0):** `ingest_sarif` folds any `*.sarif` under the project (bandit/semgrep/
+     CodeQL output) in as extra candidates — auto-detected by presence, or `--sarif
+     <path>`. External ids are re-keyed through `candidate_id` (never the tool's rule
+     id, or the ledger's dedup/`gone` logic breaks) and every result maps onto a native
+     `CLASS_META` class by CWE tag then ruleId keyword, falling to `sast-other` (which
+     alone carries the tool's own cwe/severity). Merged through the SAME (file,line,
+     class) dedup as native, native winning. SARIF is JSON, so this needs no new
+     dependency and no SAST tool installed — output only. Fails open (returns [] on any
+     error, a malformed `.sarif` is skipped), never raises.
 
 ## Key files
 - `clawness/core.py` — engine (rules loader, tokenizer + `_CONCEPT_GROUPS`, BM25,
@@ -487,9 +495,11 @@ dependency**. No ML models, no services, no Docker.
   no default — an invented cadence gets argued with instead of acted on.
 - `clawness/plan.py` — plan-gate logic (`gate_decision`, `is_plan_file`, session approval).
 - `clawness/scan.py` — deterministic attack-surface enumerator (`enumerate_candidates`,
-  `candidate_id`, `coverage_map`, `CLASS_META`). Pure regex/lexical over source files,
-  zero LLM, stable-sorted output; the discovery half of `/clawness:audit`. Modelled on
-  `guard.py`'s classifier style — a **tripwire, not SAST**. Opt-out `CLAW_NO_SCAN`.
+  `candidate_id`, `coverage_map`, `CLASS_META`) plus SARIF ingestion (`ingest_sarif`,
+  `_parse_sarif_file`, `_sarif_class`). Pure regex/lexical over source files (Python, JS/TS,
+  Go, Java/Kotlin/Scala, Ruby, C#, PHP), zero LLM, stable-sorted output; the discovery half
+  of `/clawness:audit`. Modelled on `guard.py`'s classifier style — a **tripwire, not SAST**
+  on its own, plus real SAST folded in when `*.sarif` is present. Opt-out `CLAW_NO_SCAN`.
 - `clawness/findings.py` — findings/coverage ledger (`merge_scan`, `set_verdict`,
   `coverage`, `outstanding`, `load_findings`/`save_findings`). Keyed by candidate id at
   `.clawness/security/findings.json`; `merge_scan` NEVER re-opens a `confirmed`/

@@ -8,6 +8,7 @@ if candidate_id stops folding whitespace.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -180,3 +181,113 @@ def test_severity_at_least():
     assert scan.severity_at_least("high", "high")
     assert not scan.severity_at_least("medium", "high")
     assert not scan.severity_at_least("low", "critical")
+
+
+# --- SARIF / SAST ingestion (item 3) -------------------------------------
+
+SARIF_FIXTURE = Path(__file__).parent / "fixtures" / "sarif" / "example.sarif"
+
+
+def _sarif(results, rules=None):
+    return {
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {"driver": {"name": "toolx", "rules": rules or []}},
+            "results": results,
+        }],
+    }
+
+
+def _result(rule_id, uri, line, cwe=None, level="error", snippet="x = q"):
+    tags = ["security"] + ([f"external/cwe/cwe-{cwe}"] if cwe else [])
+    return {
+        "ruleId": rule_id,
+        "level": level,
+        "message": {"text": "finding"},
+        "locations": [{"physicalLocation": {
+            "artifactLocation": {"uri": uri},
+            "region": {"startLine": line, "snippet": {"text": snippet}},
+        }}],
+    }, {"id": rule_id, "name": rule_id, "properties": {"tags": tags}}
+
+
+def _write_sarif(dirpath, results_and_rules):
+    results = [r for r, _ in results_and_rules]
+    rules = [rule for _, rule in results_and_rules]
+    (dirpath / "report.sarif").write_text(
+        json.dumps(_sarif(results, rules)), encoding="utf-8")
+
+
+def test_sarif_static_fixture_maps_classes():
+    cands = scan.ingest_sarif(SARIF_FIXTURE.parent)
+    by = {(c["file"], c["line"]): c for c in cands}
+    assert by[("svc/orders.py", 42)]["class"] == "sql-injection"   # via CWE-89 tag
+    assert by[("svc/util.py", 7)]["class"] == "weak-crypto"        # via CWE-327 in cwe prop
+    # unmappable house rule → generic bucket, carrying the tool's own severity/CWE
+    other = by[("svc/util.py", 19)]
+    assert other["class"] == "sast-other"
+    assert other["cwe"] == "CWE-693"          # no CWE in the result → CLASS_META fallback
+    assert other["severity"] == "low"         # security-severity 2.0 → low
+    assert all(c["source"] == "sarif" for c in cands)
+
+
+def test_sarif_id_is_recomputed_not_the_tool_id(tmp_path):
+    _write_sarif(tmp_path, [_result("some.tool.rule-id", "a/b.py", 5, cwe=89)])
+    cands = scan.ingest_sarif(tmp_path)
+    assert len(cands) == 1
+    c = cands[0]
+    assert c["id"] == scan.candidate_id(c["file"], c["line"], c["class"], c["snippet"])
+    assert c["id"] != "some.tool.rule-id"
+
+
+def test_sarif_auto_detected_by_enumerate(tmp_path):
+    (tmp_path / "clean_marker.py").write_text("x = 1\n", encoding="utf-8")
+    _write_sarif(tmp_path, [_result("r", "svc/pay.py", 12, cwe=918)])
+    cands = scan.enumerate_candidates(tmp_path)
+    ssrf = [c for c in cands if c["class"] == "ssrf"]
+    assert ssrf and ssrf[0]["file"] == "svc/pay.py" and ssrf[0]["source"] == "sarif"
+
+
+def test_sarif_dedup_prefers_native(tmp_path):
+    # A real native sink AND a SARIF result on the same (file, line, class):
+    # they must collapse to ONE candidate, and the native one wins (no source key).
+    src = tmp_path / "q.py"
+    src.write_text("import sqlite3\n\ndef f(cur, uid):\n    cur.execute(f\"SELECT {uid}\")\n",
+                   encoding="utf-8")
+    _write_sarif(tmp_path, [_result("dup", "q.py", 4, cwe=89)])
+    cands = scan.enumerate_candidates(tmp_path)
+    sqli = [c for c in cands if c["file"] == "q.py" and c["class"] == "sql-injection"]
+    assert len(sqli) == 1, sqli
+    assert sqli[0].get("source") != "sarif", "native hit must win the dedup"
+
+
+def test_sarif_false_skips_ingestion(tmp_path):
+    _write_sarif(tmp_path, [_result("r", "svc/x.py", 3, cwe=89)])
+    assert scan.enumerate_candidates(tmp_path, sarif=False) == []
+
+
+def test_sarif_explicit_path_opt_in(tmp_path):
+    other = tmp_path / "reports"
+    other.mkdir()
+    _write_sarif(other, [_result("r", "svc/x.py", 3, cwe=79)])
+    # Not auto-detected from an unrelated root, but ingested when pointed at it.
+    assert scan.ingest_sarif(tmp_path / "nope", [other]) [0]["class"] == "xss"
+
+
+def test_sarif_malformed_is_skipped(tmp_path):
+    (tmp_path / "bad.sarif").write_text("{ not json ", encoding="utf-8")
+    assert scan.ingest_sarif(tmp_path) == []
+    assert scan.enumerate_candidates(tmp_path) == []
+
+
+def test_sarif_disabled_returns_empty(tmp_path, monkeypatch):
+    _write_sarif(tmp_path, [_result("r", "svc/x.py", 3, cwe=89)])
+    monkeypatch.setenv("CLAW_NO_SCAN", "1")
+    assert scan.ingest_sarif(tmp_path) == []
+
+
+def test_sarif_ids_stable_across_runs(tmp_path):
+    _write_sarif(tmp_path, [_result("r", "svc/x.py", 3, cwe=89)])
+    a = scan.enumerate_candidates(tmp_path)
+    b = scan.enumerate_candidates(tmp_path)
+    assert [c["id"] for c in a] == [c["id"] for c in b]
