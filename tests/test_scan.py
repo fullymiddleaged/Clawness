@@ -40,9 +40,54 @@ def test_finds_each_planted_class():
     assert not missing, f"enumerator missed classes: {sorted(missing)}"
 
 
-def test_clean_file_yields_nothing():
+# Per-language planted classes. Each app.* fixture deliberately contains one sink
+# per class its ecosystem can express (Go has no eval/deserialization idiom the
+# enumerator models, hence a shorter set). Watched red before green by neutering
+# the relevant _p(...) pattern in scan.py (TST-FAILFIRST-001).
+_PLANTED_BY_FILE = {
+    "app.py": {
+        "sql-injection", "command-injection", "unsafe-deserialization", "code-eval",
+        "path-traversal", "hardcoded-secret", "weak-crypto", "ssrf",
+    },
+    "ui.jsx": {"xss", "code-eval", "sql-injection", "weak-crypto", "hardcoded-secret"},
+    "app.go": {
+        "sql-injection", "command-injection", "xss", "path-traversal",
+        "weak-crypto", "ssrf", "hardcoded-secret",
+    },
+    "app.rb": {
+        "sql-injection", "command-injection", "unsafe-deserialization", "code-eval",
+        "xss", "path-traversal", "weak-crypto", "ssrf", "hardcoded-secret",
+    },
+    "App.java": {
+        "sql-injection", "command-injection", "unsafe-deserialization", "code-eval",
+        "xss", "path-traversal", "weak-crypto", "ssrf", "hardcoded-secret",
+    },
+    "App.cs": {
+        "sql-injection", "command-injection", "unsafe-deserialization", "code-eval",
+        "xss", "path-traversal", "weak-crypto", "ssrf", "hardcoded-secret",
+    },
+    "app.php": {
+        "sql-injection", "command-injection", "unsafe-deserialization", "code-eval",
+        "xss", "path-traversal", "weak-crypto", "ssrf", "hardcoded-secret",
+    },
+}
+
+_CLEAN_FILES = ["clean.py", "clean.go", "clean.rb", "Clean.java", "Clean.cs", "clean.php"]
+
+
+@pytest.mark.parametrize("fixture, expected", sorted(_PLANTED_BY_FILE.items()))
+def test_planted_classes_found_per_language(fixture, expected):
     cands = scan.enumerate_candidates(FIXTURES)
-    assert _by_file(cands, "clean.py") == [], "clean.py must not produce candidates"
+    found = {c["class"] for c in _by_file(cands, fixture)}
+    missing = expected - found
+    assert not missing, f"{fixture}: enumerator missed {sorted(missing)}"
+
+
+@pytest.mark.parametrize("clean", _CLEAN_FILES)
+def test_clean_file_yields_nothing(clean):
+    cands = scan.enumerate_candidates(FIXTURES)
+    hits = _by_file(cands, clean)
+    assert hits == [], f"{clean} must not produce candidates, got {[(c['line'], c['class']) for c in hits]}"
 
 
 def test_every_candidate_has_required_shape():

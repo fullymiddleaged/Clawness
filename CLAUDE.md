@@ -464,10 +464,13 @@ dependency**. No ML models, no services, no Docker.
      candidates and writes verdicts back, the blue team fixes and marks them, and it
      reports coverage. Auto-invocation only surfaces the offer — it still confirms before
      fanning out sub-agents (WF-SECURITY-AUDIT-001 / the suggested-action wording).
-   - Known limits: the enumerator covers Python + JS/TS best, a handful of other langs
-     shallowly; it is line-oriented (a cross-line sink is a miss); `broken-authz` is a
-     low-confidence heuristic; SARIF/bandit/semgrep ingestion is a deferred enhancement,
-     not built. Fails open (returns [] on any error), never raises.
+   - Known limits: the enumerator covers Python, JS/TS, Go, Java/Kotlin/Scala, Ruby, C#
+     and PHP (the language sink blocks live at the tail of `_PATTERNS`, keyed by the
+     `_GO`/`_RB`/`_JAVA`/`_CS`/`_PHP` ext groups and reusing the 10 `CLASS_META` classes —
+     `_TAINT` carries each ecosystem's request idioms so the taint-gated classes fire);
+     other langs are shallow. It is line-oriented (a cross-line sink is a miss);
+     `broken-authz` is a low-confidence heuristic; SARIF/bandit/semgrep ingestion is a
+     deferred enhancement, not built. Fails open (returns [] on any error), never raises.
 
 ## Key files
 - `clawness/core.py` — engine (rules loader, tokenizer + `_CONCEPT_GROUPS`, BM25,

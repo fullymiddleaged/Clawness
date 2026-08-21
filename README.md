@@ -427,7 +427,8 @@ model to adjudicating a fixed list.
 **`clawness scan`** is a regex/lexical enumerator (zero LLM tokens, identical every run)
 that finds sink/source candidates — SQL and command injection, unsafe deserialization,
 code eval, XSS, path traversal, broken object authz, hardcoded secrets, weak crypto, SSRF
-— each tagged with a CWE, a mapped rule, and a **stable id**. Every scan merges into an
+— across Python, JavaScript/TypeScript, Go, Java/Kotlin/Scala, Ruby, C# and PHP, each
+tagged with a CWE, a mapped rule, and a **stable id**. Every scan merges into an
 accumulating ledger (`.clawness/security/findings.json`): a candidate stays `new` until
 you adjudicate it, a removed sink becomes `gone` (remembering its verdict so it is never
 re-litigated), and a **coverage** signal tells you when every candidate has been looked at.

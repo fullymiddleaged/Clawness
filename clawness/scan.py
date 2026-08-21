@@ -86,7 +86,11 @@ _SEVERITY_ORDER = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 # A request-derived value: the tokens that mark data as attacker-controlled. Used
 # by the classes (path traversal, SSRF, authz) that are only interesting when the
 # sink is fed untrusted input.
-_TAINT = r"(?:request|req\.|params|query|args|body|input|payload|flask\.request|self\.request|\$_(?:GET|POST|REQUEST|COOKIE))"
+_TAINT = (
+    r"(?:request|req\.|params|query|args|body|input|payload|flask\.request|self\.request|"
+    r"formvalue|getparameter|pathvariable|requestparam|c\.param|"          # Go/Java request idioms
+    r"\$_(?:GET|POST|REQUEST|COOKIE))"                                     # PHP superglobals
+)
 
 
 @dataclass(frozen=True)
@@ -105,6 +109,12 @@ def _p(cls: str, pattern: str, confidence: str, exts: Optional[Iterable[str]] = 
 _PY = (".py", ".pyw")
 _JS = (".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".vue", ".svelte", ".astro")
 _TEMPLATES = (".html", ".htm", ".jinja", ".jinja2", ".j2", ".ejs", ".erb", ".hbs", ".vue", ".svelte")
+_GO = (".go",)
+_RB = (".rb",)
+_RB_VIEW = (".rb", ".erb")
+_JAVA = (".java", ".kt", ".scala")
+_CS = (".cs",)
+_PHP = (".php", ".phtml")
 
 # Ordered by class then specificity. Patterns are line-oriented (the common case);
 # a cross-line sink is a known miss — this is a tripwire, not a parser.
@@ -185,6 +195,111 @@ _PATTERNS: list[Pattern] = [
        rf"\s*\([^)]*{_TAINT}", "medium", _PY),
     _p("ssrf",
        rf"(?i)\b(?:fetch|axios\.(?:get|post|request))\s*\([^)]*{_TAINT}", "low", _JS),
+
+    # ============================ Go (.go) ============================
+    _p("sql-injection",
+       r"(?i)\.(?:Query|QueryRow|QueryContext|QueryRowContext|Exec|ExecContext)\s*\("
+       r"[^)]*(?:fmt\.Sprintf\(|['\"]\s*\+|\+\s*['\"])", "high", _GO),
+    # exec.Command invoking a shell — the interpolation-injectable shape (bare
+    # exec.Command with discrete args is safe, so only the shell form is flagged).
+    _p("command-injection",
+       r"(?i)\bexec\.Command(?:Context)?\s*\(\s*[\"'](?:/bin/|/usr/bin/)?"
+       r"(?:sh|bash|zsh|cmd|powershell)\b", "high", _GO),
+    _p("xss", r"(?i)\btemplate\.HTML\s*\(", "medium", _GO),   # marks a string safe, bypassing escaping
+    _p("path-traversal",
+       rf"(?i)\b(?:os\.Open|os\.ReadFile|os\.OpenFile|ioutil\.ReadFile|http\.ServeFile)"
+       rf"\s*\([^)]*{_TAINT}", "high", _GO),
+    _p("weak-crypto", r"(?i)\b(?:md5|sha1)\.(?:New|Sum(?:224)?)\s*\(", "medium", _GO),
+    _p("weak-crypto",   # math/rand-only helpers (crypto/rand has no Intn/Float*)
+       r"(?i)\brand\.(?:Intn|Int31n?|Int63n?|Float64|Float32)\s*\(", "low", _GO),
+    _p("ssrf",
+       rf"(?i)\b(?:http\.(?:Get|Post|Head)|http\.NewRequest|client\.(?:Get|Post|Do))"
+       rf"\s*\([^)]*{_TAINT}", "low", _GO),
+
+    # ============================ Ruby (.rb) ============================
+    _p("sql-injection",
+       r"(?i)\.(?:where|find_by_sql|exec_query|execute|select_all|from|order|group|having)"
+       r"\s*\(?\s*[\"'][^\"']*(?:#\{|['\"]\s*\+|\+\s*['\"])", "high", _RB),
+    _p("command-injection", r"(?i)\b(?:system|exec|spawn)\s*\(", "high", _RB),
+    _p("command-injection", r"`[^`]*#\{", "high", _RB),            # backticks with interpolation
+    _p("command-injection", r"(?i)%x[\(\{\[/]|IO\.popen\s*\(|Open3\.", "medium", _RB),
+    _p("unsafe-deserialization",
+       r"(?i)\b(?:YAML\.load|Marshal\.load|Oj\.load)\s*\(", "high", _RB),
+    _p("code-eval",
+       r"(?i)\b(?:eval|instance_eval|class_eval|module_eval)\s*[\(\s]", "medium", _RB),
+    _p("xss", r"(?i)\.html_safe\b|\braw\s*\(|<%=\s*raw\b", "medium", _RB_VIEW),
+    _p("path-traversal",
+       rf"(?i)\b(?:File\.(?:read|open|new|binread)|IO\.(?:read|binread)|send_file)"
+       rf"\s*\([^)]*{_TAINT}", "high", _RB),
+    _p("weak-crypto", r"(?i)\bDigest::(?:MD5|SHA1)\b", "medium", _RB),
+    _p("ssrf",
+       rf"(?i)\b(?:Net::HTTP\.(?:get|post|start)|HTTParty\.(?:get|post)|"
+       rf"RestClient\.(?:get|post)|open)\s*\([^)]*{_TAINT}", "low", _RB),
+
+    # ==================== Java / Kotlin / Scala (.java .kt .scala) ====================
+    _p("sql-injection",
+       r"(?i)\.(?:executeQuery|executeUpdate|execute|createQuery|createNativeQuery|"
+       r"prepareStatement|addBatch)\s*\([^)]*(?:['\"]\s*\+|\+\s*['\"]|String\.format\s*\()",
+       "high", _JAVA),
+    _p("command-injection",
+       r"(?i)\bRuntime\.getRuntime\s*\(\s*\)\.exec\s*\(|\bnew\s+ProcessBuilder\s*\(",
+       "high", _JAVA),
+    _p("unsafe-deserialization",
+       r"(?i)\bnew\s+(?:ObjectInputStream|XMLDecoder)\b|\.readObject\s*\(", "high", _JAVA),
+    _p("code-eval",
+       r"(?i)\bScriptEngineManager\b|\.getEngineByName\s*\(|\bSpelExpressionParser\b|"
+       r"\.parseExpression\s*\(", "medium", _JAVA),
+    _p("xss",
+       rf"(?i)\.getWriter\s*\(\s*\)\.(?:print|println|write)\s*\([^)]*{_TAINT}", "medium", _JAVA),
+    _p("path-traversal",
+       rf"(?i)\bnew\s+(?:File|FileInputStream|FileReader)\s*\([^)]*{_TAINT}|"
+       rf"\b(?:Files\.(?:readAllBytes|readString|readAllLines|newInputStream)|Paths\.get)"
+       rf"\s*\([^)]*{_TAINT}", "high", _JAVA),
+    _p("weak-crypto",
+       r"(?i)\bMessageDigest\.getInstance\s*\(\s*[\"'](?:MD5|SHA-?1)[\"']|"
+       r"\bDigestUtils\.(?:md5|sha1)\b", "medium", _JAVA),
+    _p("weak-crypto", r"(?i)\bnew\s+(?:java\.util\.)?Random\s*\(", "low", _JAVA),
+    _p("ssrf",
+       rf"(?i)\b(?:openConnection|getForObject|getForEntity|exchange|newBuilder)"
+       rf"\s*\([^)]*{_TAINT}|\bnew\s+(?:[\w.]+\.)?URL\s*\([^)]*{_TAINT}", "low", _JAVA),
+
+    # ============================ C# / .NET (.cs) ============================
+    _p("sql-injection",
+       r"(?i)\b(?:new\s+SqlCommand|CommandText\s*=|FromSqlRaw|ExecuteSqlRaw|"
+       r"ExecuteSqlInterpolated|new\s+MySqlCommand|new\s+NpgsqlCommand)\s*[\(=]"
+       r"[^;]*(?:['\"]\s*\+|\+\s*['\"]|\$['\"])", "high", _CS),
+    _p("command-injection",
+       r"(?i)\bProcess\.Start\s*\(|\bnew\s+ProcessStartInfo\b", "high", _CS),
+    _p("unsafe-deserialization",
+       r"(?i)\b(?:BinaryFormatter|SoapFormatter|NetDataContractSerializer|LosFormatter|"
+       r"ObjectStateFormatter)\b|TypeNameHandling", "high", _CS),
+    _p("code-eval", r"(?i)\bCSharpScript\.(?:Run|Eval|Create)", "medium", _CS),
+    _p("xss",
+       rf"(?i)\bResponse\.Write\s*\([^)]*{_TAINT}|@?Html\.Raw\s*\(", "medium", _CS),
+    _p("path-traversal",
+       rf"(?i)\b(?:File\.(?:ReadAllText|ReadAllBytes|ReadAllLines|Open|OpenRead)|"
+       rf"new\s+FileStream|Path\.Combine)\s*\([^)]*{_TAINT}", "high", _CS),
+    _p("weak-crypto",
+       r"(?i)\b(?:MD5|SHA1)(?:CryptoServiceProvider|Managed)?\.Create\s*\(|"
+       r"\bnew\s+(?:MD5|SHA1)(?:CryptoServiceProvider|Managed)\s*\(", "medium", _CS),
+    _p("weak-crypto", r"(?i)\bnew\s+Random\s*\(", "low", _CS),
+    _p("ssrf",
+       rf"(?i)\b(?:WebRequest\.Create|\.GetAsync|\.GetStringAsync|\.GetByteArrayAsync|"
+       rf"DownloadString|DownloadData)\s*\([^)]*{_TAINT}", "low", _CS),
+
+    # ============================ PHP round-out (.php .phtml) ============================
+    _p("sql-injection",
+       r"(?i)\b(?:mysqli_query|mysql_query|pg_query)\s*\(\s*[\"'][^\"']*(?:\$|['\"]\s*\.)|"
+       r"->(?:query|exec)\s*\(\s*[\"'][^\"']*(?:\$|['\"]\s*\.)", "high", _PHP),
+    _p("code-eval",
+       r"(?i)\beval\s*\(|\bcreate_function\s*\(|\bassert\s*\(\s*['\"]", "medium", _PHP),
+    _p("xss", r"(?i)\b(?:echo|print)\b[^;]*\$_(?:GET|POST|REQUEST|COOKIE)", "medium", _PHP),
+    _p("path-traversal",
+       rf"(?i)\b(?:include|include_once|require|require_once|fopen|file_get_contents|readfile)"
+       rf"\b[^;]*{_TAINT}", "high", _PHP),
+    _p("weak-crypto", r"(?i)\b(?:mt_rand|rand|uniqid)\s*\(", "low", _PHP),
+    _p("ssrf",
+       rf"(?i)\bcurl_setopt\s*\([^)]*CURLOPT_URL[^)]*{_TAINT}", "low", _PHP),
 ]
 
 # Lines carrying any of these are dropped BEFORE the secret patterns run: they are

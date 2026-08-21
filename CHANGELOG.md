@@ -5,6 +5,23 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-08-21
+
+### Added
+
+- **`clawness scan` now enumerates Go, Java/Kotlin/Scala, Ruby, C# and PHP** — not
+  just Python and JavaScript/TypeScript. On-stack users of these ecosystems now get
+  real sink/source candidates instead of silence: SQL and command injection, unsafe
+  deserialization, code eval, XSS, path traversal, weak crypto, and SSRF, drawn from
+  each language's own idioms (e.g. Go `database/sql` + `exec.Command` shell forms and
+  `math/rand`; Java `ProcessBuilder` / `ObjectInputStream` / `ScriptEngine` /
+  `MessageDigest("MD5")`; Ruby ActiveRecord interpolation, backticks, `YAML.load`;
+  C# `SqlCommand` interpolation, `BinaryFormatter`, `Process.Start`; PHP query
+  concatenation, `include($_GET…)`, `mt_rand`). Reuses the existing 10 finding
+  classes and CWE/severity metadata, so the ledger, coverage and `/clawness:audit`
+  workflow are unchanged — there is simply more to find. Still a tripwire, not a SAST
+  engine; the scan stays deterministic and zero-token.
+
 ## [1.15.1] - 2026-08-21
 
 ### Changed
