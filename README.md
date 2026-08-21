@@ -29,7 +29,7 @@ What you get:
 - **Session continuity**: a per-project lessons memory, a warning when your context window
   is filling up, and a handoff the next session picks up on its own.
 - **Low token cost.** Only the matching rules are injected, never the whole set. A typical
-  turn is around 1,700 tokens instead of loading all 214 rules every turn.
+  turn is around 1,700 tokens instead of loading all 215 rules every turn.
 
 Under 1 MB, no services, no ML models, about 3 ms per prompt. Pure Python, with PyYAML as
 the only dependency.
@@ -128,7 +128,7 @@ only the few that fit, plus an always-on mandatory set. So a developer moving be
 frontend, backend, and SQL always has the right rules and never the rest. The same hook
 carries the rest of what's [in the box](#clawness), each covered under [Using It](#using-it).
 
-**Make them *your* standards.** The 214 built-in rules are a starting point. Run
+**Make them *your* standards.** The 215 built-in rules are a starting point. Run
 `/clawness:add describe your rule` and Clawness writes the tagged YAML for you, or drop
 `.yml` files in `.clawness/rules/`. Commit `.clawness/rules/` and `.clawness/memory.md` to
 share them with your team. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
@@ -160,13 +160,13 @@ Pure Python, one dependency (PyYAML), nothing to download at query time:
 - **BM25 and TF-IDF, fused with Reciprocal Rank Fusion.** Two word-matching methods that
   fail in different places, so a rule is found whether your prompt shares its exact terms or
   just its general vocabulary.
-- **Concept expansion (26 groups)** maps synonyms onto shared markers
+- **Concept expansion (32 groups)** maps synonyms onto shared markers
   (`login ↔ auth ↔ jwt`, `postgres ↔ db ↔ query`), the reach a vector model gives but
   instant and dependency-free. Light stemming collapses plural and verb forms.
 - **Project memory is searched the same way**, so a long lessons log stays a few lines per
   turn. See [Project Memory](#project-memory).
 
-**Quality is measured.** `clawness eval` scores retrieval against 246 known-answer
+**Quality is measured.** `clawness eval` scores retrieval against 249 known-answer
 questions: **MRR@5 = 0.990**, **hit-rate = 1.000**, both CI-enforced.
 
 **Cost.** About 2 ms and roughly 850 tokens for the always-on mandatory block, plus the few
@@ -856,7 +856,7 @@ clawness agents-md --write
 
 | Domain | Rules | Covers |
 |--------|-------|--------|
-| `general` | 25 | Cross-cutting: prior art, abstraction/YAGNI, comments, memory, magic numbers, immutability, dependency selection, versioning/lockfiles, changelog upkeep, linting, naming, validation, logging, env config, accessibility, git, performance *(3 mandatory)* |
+| `general` | 26 | Cross-cutting: prior art, abstraction/YAGNI, comments, memory, magic numbers, immutability, dependency selection, versioning/lockfiles, changelog upkeep, linting, naming, validation, logging, env config, accessibility, git, performance *(3 mandatory)* |
 | `science` | 18 | Physics/maths/engineering: dimensional consistency, numerical stability, matrix conditioning, uncertainty propagation, statistical discipline, derivation checking, solver validation and convergence, RNG and seeding, reproducibility, paper claims, figure standards, array/dataframe correctness, notebook hygiene |
 | `research` | 14 | Source hygiene, citation verification, date-bounded sweeps, reporting standards (PRISMA/CONSORT/STROBE/ARRIVE), data/code availability with a DOI, pre-registration, peer-review responses, falsifiable questions, novelty search, structured synthesis |
 | `security` | 11 | Auth, secrets, deps, untrusted-content/exfil *(4 mandatory)*; SQLi, XSS, supply-chain, SSRF, path traversal, IDOR, password hashing *(ranked)* |
