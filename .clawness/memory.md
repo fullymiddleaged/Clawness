@@ -38,3 +38,5 @@
 - `openclaw agent --local` does NOT run the plugin-command interceptor — `/clawness-status` went to the LLM (it paraphrased injected context). Same CLI gap as SessionStart notes; verify command reply on a real channel.
 - OpenClaw SDK levers past our 4 hooks: registerContextEngine, registerCompactionProvider(+before/after_compaction), registerMemoryPromptSection/Capability, before_install — homes for our retrieval/handoff/memory/trust.
 - openclaw plugins update says 'already at 0.1.0' (adapter ver) yet re-pulls git HEAD; verify engine moved via clone __version__.
+- Repeating fields in build_search_text won't downweight prose (cosine normalises length); use the CLAW_MIN_CURATED index
+- eval ran stackless before 1.18: ground_truth cases need "stack" or the off-stack/narrow floors are untested and misscore

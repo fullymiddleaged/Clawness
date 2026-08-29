@@ -812,6 +812,7 @@ class Clawness:
         off_stack_min_relevance: Optional[float] = None,  # higher floor for off-stack
         topical_min_relevance: Optional[float] = None,  # middle floor for science/research
         narrow_min_relevance: Optional[float] = None,  # top floor for off-stack cfd/julia/...
+        min_curated_relevance: Optional[float] = None,  # floor on the curated-only index
         build_index: bool = True,       # False: caller will add_rules() then build_index()
     ) -> None:
         self.rules_dir = Path(rules_dir)
@@ -883,6 +884,35 @@ class Clawness:
         self.narrow_min_relevance = max(self.off_stack_min_relevance,
                                         narrow_min_relevance)
 
+        # Floor on a SECOND index built only from the hand-curated fields
+        # (id/domain/tags/triggers/when). It targets a bug class the domain floors
+        # above cannot see: a rule matching a prompt only through an ordinary word
+        # buried in its explanatory prose. JL-DISPATCH-001 says dispatch changes
+        # behaviour "globally for every package in the session" — meaning Julia's
+        # package session — and so collided with any prompt saying "this session".
+        #
+        # It is a SEPARATE index, not a weighting of the main one. Duplicating the
+        # curated fields inside build_search_text was measured and does not work:
+        # TF-IDF cosine normalizes by document length, so repeating a field shifts
+        # the norm instead of down-weighting prose, and it moved two of three
+        # collision probes the WRONG way (CFD-CONVERGE 0.186 -> 0.194, ML-VECTOR
+        # 0.195 -> 0.215) while leaving the eval flat.
+        #
+        # 0.03 is deliberately conservative. Measured over the 249 eval queries,
+        # every expected rule has non-zero curated overlap (min 0.047, median
+        # 0.375), while the prose-only collision scores 0.015. Genuine jargon
+        # collisions ("solver", "vectorize") score 0.216-0.303 here because they
+        # ARE real curated matches — those are the narrow floor's job, not this
+        # one. Set CLAW_MIN_CURATED=0 to disable.
+        if min_curated_relevance is None:
+            try:
+                min_curated_relevance = float(
+                    os.environ.get("CLAW_MIN_CURATED", "0.03")
+                )
+            except ValueError:
+                min_curated_relevance = 0.03
+        self.min_curated_relevance = max(0.0, min_curated_relevance)
+
         # Rendering verbosity (token efficiency). Mandatory rules repeat on
         # every turn, so they render compact (id + RULE only) unless
         # CLAW_VERBOSE is set. Ranked rules render full (with WHEN/BAD/GOOD)
@@ -899,6 +929,7 @@ class Clawness:
         self._ranked_rules, self._mandatory_rules = load_rules(self.rules_dir)
         self._bm25: Optional[BM25] = None
         self._tfidf: Optional[TfIdfIndex] = None
+        self._curated: Optional[TfIdfIndex] = None
         self._indexed = False
 
         if build_index:
@@ -937,6 +968,7 @@ class Clawness:
         if not self._ranked_rules:
             self._bm25 = None
             self._tfidf = None
+            self._curated = None
             self._indexed = True
             return
 
@@ -948,6 +980,24 @@ class Clawness:
 
         self._tfidf = TfIdfIndex()
         self._tfidf.build(search_texts)
+
+        # Second index over the hand-curated fields only. tags/triggers/when are
+        # written to be diagnostic; rule/violation/correct exist to explain and
+        # inevitably contain ordinary words. Indexing them separately lets _rank
+        # ask "did this match on something curated, or only on prose?" — see
+        # min_curated_relevance. Provenance stays excluded here for the same
+        # reason build_search_text excludes it.
+        self._curated = TfIdfIndex()
+        self._curated.build([
+            " ".join(p for p in (
+                r.id,
+                r.domain,
+                " ".join(str(t) for t in r.tags if t),
+                " ".join(str(t) for t in r.triggers if t),
+                r.when,
+            ) if p)
+            for r in self._ranked_rules
+        ])
         self._indexed = True
 
     @property
@@ -1036,10 +1086,32 @@ class Clawness:
             ranked.append((i, relevance))
 
         # --- apply the floor (per-rule: off-stack rules face a higher bar) ---
-        floored = [
-            (i, rel) for (i, rel) in ranked
-            if rel >= self._floor_for(self._ranked_rules[i].domain)
-        ]
+        # Two independent bars. The domain floor asks "is this a strong enough
+        # match?"; the curated floor asks "did it match on anything hand-written
+        # to be diagnostic, or only on a word that happened to appear in the
+        # prose?" A rule needs both. See min_curated_relevance for the measurements.
+        # min_relevance == 0 means the caller turned the floor system OFF; the
+        # curated gate is part of that system, so it goes off too. Otherwise
+        # `Clawness(min_relevance=0)` would still silently filter.
+        gate_on = (self.min_relevance > 0
+                   and self.min_curated_relevance > 0
+                   and self._curated is not None)
+        curated_map: dict[int, float] = {}
+        if gate_on:
+            curated_map = dict(self._curated.query(
+                query,
+                top_k=len(self._ranked_rules),
+                candidates=candidate_set if domain else None,
+            ))
+
+        def _passes(i: int, rel: float) -> bool:
+            if rel < self._floor_for(self._ranked_rules[i].domain):
+                return False
+            if not gate_on:
+                return True
+            return curated_map.get(i, 0.0) >= self.min_curated_relevance
+
+        floored = [(i, rel) for (i, rel) in ranked if _passes(i, rel)]
 
         # --- BM25 rescue ---
         # RRF fuses both signals, but the floor above is gauged on TF-IDF cosine
@@ -1054,9 +1126,19 @@ class Clawness:
         # score can exceed a genuine narrow query's), so a ratio/absolute
         # threshold can't be tuned reliably — "floor emptied the result" is the
         # only additive, zero-regression trigger condition.
+        # The rescue deliberately bypasses the floor, so it must not become a
+        # side door for exactly what the narrow floor exists to keep out: a
+        # content-free prompt in a non-Julia repo falling back onto a Fortran
+        # rule. A narrow-domain rule is only rescuable in its OWN project.
         if not floored and bm25_ranked:
             top_idx, top_score = bm25_ranked[0]
-            if top_score > 0:
+            top_domain = self._ranked_rules[top_idx].domain
+            rescuable = (
+                top_domain not in _NARROW_STACK_DOMAINS
+                or (self.stack_domains is not None
+                    and top_domain in self.stack_domains)
+            )
+            if top_score > 0 and rescuable:
                 floored = [(top_idx, tfidf_map.get(top_idx, 0.0))]
 
         return floored
@@ -1069,12 +1151,38 @@ class Clawness:
 
         The narrow tier is checked FIRST inside the off-stack branch: cfd/julia/
         fortran/matlab/r are also in _STACK_DOMAINS, so returning the ordinary
-        off-stack floor before testing them would make the tier dead code."""
+        off-stack floor before testing them would make the tier dead code.
+
+        The narrow tier ALSO applies when the stack is unknown, and that
+        asymmetry is deliberate. Detection returning None used to disable every
+        penalty, which read "no stack detected" as "no opinion" — but for these
+        domains it means "not Julia": an unrecognized repo is not evidence of
+        Fortran. Measured with stack_domains=None, "refactor this loop to be
+        faster" surfaced ML-VECTOR-001 and "why is this converging so slowly"
+        surfaced CFD-CONVERGE-001, in a project detected as nothing at all. That
+        is also the likeliest route by which a Julia rule reached an Astro
+        session: a project in a subdirectory detects nothing from the repo root,
+        so the 0.22 floor never applied.
+
+        Ordinary off-stack domains keep the old behaviour on the unknown-stack
+        path on purpose. sql/docker/llm are legitimately cross-cutting — a bare
+        repo really might want them — whereas there is no such thing as needing
+        Fortran conventions in a project that shows no sign of Fortran.
+
+        This stays a FLOOR rather than becoming a hard gate, for two measured
+        reasons. An explicit cross-language ask must still work: in a TypeScript
+        repo "fix the type instability in my julia function" returns JL-TYPE-001
+        and "which turbulence model for this openfoam case" returns CFD-TURB-001,
+        both above 0.22. And `*.m` is deliberately not a MATLAB detector (see
+        init.py) because it collides with Objective-C, so a genuine .m-only
+        MATLAB project detects nothing — a hard gate would silence its own rules
+        in its own repo, permanently and invisibly."""
+        if domain in _NARROW_STACK_DOMAINS and not (
+                self.stack_domains is not None and domain in self.stack_domains):
+            return self.narrow_min_relevance
         if (self.stack_domains is not None
                 and domain in _STACK_DOMAINS
                 and domain not in self.stack_domains):
-            if domain in _NARROW_STACK_DOMAINS:
-                return self.narrow_min_relevance
             return self.off_stack_min_relevance
         if domain in _TOPICAL_DOMAINS:
             return self.topical_min_relevance

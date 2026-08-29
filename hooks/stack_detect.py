@@ -142,6 +142,14 @@ def main() -> None:
     coverage_note = check_coverage(cwd_path, domains)
     if coverage_note:
         print(("\n" if labels else "") + coverage_note)
+
+    # --- New coverage after a Clawness upgrade (checked LAST, like the rest) ---
+    # Reuses the `domains` this hook already computed, so it costs no extra scan;
+    # on the overwhelmingly common turn (version unchanged) it is one small JSON
+    # read and nothing else.
+    upgrade_note = check_upgrade(cwd_path, domains)
+    if upgrade_note:
+        print(('\n' if (labels or coverage_note) else "") + upgrade_note)
     sys.exit(0)
 
 
@@ -209,6 +217,29 @@ def check_coverage(cwd_path: Path, domains: set) -> str:
         if not labels:
             return ""
         return render_note(unasked(root, labels))
+    except Exception:
+        return ""
+
+
+def check_upgrade(cwd_path: Path, domains: set) -> str:
+    """The new-coverage note for this project, or "" — never raises.
+
+    Needs a git root for the ledger, so a scratch dir stays silent, matching the
+    other ask-once note hooks. Checked LAST for the same reason they are.
+    """
+    if os.environ.get("CLAW_NO_UPGRADE_NOTE"):
+        return ""
+    try:
+        from clawness import __version__
+        from clawness.upgrade import check_upgrade as _check, render_note
+
+        root = git_root(cwd_path)
+        if root is None:
+            return ""
+        rules_dir = Path(__file__).resolve().parent.parent / "rules"
+        return render_note(
+            _check(root, __version__, domains, rules_dir), __version__
+        )
     except Exception:
         return ""
 

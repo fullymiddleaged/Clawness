@@ -112,12 +112,14 @@ def test_bm25_rescue_never_fires_when_tfidf_already_cleared_the_floor():
     surfaces matches via TF-IDF (including a signal-less/noise prompt, which
     empirically still returns something) is completely unaffected by it."""
     wl = Clawness(RULES_DIR, min_relevance=0.06)
-    ids = wl.rank_ids("hello can you help me", top_k=5)
+    # Two or more results is the actual evidence the rescue was not reached: the
+    # rescue can only ever contribute a SINGLE candidate, so len >= 2 rules it out.
+    ids = wl.rank_ids("can you take a look at this for me", top_k=5)
     # The floor already trims this down from a full top-5 (test_floor_suppresses_
     # scattershot_on_signal_less_prompt covers the same query via `_rank`
     # directly) — confirm it's non-empty (so the rescue path is never reached)
     # and still bounded (not full top-5).
-    assert 0 < len(ids) < 5
+    assert 1 < len(ids) < 5
 
 
 def test_off_stack_rules_suppressed_when_stack_known():
@@ -148,7 +150,11 @@ def test_llm_domain_is_stack_gated():
     Uses a marginal match on purpose: a STRONG match is designed to clear the
     off-stack floor anyway (test_strong_off_stack_match_still_surfaces), so only
     a mid-band score exercises the gate."""
-    prompt = "confirm before the side effect"
+    # Mid-band AND carrying real curated overlap (tfidf 0.070, curated 0.098).
+    # The previous prompt, "confirm before the side effect", matched LLM-INJECT-001
+    # only through its prose (curated 0.000) and so is now correctly refused by the
+    # curated gate — it never demonstrated stack gating, which is what this tests.
+    prompt = "the agent should ask before acting"
     off = Clawness(RULES_DIR, stack_domains={"python", "science", "general"})
     on = Clawness(RULES_DIR, stack_domains={"python", "llm", "general"})
     off_ids = [i for i in off.rank_ids(prompt, top_k=8) if i.startswith("LLM-")]
@@ -377,3 +383,45 @@ if __name__ == "__main__":
             except Exception as e:  # noqa: BLE001
                 print(f"FAIL {name}: {e}")
     print("done")
+
+
+def test_curated_gate_rejects_a_prose_only_match():
+    """A rule must match on something hand-curated, not merely on an ordinary
+    word buried in its explanatory prose.
+
+    LLM-INJECT-001 is the specimen: on "confirm before the side effect" it scores
+    a live 0.093 on the main index but 0.000 on the curated one — the words it
+    matched appear only in its rule/violation/correct prose. Held on-stack so the
+    domain floors play no part and the gate is the only thing under test."""
+    prompt = "confirm before the side effect"
+    stack = {"python", "llm", "general"}
+    ungated = Clawness(RULES_DIR, stack_domains=stack, min_curated_relevance=0.0)
+    gated = Clawness(RULES_DIR, stack_domains=stack)
+    assert "LLM-INJECT-001" in ungated.rank_ids(prompt, top_k=8)
+    assert "LLM-INJECT-001" not in gated.rank_ids(prompt, top_k=8)
+
+
+def test_curated_gate_is_disabled_with_the_floor():
+    """min_relevance=0 turns the floor system off, and the curated gate is part
+    of that system — otherwise the documented "0 disables" escape hatch would
+    still silently filter."""
+    wl = Clawness(RULES_DIR, min_relevance=0.0)
+    assert len(wl._rank("hello can you help me", limit=5)[:5]) == 5
+
+
+def test_narrow_domain_faces_its_floor_when_no_stack_is_detected():
+    """"Nothing detected" means "not MATLAB", not "no opinion". An unrecognized
+    repo (a project in a subdirectory, say) used to disable every penalty, which
+    is the likeliest route by which a Julia rule reached an Astro session."""
+    prompt = "vectorize this dataframe loop"
+    assert "ML-VECTOR-001" not in Clawness(RULES_DIR).rank_ids(prompt, top_k=8)
+    on_stack = Clawness(RULES_DIR, stack_domains={"matlab", "general"})
+    assert "ML-VECTOR-001" in on_stack.rank_ids(prompt, top_k=8)
+
+
+def test_bm25_rescue_will_not_rescue_a_narrow_rule_outside_its_project():
+    """The rescue bypasses the floor by design, so it must not become a side door
+    for the leak the narrow floor exists to stop."""
+    wl = Clawness(RULES_DIR)
+    for rid in wl.rank_ids("why is this converging so slowly", top_k=5):
+        assert not rid.startswith(("CFD-", "JL-", "FT-", "ML-", "R-"))

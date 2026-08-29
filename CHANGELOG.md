@@ -5,6 +5,35 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.18.0] - 2026-08-29
+
+### Added
+
+- **Clawness tells you when an update brings rule coverage your project can use.**
+  When Clawness gains detection or rules for a stack you already work in, those rules
+  start applying by themselves — but nothing used to say so, and a capability you were
+  waiting for could sit unnoticed. On the first session after an update, Clawness now
+  compares what your project matches against what it matched before and names anything
+  new. It stays silent on a project's first ever session (everything is new then), on
+  every session where the version hasn't changed, and once a domain has been announced.
+  It rides the existing project scan, so it costs no extra work. Silence it with
+  `CLAW_NO_UPGRADE_NOTE=1`.
+
+### Changed
+
+- **Ranked rules must now match on a rule's curated fields, not just its prose.** Rules
+  are indexed twice: once over everything, and once over only the hand-written
+  `tags`/`triggers`/`when`. A rule that matches your prompt purely through an ordinary
+  word buried in its explanation is no longer injected — the case that put a Julia
+  dispatch rule in front of someone editing an Astro site. Tune with `CLAW_MIN_CURATED`
+  (default 0.03); `CLAW_MIN_RELEVANCE=0` disables it along with the other floors.
+- **Rules for narrow stacks stay out of projects that show no sign of them.** The higher
+  relevance bar for cfd/julia/fortran/matlab/r previously applied only when Clawness had
+  recognised your stack; a project it couldn't identify — one in a subdirectory, say — got
+  no filtering at all. "Nothing detected" now means "not Fortran" rather than "no opinion".
+  Asking about those languages directly still works, and their rules are unaffected in
+  their own projects.
+
 ## [1.17.0] - 2026-08-21
 
 ### Changed

@@ -517,6 +517,14 @@ def cmd_eval(args: argparse.Namespace) -> None:
     for entry in queries:
         q = entry["q"]
         expect = set(entry.get("expect", []))
+        # A case may declare the stack it is asked in. Without this every query
+        # ran stackless, so the off-stack/topical/narrow floors — the bulk of the
+        # retrieval logic — were never exercised by the eval, and a narrow-domain
+        # question ("how big should the far field domain be") was scored as if
+        # asked in a project showing no sign of CFD. Assigning the attribute is
+        # enough: stack_domains is read by _floor_for and does not affect either
+        # index, so this needs no rebuild between cases.
+        wl.stack_domains = set(entry["stack"]) if entry.get("stack") else None
         ids = wl.rank_ids(q, top_k=k)
         rank = next((i + 1 for i, rid in enumerate(ids) if rid in expect), None)
         if rank:

@@ -271,6 +271,37 @@ dependency**. No ML models, no services, no Docker.
      note about a rule that is still correct for them, while the rewrite serves
      everyone and the stamp then records the range you actually checked.
 
+6c. **New coverage after an upgrade** (`clawness/upgrade.py`, surfaced by
+   `stack_detect`'s `check_upgrade`): when Clawness gains detection or rules for a
+   stack, a project that already IS that stack starts benefiting automatically —
+   retrieval runs the whole corpus each prompt and the stack filter simply stops
+   penalizing the newly-detected domain. Nothing needs installing. What the user
+   does not get automatically is *awareness*, which is all this provides.
+   - **Gated on `__version__` changing**, so the steady state is one small JSON
+     read. It rides the `scan_project` call `stack_detect` already makes, so an
+     upgrade turn costs a listing of `rules/` plus a set difference — and it
+     needed no new hook registration, unlike a standalone SessionStart hook.
+   - **Silent on a project's FIRST session.** With no ledger every domain is
+     "new", which is noise; the first run records and says nothing. Same
+     first-session reasoning `claude_md_check` documents.
+   - **The note says what now MATCHES and does not claim to know why.** The
+     ledger stores `detected ∩ available`, so a diff means "these apply now and
+     didn't at the last check" — true whether the corpus grew or the project did.
+     Distinguishing them needs the old corpus's domain list, and the wording
+     would then outrun the data. It is useful either way, so neutral costs
+     nothing. `_mandatory` is excluded from `available_domains`: those bypass
+     retrieval and the stack filter, so they can never be "newly matched".
+   - **A corrupt ledger is treated as a first session — record, stay quiet.**
+     This is the OPPOSITE of `coverage.unasked`, which warns twice rather than
+     never, and the asymmetry is the point: a missed uncovered-stack warning
+     means the user never learns Clawness is doing little for them, while a
+     missed new-coverage note costs only an announcement about rules that are
+     already working. A spurious "new coverage" note is the false alarm that
+     teaches people to ignore the real one.
+   - Like every note here it **orients and commissions nothing** — the rules are
+     already live, so there is nothing to run or author, and
+     `test_note_names_the_version_and_labels_and_commissions_nothing` pins that. Opt-out `CLAW_NO_UPGRADE_NOTE`; needs a git root; fails silent.
+
 7. **Changelog check** (`hooks/changelog_check.py`, SessionStart): reminds when a
    changelog exists, and asks **once per project, ever** when one doesn't — ledger at
    `.clawness/changelog.json`, `should_ask` called LAST so a session that would have
@@ -519,6 +550,9 @@ dependency**. No ML models, no services, no Docker.
   truth for "what model is configured?"), keeping only the `[1m]` reading here.
 - `clawness/model_advisor.py` — model-tier advice (`normalize_tier`, `assess`,
   `should_advise`, `render_advice`, `read_settings_model`).
+- `clawness/upgrade.py` — new-coverage-on-upgrade note (`available_domains`,
+  `newly_covered`, `check_upgrade`, `render_note`). Ledger `.clawness/version.json`
+  keyed on the Clawness version; called only from `stack_detect` (SessionStart).
 - `clawness/staleness.py` — version stamps (`parse_range`, `is_above_ceiling`,
   `is_armed`, `stale_rules`, `summarize`, `unasked`, `render_note`,
   `WATCHED_LABELS`). Imports `VERSION_WATCH_*` from `init` — one source of truth for

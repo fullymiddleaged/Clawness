@@ -146,15 +146,22 @@ def test_query_missing_rules_dir_exits_1(tmp_path):
 def test_query_stack_suppresses_a_narrow_offstack_rule():
     """The documented measurement: in a Python repo "vectorize this dataframe
     loop" pulls MATLAB's ML-VECTOR-001 at 0.194, over the 0.15 off-stack floor
-    but under the 0.22 narrow one. Cross-cutting `science` is unaffected. Without
-    --stack the penalty is disabled entirely, which is what makes this the only
-    place the tier is reachable outside a live hook."""
+    but under the 0.22 narrow one. Cross-cutting `science` is unaffected.
+
+    A narrow-domain rule now clears that 0.22 bar only in its OWN project, so it
+    is suppressed both for a non-MATLAB stack and for NO stack at all. The
+    no-stack case is the one that changed: "nothing detected" used to disable
+    every penalty, which read an unrecognized repo as evidence for every language
+    at once. Asserting the on-stack case keeps the tier reachable here rather
+    than only in a live hook."""
     q = ("--rules-dir", str(REPO / "rules"), "query",
          "vectorize this dataframe loop", "--top-k", "3")
     unfiltered = _cli(*q).stdout
     filtered = _cli(*q, "--stack", "python,general").stdout
-    assert "ML-VECTOR-001" in unfiltered
+    on_stack = _cli(*q, "--stack", "matlab,general").stdout
+    assert "ML-VECTOR-001" not in unfiltered
     assert "ML-VECTOR-001" not in filtered
+    assert "ML-VECTOR-001" in on_stack
     assert "SCI-ARRAY-001" in filtered
 
 
