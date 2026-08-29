@@ -31,7 +31,7 @@ What you get:
 - **Low token cost.** Only the matching rules are injected, never the whole set. A typical
   turn is around 1,700 tokens instead of loading all 222 rules every turn.
 
-Under 1 MB, no services, no ML models, about 3 ms per prompt. Pure Python, with PyYAML as
+Under 1 MB, no services, no ML models, about 4 ms per prompt. Pure Python, with PyYAML as
 the only dependency.
 
 > **Not just for shipping code.** 61 rules cover scientific computing, machine learning,
@@ -128,7 +128,7 @@ only the few that fit, plus an always-on mandatory set. So a developer moving be
 frontend, backend, and SQL always has the right rules and never the rest. The same hook
 carries the rest of what's [in the box](#clawness), each covered under [Using It](#using-it).
 
-**Make them *your* standards.** The 215 built-in rules are a starting point. Run
+**Make them *your* standards.** The 222 built-in rules are a starting point. Run
 `/clawness:add describe your rule` and Clawness writes the tagged YAML for you, or drop
 `.yml` files in `.clawness/rules/`. Commit `.clawness/rules/` and `.clawness/memory.md` to
 share them with your team. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
@@ -142,7 +142,7 @@ your prompt
    │  hook fires automatically, before your agent sees it
    ▼
 score every rule against the task   (global rules + <project>/.clawness/rules/)
-   │  BM25 + TF-IDF + RRF + concept expansion, ~3 ms, pure Python
+   │  BM25 + TF-IDF + RRF + concept expansion, ~4 ms, pure Python
    ▼
 your agent sees:  mandatory rules (always) + the few that matched + your prompt
 ```
@@ -404,7 +404,8 @@ files without asking.
 - **Stack note.** Detects your stack from its files and injects a line like *"Detected
   project stack: Next.js 14.2, React 18.3, TypeScript 5.4"*, so your agent knows the
   ecosystem and which major versions. Versions it can't read are left off, not guessed.
-  Off: `CLAW_NO_STACK_NOTE=1`.
+  It looks through the project, not just the top folder, skipping `node_modules` and other
+  vendored trees. Off: `CLAW_NO_STACK_NOTE=1`.
 - **Changelog.** If a `CHANGELOG.md` exists, a note reminds Claude to add the line as part
   of the work rather than at release time. If it doesn't, Claude offers **once, ever** to
   create one. Off: `CLAW_NO_CHANGELOG_CHECK=1`.

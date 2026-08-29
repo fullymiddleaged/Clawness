@@ -90,7 +90,7 @@ def cmd_stats(args: argparse.Namespace) -> None:
     print(f"Ranked rules    : {s['ranked_rules']}")
     print(f"Mandatory rules : {s['mandatory_rules']}")
     print(f"Total           : {s['total_rules']}")
-    print(f"Retrieval       : BM25 + TF-IDF + RRF + concept expansion (lexical, ~2ms)")
+    print(f"Retrieval       : BM25 + TF-IDF + RRF + concept expansion (lexical, ~4ms)")
     ranked_room = max(0, s["context_budget"] - s["mandatory_tokens"])
     # What the mandatory block costs on the turns it's abbreviated to an id list
     # (see session_state / CLAW_FULL_EVERY) — computed, not assumed, so it stays
