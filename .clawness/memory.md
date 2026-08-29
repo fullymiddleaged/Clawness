@@ -40,3 +40,4 @@
 - openclaw plugins update says 'already at 0.1.0' (adapter ver) yet re-pulls git HEAD; verify engine moved via clone __version__.
 - Repeating fields in build_search_text won't downweight prose (cosine normalises length); use the CLAW_MIN_CURATED index
 - eval ran stackless before 1.18: ground_truth cases need "stack" or the off-stack/narrow floors are untested and misscore
+- clawness.guard costs ~13ms regex compile at import; keep it off per-prompt hooks (init owns SCAN_SKIP_DIRS)
