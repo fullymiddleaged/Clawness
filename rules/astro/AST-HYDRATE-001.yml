@@ -1,0 +1,21 @@
+id: AST-HYDRATE-001
+domain: astro
+severity: warning
+tags: [astro, hydration, hydrate, islands, client-directive, javascript, interactivity, performance]
+triggers: [astro, client, hydrate, hydration, island, islands, interactive, component, javascript, bundle, directive]
+when: Adding a UI framework component (React, Vue, Svelte, Solid) to an Astro page.
+rule: >
+  Astro ships zero client JavaScript by default — a framework component with
+  no client:* directive renders to static HTML. Add a directive only to a
+  component that genuinely needs browser interactivity, and pick the cheapest
+  one that works: client:visible for anything below the fold, client:idle for
+  non-urgent widgets, client:load only for controls that must respond the
+  instant the page paints. client:only skips server rendering entirely, so
+  reserve it for components that cannot run outside the browser.
+violation: "<Newsletter client:load /> on a footer widget nobody scrolls to"
+correct: "<Newsletter client:visible /> — hydrates when it enters the viewport"
+
+# Reviewed against the Astro 6 directives reference, August 2026. The five
+# client:* directives and their ordering guidance are unchanged since 1.0, so
+# there is no applies_to ceiling: a major bump does not change this claim.
+# Sources: https://docs.astro.build/en/reference/directives-reference/ | https://docs.astro.build/en/concepts/islands/

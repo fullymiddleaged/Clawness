@@ -1,0 +1,24 @@
+id: AST-ENV-001
+domain: astro
+severity: error
+tags: [astro, env, environment, secrets, astro-env, config, client-bundle, security]
+triggers: [astro, env, environment, secret, secrets, api, key, token, config, public, bundle]
+when: Reading configuration or secrets in an Astro project.
+rule: >
+  Declare variables in the env.schema (astro:env) with an explicit context and
+  access, then import them from astro:env/client or astro:env/server.
+  import.meta.env values are inlined into the bundle at build time, so a secret
+  read that way from any client-reachable code ships to the browser. There is
+  no such thing as a secret client variable: a value the browser needs is
+  public, and everything else stays server-only behind astro:env/server.
+violation: "const key = import.meta.env.STRIPE_SECRET_KEY inside a client:load component"
+correct: "import { STRIPE_SECRET_KEY } from 'astro:env/server' — declared context server, access secret"
+
+# Reviewed against the Astro 6 environment-variables guide, August 2026.
+# astro:env is the 5-era replacement for raw import.meta.env access, and 6
+# changed import.meta.env to always inline without type coercion.
+applies_to: {"Astro": "5-6"}
+verified: "2026-08"
+sources:
+  - https://docs.astro.build/en/guides/environment-variables/
+  - https://docs.astro.build/en/guides/upgrade-to/v6/

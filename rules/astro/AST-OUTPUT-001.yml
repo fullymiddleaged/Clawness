@@ -1,0 +1,25 @@
+id: AST-OUTPUT-001
+domain: astro
+severity: warning
+tags: [astro, output, prerender, ssr, static, server, adapter, server-islands, rendering]
+triggers: [astro, output, prerender, ssr, static, server, hybrid, adapter, dynamic, render, deploy, personalized]
+when: Choosing an Astro rendering mode, or making one route dynamic.
+rule: >
+  Keep output static (the default) and opt individual routes into server
+  rendering with `export const prerender = false`; output server inverts that
+  default for the whole site and requires an adapter. The hybrid value was
+  removed — per-route prerender is how a mostly-static site serves a few
+  dynamic routes. When a page is static except for one personalized fragment,
+  use a server island (server:defer with a fallback slot) rather than making
+  the whole page dynamic.
+violation: "output: server for a marketing site that has one dynamic /account page"
+correct: "static output, with `export const prerender = false` in src/pages/account.astro"
+
+# Reviewed against the Astro 6 configuration reference and server-islands
+# guide, August 2026. The hybrid value was removed in 5 and server islands
+# landed in 5, so the claim is specific to 5-6.
+applies_to: {"Astro": "5-6"}
+verified: "2026-08"
+sources:
+  - https://docs.astro.build/en/reference/configuration-reference/
+  - https://docs.astro.build/en/guides/server-islands/

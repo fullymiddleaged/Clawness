@@ -10,10 +10,24 @@ Usage:
 
 from __future__ import annotations
 
+import fnmatch
 import json
+import os
 import re
 import sys
+from functools import lru_cache
 from pathlib import Path
+
+
+# Directories neither the stack walk below nor `guard`'s provenance walk descends
+# into: vendored trees, build output, VCS and editor internals. Shared with the
+# guard (which imports it from here) so the two walks can never drift apart.
+SCAN_SKIP_DIRS = frozenset({
+    ".claude", ".clawness", ".git", "node_modules", ".venv", "venv", "env",
+    "__pycache__", "dist", "build", ".next", "out", "target", "vendor",
+    ".cache", "site-packages", ".mypy_cache", ".pytest_cache", ".tox",
+    ".gradle", "Pods", ".idea", ".vscode", "coverage", ".turbo",
+})
 
 
 # Map from detected file/pattern to rule domains
@@ -24,6 +38,11 @@ DETECTORS: list[tuple[str, list[str], str]] = [
     ("package.json",           ["typescript", "general"],            "Node.js project"),
     ("tsconfig.json",          ["typescript"],                      "TypeScript"),
     ("next.config.*",          ["nextjs", "react"],                 "Next.js"),
+    # Astro (and Vue/Svelte, when they land) implies `css`: scoped <style> blocks
+    # inside a component file are a large share of how CSS is written in these
+    # stacks, and no filename glob can see them. Implying the domain from the
+    # framework is both cheaper and more reliable than sniffing file bodies.
+    ("astro.config.*",         ["astro", "typescript", "css"],      "Astro"),
     ("capacitor.config.*",     ["capacitor"],                       "Capacitor (mobile)"),
     # Bare *.py matters: without it a repo holding paper.tex + analysis.py and no
     # packaging file does NOT detect Python, so Python rules face the off-stack
@@ -32,8 +51,13 @@ DETECTORS: list[tuple[str, list[str], str]] = [
     ("requirements.txt",       ["python"],                          "Python (requirements.txt)"),
     ("pyproject.toml",         ["python"],                          "Python (pyproject.toml)"),
     ("Pipfile",                ["python"],                          "Python (Pipfile)"),
-    ("main.py",                ["python", "fastapi"],               "Python app"),
-    ("app.py",                 ["python", "fastapi"],               "Python app"),
+    # Root-anchored (the leading "./"): "a main.py/app.py sits at the top of this
+    # project" is a fair guess at a web app, but "somewhere in the tree" is not —
+    # every second Python repo has a nested one, and since the detectors went
+    # recursive an unanchored match dragged `fastapi` into projects with no web
+    # framework at all (this repo's own tests/fixtures/vuln/app.py did exactly that).
+    ("./main.py",              ["python", "fastapi"],               "Python app"),
+    ("./app.py",               ["python", "fastapi"],               "Python app"),
     ("go.mod",                 ["go"],                              "Go module"),
     ("go.sum",                 ["go"],                              "Go module"),
     ("Cargo.toml",             ["rust"],                            "Rust crate"),
@@ -65,7 +89,7 @@ DETECTORS: list[tuple[str, list[str], str]] = [
     ("*.ipynb",                ["science", "python"],               "Jupyter notebook"),
     ("Project.toml",           ["julia", "science"],                "Julia project"),
     ("*.jl",                   ["julia", "science"],                "Julia source"),
-    ("DESCRIPTION",            ["r", "science"],                    "R package"),
+    ("./DESCRIPTION",          ["r", "science"],                    "R package"),
     ("*.R",                    ["r", "science"],                    "R scripts"),
     ("*.Rproj",                ["r", "science"],                    "RStudio project"),
     ("*.f90",                  ["fortran", "science"],              "Fortran source"),
@@ -89,6 +113,7 @@ DETECTORS: list[tuple[str, list[str], str]] = [
 # Deep scan: look inside package.json for specific dependencies
 PACKAGE_JSON_DEPS: list[tuple[str, list[str], str]] = [
     ("next",                   ["nextjs", "react"],                 "Next.js"),
+    ("astro",                  ["astro", "typescript", "css"],      "Astro"),
     ("react",                  ["react"],                           "React"),
     ("@capacitor/core",        ["capacitor"],                       "Capacitor"),
     ("fastapi",                ["fastapi"],                         "FastAPI"),
@@ -158,6 +183,7 @@ PYTHON_DEPS: list[tuple[str, list[str], str]] = [
 # spelling rather than the package name.
 VERSION_WATCH_JS: list[tuple[str, str]] = [
     ("next", "Next.js"),
+    ("astro", "Astro"),
     ("react", "React"),
     ("vue", "Vue"),
     ("svelte", "Svelte"),
@@ -204,6 +230,138 @@ def _python_version(content: str, dep: str) -> str:
     return m.group(1) if m else ""
 
 
+# --- the bounded project walk ---------------------------------------------
+# `Path.glob` is NOT recursive, so until now every extension detector below
+# (`*.py`, `*.css`, `*.sql`, `*.tex`, `*.jl`, ...) only ever saw the repo ROOT:
+# a project keeping its stylesheets in `src/styles/` never triggered `css`, and
+# the omission was invisible because the manifest detectors usually covered for
+# it. The fix cannot be `rglob` — `scan_project` re-runs uncached on EVERY
+# prompt, and `**/*.py` measures ~121ms against ~0.4ms for the shallow glob. So
+# the tree is listed ONCE, bounded in depth and entry count (the same shape as
+# `guard.value_in_project`), and all ~60 patterns are matched against that one
+# listing.
+_SCAN_MAX_DEPTH = 4        # .github/workflows/ci.yml is 2; apps/web/src/app.css is 3
+_SCAN_MAX_ENTRIES = 4000   # stop listing, never hang; this repo walks ~380
+
+_GLOB_CHARS = re.compile(r"[*?\[]")
+# "*.py" / "*.f90" — the bare-extension shape, answered by dictionary lookup.
+_EXT_PATTERN = re.compile(r"\*(\.[^*?\[\]./]+)$")
+
+
+def _walk_project(
+    project_dir: Path,
+    max_depth: int = _SCAN_MAX_DEPTH,
+    max_entries: int = _SCAN_MAX_ENTRIES,
+) -> list[str]:
+    """Relative POSIX paths of the files under *project_dir*, depth- and count-bounded.
+
+    Unordered — callers index it by name, never slice it. Symlinks are skipped
+    (cheap cycle safety), and past *max_entries* the listing simply stops, so a
+    project larger than the cap detects from whatever it reached: bounded and
+    partial beats complete and slow on a path that runs every prompt. Never
+    raises — an unreadable directory contributes nothing.
+    """
+    paths: list[str] = []
+    frontier: list[tuple[str, str, int]] = [(str(project_dir), "", 0)]
+    seen = 0
+    while frontier:
+        current, prefix, depth = frontier.pop()
+        try:
+            with os.scandir(current) as it:
+                entries = list(it)
+        except OSError:
+            continue
+        for entry in entries:
+            try:
+                if entry.is_symlink():
+                    continue
+                if entry.is_dir():
+                    if depth < max_depth and entry.name not in SCAN_SKIP_DIRS:
+                        frontier.append((entry.path, prefix + entry.name + "/", depth + 1))
+                    continue
+                if not entry.is_file():
+                    continue
+            except OSError:
+                continue
+            seen += 1
+            if seen > max_entries:
+                return paths
+            paths.append(prefix + entry.name)
+    return paths
+
+
+def _index_paths(paths: list[str]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """Case-normalised basename index and extension index over the walked paths.
+
+    Two indexes because most detectors are bare `*.ext` patterns, and answering
+    those by dictionary lookup is what keeps the match pass off the hot path's
+    budget: matching all ~50 patterns through `fnmatch.filter` instead measured
+    ~9ms, more than the walk itself.
+    """
+    by_name: dict[str, list[str]] = {}
+    by_ext: dict[str, list[str]] = {}
+    for rel in paths:
+        name = os.path.normcase(rel.rsplit("/", 1)[-1])
+        by_name.setdefault(name, []).append(rel)
+        dot = name.rfind(".")
+        if dot > 0:   # a leading dot is a hidden file (".eslintrc"), not an extension
+            by_ext.setdefault(name[dot:], []).append(rel)
+    return by_name, by_ext
+
+
+@lru_cache(maxsize=256)
+def _matcher(pattern: str):
+    """Compiled matcher for a glob segment, against already-normalised names.
+
+    `fnmatch.filter` re-runs `os.path.normcase` over every candidate on every
+    call; the indexes are normalised once, so only the pattern needs it here.
+    """
+    return re.compile(fnmatch.translate(os.path.normcase(pattern))).match
+
+
+def _pattern_hits(
+    pattern: str,
+    by_name: dict[str, list[str]],
+    by_ext: dict[str, list[str]],
+) -> bool:
+    """True when *pattern* matches any walked path.
+
+    A pattern with no separator matches by BASENAME at any walked depth — that is
+    the recursion fix. A `"./"` prefix opts back out of it, for the few detectors
+    whose signal is a file sitting at the project ROOT and which are pure noise
+    nested (`./main.py` -> FastAPI). A pattern that carries separators (".github/workflows/*.yml",
+    "system/controlDict") still has to match that whole trailing layout, so it means
+    the same thing it always did, just no longer only at the root. Case handling
+    follows `Path.glob`'s platform semantics (insensitive on Windows, sensitive
+    elsewhere) because both indexes and patterns go through `os.path.normcase`.
+    """
+    root_only = pattern.startswith("./")
+    segments = pattern[2:].split("/") if root_only else pattern.split("/")
+    tail = segments[-1]
+    ext = _EXT_PATTERN.match(tail)
+    if ext:
+        candidates = by_ext.get(os.path.normcase(ext.group(1)), [])
+    elif _GLOB_CHARS.search(tail):
+        match = _matcher(tail)
+        candidates = [rel for name, rels in by_name.items() if match(name) for rel in rels]
+    else:
+        candidates = by_name.get(os.path.normcase(tail), [])
+    if root_only:
+        return any("/" not in rel for rel in candidates)
+    if len(segments) == 1:
+        return bool(candidates)
+    for rel in candidates:
+        parts = rel.split("/")
+        if len(parts) < len(segments):
+            continue
+        if all(
+            _matcher(seg)(os.path.normcase(part))
+            for part, seg in zip(parts[-len(segments):], segments)
+        ):
+            return True
+    return False
+
+
 def scan_project(project_dir: Path) -> dict:
     """Scan a project directory and return detection results."""
     detected: list[tuple[str, list[str]]] = []
@@ -216,10 +374,10 @@ def scan_project(project_dir: Path) -> dict:
     # Always include mandatory and general
     domains.add("general")
 
-    # File-based detection
+    # File-based detection, over one bounded walk rather than ~60 shallow globs.
+    by_name, by_ext = _index_paths(_walk_project(project_dir))
     for pattern, rule_domains, desc in DETECTORS:
-        matches = list(project_dir.glob(pattern))
-        if matches:
+        if _pattern_hits(pattern, by_name, by_ext):
             detected.append((desc, rule_domains))
             domains.update(rule_domains)
 

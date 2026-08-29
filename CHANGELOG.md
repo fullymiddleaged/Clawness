@@ -19,6 +19,25 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   It rides the existing project scan, so it costs no extra work. Silence it with
   `CLAW_NO_UPGRADE_NOTE=1`.
 
+- **Astro projects are now recognised, with a rule set of their own.** An `astro.config.*`
+  file or an `astro` dependency detects the project as Astro (and TypeScript, and CSS —
+  scoped `<style>` blocks in a component are invisible to a filename scan), the session
+  note reads the version ("Astro 5.2"), and seven new rules cover island hydration
+  directives, state across islands, content collections, static vs server output,
+  `astro:env` secrets, scoped styles, and the server-only frontmatter fence.
+
+### Fixed
+
+- **Detection by file extension now sees your whole project, not just its top folder.**
+  Rules for a language were only triggered when a matching file sat in the project root,
+  so a site with its stylesheets in `src/styles/` got no CSS rules, and the same held for
+  `*.py`, `*.sh`, `*.sql`, `*.tex` and `*.jl`. Clawness now walks the project (skipping
+  `node_modules`, build output and other vendored trees, bounded so it stays a few
+  milliseconds) and detects those files wherever they live. Expect some projects to start
+  matching domains they never did before — that is the bug being fixed. A handful of
+  weak signals stay root-only on purpose: a `main.py` at the top of a project suggests a
+  web app, a `main.py` three folders down does not.
+
 ### Changed
 
 - **Ranked rules must now match on a rule's curated fields, not just its prose.** Rules

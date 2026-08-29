@@ -1,0 +1,19 @@
+id: AST-ISLAND-001
+domain: astro
+severity: warning
+tags: [astro, islands, state, context, props, serialization, store, nanostores]
+triggers: [astro, island, islands, state, context, provider, store, props, share, shared, global, nanostores]
+when: Sharing state or context between interactive components on an Astro page.
+rule: >
+  Every client:* component is an isolated island with its own framework
+  runtime: sibling islands do not share React context, module-level state or a
+  framework store, and props crossing the boundary are serialized, so
+  functions, class instances and callbacks do not survive the trip. To share
+  state, either wrap the components that need one context inside a single
+  island, or use a framework-agnostic store (nanostores) or the URL.
+violation: "Two client:load islands each wrapped in their own <CartProvider>, expecting one shared cart"
+correct: "One island rendering <CartProvider><Header/><Cart/></CartProvider>, or a nanostore both islands read"
+
+# Reviewed against the Astro 6 islands documentation, August 2026. Island
+# isolation is the architecture, not a versioned API — no ceiling.
+# Sources: https://docs.astro.build/en/concepts/islands/ | https://docs.astro.build/en/guides/framework-components/

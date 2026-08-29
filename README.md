@@ -17,7 +17,7 @@ But it also does heaps more!
 
 What you get:
 
-- **215 rules** across 29 domains: general coding, plus scientific computing, machine
+- **222 rules** across 30 domains: general coding, plus scientific computing, machine
   learning, research method, and building with LLMs. Only the ones that match your task
   are injected.
 - **7 review sub-agents**: security red/blue team, code critic, architecture challenger,
@@ -29,7 +29,7 @@ What you get:
 - **Session continuity**: a per-project lessons memory, a warning when your context window
   is filling up, and a handoff the next session picks up on its own.
 - **Low token cost.** Only the matching rules are injected, never the whole set. A typical
-  turn is around 1,700 tokens instead of loading all 215 rules every turn.
+  turn is around 1,700 tokens instead of loading all 222 rules every turn.
 
 Under 1 MB, no services, no ML models, about 3 ms per prompt. Pure Python, with PyYAML as
 the only dependency.
@@ -884,7 +884,7 @@ clawness agents-md --write
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Rules** | 215 across 29 domains | Coding, science, ML, research, and LLM standards, injected per prompt |
+| **Rules** | 222 across 30 domains | Coding, science, ML, research, and LLM standards, injected per prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 13 slash commands | See [Slash Commands](#slash-commands) — `security-audit`, `review`, `test`, `perf`, `add`, `status`, `user-docs`, plus hygiene and maintainer commands |
 | **Hooks** | 12 | Rule injection, context watch, model-tier check, output compression, plan gate, access guard, trust ledger, and the session-start checks |
@@ -904,6 +904,7 @@ clawness agents-md --write
 | `fastapi` | 8 | Pydantic v2, dependency injection, async, error handling, CORS, DB sessions |
 | `meta` | 8 | Rebuttals to common AI shortcuts ("too simple to test", "I'll refactor later", trusting input) |
 | `ml` | 8 | Training/evaluating your own models: leakage, cross-validation, metrics/baselines, class imbalance, calibration, reproducibility, overfitting |
+| `astro` | 7 | Island hydration directives, island state isolation, content collections, static vs server output, `astro:env` secrets, scoped styles, the server-only frontmatter fence |
 | `llm` | 7 | Building with models: eval sets, prompt injection, schema-constrained output, token cost, non-determinism, model-id pinning, retrieval |
 | `python` | 7 | Async I/O, imports, error handling, type hints, mutable defaults, context managers, pathlib |
 | `testing` | 7 | Coverage for new code *(1 mandatory)*; watching a test fail, boundary testing, determinism, mocking, assertions, isolation *(ranked)* |

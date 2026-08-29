@@ -40,6 +40,7 @@ _LABELS = [
     ("python", "Python"), ("typescript", "TypeScript"), ("go", "Go"),
     ("rust", "Rust"), ("java", "Java"), ("bash", "Bash"),
     ("fastapi", "FastAPI"), ("nextjs", "Next.js"), ("react", "React"),
+    ("astro", "Astro"),
     ("capacitor", "Capacitor"), ("css", "CSS"),
     ("sql", "SQL"), ("docker", "Docker"),
     # Scientific computing. Listed after the web stack so a mixed repo reads

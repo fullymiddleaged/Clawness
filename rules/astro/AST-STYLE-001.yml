@@ -1,0 +1,18 @@
+id: AST-STYLE-001
+domain: astro
+severity: info
+tags: [astro, styles, styling, css, scoped, is-global, cascade, component]
+triggers: [astro, style, styles, styling, css, scoped, global, class, selector, leak, cascade]
+when: Styling an Astro component.
+rule: >
+  A style block in a .astro file is scoped to that component automatically —
+  keep it that way and let scoped styles be the default. Use is:global or the
+  :global() selector only for genuinely site-wide concerns (resets, typography,
+  markup a third-party widget renders), and keep those in one imported global
+  stylesheet instead of scattering is:global blocks through components.
+violation: "A component using is:global to reach a child element it renders"
+correct: "A scoped block using :global() to target only that third-party child"
+
+# Reviewed against the Astro 6 styling guide, August 2026. Scoping by default
+# and the is:global escape hatch are unchanged since 1.0 — no ceiling.
+# Sources: https://docs.astro.build/en/guides/styling/

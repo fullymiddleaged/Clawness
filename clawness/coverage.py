@@ -93,8 +93,10 @@ def has_coverage(domains) -> bool:
 def detect_uncovered(project_dir: Path) -> list[str]:
     """Ecosystem labels present in *project_dir* that Clawness has no corpus for.
 
-    Sorted, de-duplicated. A shallow top-level glob (same as `scan_project`'s
-    detectors) — cheap, and a nested marker isn't the project's primary stack.
+    Sorted, de-duplicated. A shallow top-level glob — deliberately NOT the bounded
+    recursive walk `scan_project` now uses: a nested marker isn't the project's
+    primary stack, and this drives a note saying "Clawness has no rules for your
+    stack", which must not fire on one vendored .rb file.
     Never raises; an unreadable directory yields [].
     """
     found: set[str] = set()

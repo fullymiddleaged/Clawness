@@ -1677,6 +1677,102 @@
       "expect": [
         "GEN-USERDOCS-001"
       ]
+    },
+    {
+      "q": "should this astro component be client:load or client:visible",
+      "expect": [
+        "AST-HYDRATE-001"
+      ],
+      "stack": [
+        "astro",
+        "typescript",
+        "css",
+        "general"
+      ]
+    },
+    {
+      "q": "my astro blog ships way too much javascript to the browser",
+      "expect": [
+        "AST-HYDRATE-001"
+      ],
+      "stack": [
+        "astro",
+        "typescript",
+        "css",
+        "general"
+      ]
+    },
+    {
+      "q": "two astro islands need to share the same cart state",
+      "expect": [
+        "AST-ISLAND-001"
+      ],
+      "stack": [
+        "astro",
+        "typescript",
+        "css",
+        "general"
+      ]
+    },
+    {
+      "q": "define a blog content collection with a zod schema in astro",
+      "expect": [
+        "AST-CONTENT-001"
+      ],
+      "stack": [
+        "astro",
+        "typescript",
+        "css",
+        "general"
+      ]
+    },
+    {
+      "q": "make one route dynamic in an otherwise static astro site",
+      "expect": [
+        "AST-OUTPUT-001"
+      ],
+      "stack": [
+        "astro",
+        "typescript",
+        "css",
+        "general"
+      ]
+    },
+    {
+      "q": "where do i put the stripe secret key in an astro project",
+      "expect": [
+        "AST-ENV-001"
+      ],
+      "stack": [
+        "astro",
+        "typescript",
+        "css",
+        "general"
+      ]
+    },
+    {
+      "q": "my astro component styles are leaking into other components",
+      "expect": [
+        "AST-STYLE-001"
+      ],
+      "stack": [
+        "astro",
+        "typescript",
+        "css",
+        "general"
+      ]
+    },
+    {
+      "q": "fetch the posts for this astro page at build time",
+      "expect": [
+        "AST-FRONTMATTER-001"
+      ],
+      "stack": [
+        "astro",
+        "typescript",
+        "css",
+        "general"
+      ]
     }
   ]
 }

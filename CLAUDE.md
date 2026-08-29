@@ -46,8 +46,30 @@ dependency**. No ML models, no services, no Docker.
    such thing as needing Fortran conventions while writing TypeScript. Note `_floor_for`
    must test the narrow set BEFORE returning the off-stack floor — these domains are in
    `_STACK_DOMAINS` too, so the reverse order makes the tier dead code. Passing no
-   stack (CLI/eval) disables the penalty, so eval is unaffected. ~2ms/prompt + ~3ms scan
-   (retrieval is <1% of the ~400ms hook, which is dominated by interpreter startup).
+   stack (CLI/eval) disables the penalty, so eval is unaffected. ~4ms/prompt + ~10ms scan
+   (still ~3% of the ~400ms hook, which is dominated by interpreter startup).
+   **The stack scan walks the tree once; it does not glob per pattern (1.18.0).**
+   `Path.glob` is NOT recursive, so for ten versions every `*.py`/`*.css`/`*.sql`/`*.tex`
+   detector only ever saw the repo ROOT — a project keeping its stylesheets in
+   `src/styles/` never triggered `css`, and the manifest detectors masked it well enough
+   that nobody noticed. `rglob` is not the fix: `**/*.py` measures ~121ms against ~0.4ms
+   shallow, on a path that re-runs uncached every prompt. So `_walk_project` lists the
+   tree ONCE, bounded at depth 4 / 4000 entries and skipping `init.SCAN_SKIP_DIRS`
+   (one source of truth: a directory not worth searching for a hostname is not worth
+   searching for a stack — the set lives in `init` and `guard` imports it, NOT the
+   reverse, because importing `guard` here would put its ~13ms of regex compilation on
+   every prompt), and `_pattern_hits` matches every pattern against that one
+   listing — by BASENAME at any depth, or by trailing path segments for a pattern that
+   carries a `/`. Matching is indexed, not `fnmatch.filter` per pattern: filtering all
+   ~50 patterns over the walked names measured ~9ms, more than the walk itself, so bare
+   `*.ext` patterns (most of them) resolve through an extension dict and only the rest
+   compile a cached matcher. **A leading `./` opts a detector back OUT of recursion**
+   (`./main.py`, `./app.py`, `./DESCRIPTION`): "a main.py at the top of the project"
+   is a fair guess at a web app, "somewhere in the tree" is not — unanchored, this
+   repo's own `tests/fixtures/vuln/app.py` dragged `fastapi` in. Expect a detector to
+   need anchoring whenever its filename is common as a *nested* file.
+   `coverage.detect_uncovered` deliberately stays a shallow root glob — it drives
+   "Clawness has no rules for your stack", which must not fire on one vendored `.rb`.
    **Session-aware re-injection** (`clawness/session_state.py`): the mandatory block
    (identical every turn) renders in full only on prompt 1 and every `CLAW_FULL_EVERY`-th
    prompt after (default 5); other turns get a one-line id list — the rules stay just as
@@ -568,7 +590,7 @@ dependency**. No ML models, no services, no Docker.
   registered. Every SessionStart note hook uses it; `git_check` keeps its own *downward*
   tree scan because "is git used anywhere relevant?" is a different question from
   `git_root`'s upward walk.
-- `rules/<domain>/*.yml` — the corpus (215 rules / 29 domains; `_mandatory/` = always-on).
+- `rules/<domain>/*.yml` — the corpus (222 rules / 30 domains; `_mandatory/` = always-on).
   Beyond the language domains: `llm/` (building with models — stack-gated, detected from
   anthropic/openai/langchain deps), `ml/` (training/evaluating your OWN models — leakage,
   CV, calibration — stack-gated on modelling libs sklearn/xgboost/torch/statsmodels, so it
@@ -578,6 +600,10 @@ dependency**. No ML models, no services, no Docker.
   works in a bare or LaTeX-only directory where gating would silence them), plus
   `reliability/`, `testing/` and `ci/`. `cfd/`, `julia/`, `fortran/`, `matlab/` and `r/`
   are stack-gated AND take the narrow floor — see `_NARROW_STACK_DOMAINS` below.
+  `astro/` is an ordinary off-stack-tier web domain, detected from `astro.config.*` or
+  the `astro` dependency; that detector also implies `css`, because scoped `<style>`
+  blocks inside a component file are a large share of how CSS is written in that stack
+  and no filename glob can see them (the same will hold for Vue/Svelte if they land).
 - `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin. `skills/user-docs`
   authors user/developer documentation from a codebase scan (Diátaxis + brevity,
   approval-gated writes); `skills/security-audit` runs the stateful security audit (see §11).

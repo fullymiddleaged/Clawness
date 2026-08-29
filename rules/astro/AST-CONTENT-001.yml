@@ -1,0 +1,25 @@
+id: AST-CONTENT-001
+domain: astro
+severity: error
+tags: [astro, content-collections, collections, markdown, mdx, zod, schema, frontmatter, loader]
+triggers: [astro, content, collection, collections, markdown, mdx, blog, posts, frontmatter, schema, zod, loader, getCollection]
+when: Reading Markdown, MDX or data files as a content collection.
+rule: >
+  Define collections in src/content.config.ts with defineCollection({ loader,
+  schema }) — the glob() or file() loader from astro/loaders for local files, a
+  custom loader for a CMS or API — and give every collection a zod schema, so
+  bad frontmatter fails the build instead of the page. Read entries with
+  getCollection/getEntry and render with the standalone render(entry). The
+  pre-5 shape is gone: src/content/config.ts, entry.slug and entry.render() no
+  longer exist.
+violation: "import.meta.glob over ../content/**/*.md, plus hand-written frontmatter checks"
+correct: "defineCollection({ loader: glob({ pattern, base }), schema: z.object({ title: z.string() }) })"
+
+# Reviewed against the Astro 6 content-collections guide, August 2026. Astro 5
+# replaced the original API with the Content Layer; 6 removed the legacy one
+# and the legacy.collections flag outright, so this text is 5-6 specific.
+applies_to: {"Astro": "5-6"}
+verified: "2026-08"
+sources:
+  - https://docs.astro.build/en/guides/content-collections/
+  - https://docs.astro.build/en/guides/upgrade-to/v6/

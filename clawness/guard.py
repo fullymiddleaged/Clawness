@@ -61,12 +61,11 @@ DENY = "deny"
 # filetype), so this is correct whether a project stores hosts in .env, a
 # docker-compose.yml, appsettings.json, or hardcoded in source — no curated
 # filetype list to keep in sync.
-_PROVENANCE_SKIP_DIRS = {
-    ".claude", ".clawness", ".git", "node_modules", ".venv", "venv", "env",
-    "__pycache__", "dist", "build", ".next", "out", "target", "vendor",
-    ".cache", "site-packages", ".mypy_cache", ".pytest_cache", ".tox",
-    ".gradle", "Pods", ".idea", ".vscode", "coverage", ".turbo",
-}
+# One source of truth with the stack scan: a directory not worth searching for a
+# hostname is not worth searching for a stack. It lives in `init` rather than here
+# because importing `guard` from `init` would put this module's ~13ms of regex
+# compilation on the per-prompt hook, which only needs the set.
+from .init import SCAN_SKIP_DIRS as _PROVENANCE_SKIP_DIRS
 _PROV_MAX_FILES = 1500          # cap: undetermined (→ ask) past this, never hang
 _PROV_MAX_FILE_BYTES = 524_288  # skip individual files larger than 512 KB
 _PROV_MIN_VALUE_LEN = 4         # too-short values match noise; treat as unverifiable

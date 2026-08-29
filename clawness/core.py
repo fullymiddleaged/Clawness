@@ -736,7 +736,7 @@ def _estimate_tokens(text: str) -> int:
 # needed most. Their precision comes from tight triggers, not from the floor.
 _STACK_DOMAINS = frozenset({
     "python", "fastapi", "typescript", "react", "nextjs", "capacitor",
-    "go", "rust", "java", "sql", "bash", "css", "docker",
+    "astro", "go", "rust", "java", "sql", "bash", "css", "docker",
     # "llm" is stack-gated like a language/framework: prompt-caching and
     # eval-set rules are noise in a repo that calls no model. Detected from
     # anthropic/openai/langchain deps (see init.py).

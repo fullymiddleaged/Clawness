@@ -1,0 +1,21 @@
+id: AST-FRONTMATTER-001
+domain: astro
+severity: warning
+tags: [astro, frontmatter, server, data-fetching, props, build-time, useEffect]
+triggers: [astro, frontmatter, fence, fetch, data, database, query, props, useEffect, server, build, api]
+when: Fetching data or computing values for an Astro page.
+rule: >
+  The frontmatter fence of a .astro component runs on the server only — at
+  build time for prerendered routes, per request for server-rendered ones — so
+  fetch, read the filesystem and query the database there, and pass the result
+  down as props. Do not move that work into a hydrated island to keep it inside
+  the component: that ships the query, its client library and often its
+  credentials to the browser. Astro.glob() was removed; use import.meta.glob()
+  or a content collection.
+violation: "A client:load component calling fetch in useEffect for content known at build time"
+correct: "const posts = await getCollection('blog') in the fence, passed as <PostList posts={posts} />"
+
+# Reviewed against the Astro 6 component and data-fetching docs, August 2026.
+# The server-only fence is the component model itself; only the Astro.glob()
+# removal is version-bound, and the replacement advice is right on 5 too.
+# Sources: https://docs.astro.build/en/basics/astro-components/ | https://docs.astro.build/en/guides/data-fetching/

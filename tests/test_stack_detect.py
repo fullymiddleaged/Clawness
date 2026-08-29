@@ -112,7 +112,12 @@ def test_opt_out_is_silent():
 # regression in the detection tables surfaced as a confusing note-text failure.
 
 sys.path.insert(0, str(REPO))
-from clawness.init import _clean_version, _python_version, scan_project  # noqa: E402
+from clawness.init import (  # noqa: E402
+    _clean_version,
+    _python_version,
+    _walk_project,
+    scan_project,
+)
 
 
 def test_clean_version_strips_range_operators():
@@ -143,6 +148,72 @@ def test_scan_project_reports_versions_and_domains_together():
         scan = scan_project(root)
         assert scan["versions"] == {"Next.js": "14.2", "Pydantic": "2.7"}
         assert {"nextjs", "react", "typescript"} <= set(scan["domains"])
+
+
+# --- the bounded walk ------------------------------------------------------
+# `Path.glob` is not recursive, so before 1.18.0 the extension detectors only ever
+# saw the repo root and a project with src/styles/ never triggered `css`. These pin
+# both halves of the fix: that nesting is now seen, and that seeing it stays bounded.
+
+def test_extension_detectors_see_nested_files():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "src" / "styles").mkdir(parents=True)
+        (root / "src" / "styles" / "main.css").write_text("body{}", encoding="utf-8")
+        assert "css" in scan_project(root)["domains"]
+
+
+def test_walk_skips_vendored_trees():
+    # A stray .py under node_modules must not make a React app a Python project.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "node_modules" / "pkg").mkdir(parents=True)
+        (root / "node_modules" / "pkg" / "setup.py").write_text("x", encoding="utf-8")
+        (root / "package.json").write_text("{}", encoding="utf-8")
+        assert "python" not in scan_project(root)["domains"]
+
+
+def test_walk_respects_the_depth_cap():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        deep = root / "a" / "b" / "c" / "d" / "e"
+        deep.mkdir(parents=True)
+        (deep / "x.py").write_text("x", encoding="utf-8")
+        assert "python" not in scan_project(root)["domains"]
+        (root / "a" / "b" / "c" / "y.py").write_text("x", encoding="utf-8")
+        assert "python" in scan_project(root)["domains"]
+
+
+def test_walk_respects_the_entry_cap():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        for i in range(12):
+            (root / f"f{i}.txt").write_text("x", encoding="utf-8")
+        assert len(_walk_project(root, max_entries=5)) == 5
+
+
+def test_root_anchored_detector_ignores_a_nested_match():
+    # "./main.py" means FastAPI only at the top of the project; nested it is noise.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "scripts").mkdir()
+        (root / "scripts" / "main.py").write_text("x", encoding="utf-8")
+        assert "fastapi" not in scan_project(root)["domains"]
+        (root / "main.py").write_text("x", encoding="utf-8")
+        assert "fastapi" in scan_project(root)["domains"]
+
+
+def test_path_pattern_matches_a_nested_layout_but_not_a_bare_file():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        wf = root / "packages" / "app" / ".github" / "workflows"
+        wf.mkdir(parents=True)
+        (wf / "ci.yml").write_text("on: push", encoding="utf-8")
+        assert ("GitHub Actions CI", ["general"]) in scan_project(root)["detected"]
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "anywhere.yml").write_text("on: push", encoding="utf-8")
+        assert ("GitHub Actions CI", ["general"]) not in scan_project(root)["detected"]
 
 
 def test_scan_project_survives_a_malformed_manifest():
