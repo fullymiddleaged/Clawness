@@ -10,8 +10,8 @@
 Clawness is a Python backed plugin compatible with **Claude Code and [OpenClaw](https://openclaw.ai)**.
 It's designed for full stack devs or researchers who often work across various code bases at short 
 notice, it works out (per prompt) which of your coding rules matter for the current task and puts 
-just those into context, so you never have to repeat your standards or dump them all into a flat config 
-file per repo.
+just those into context, so you never have to repeat your standards or dump them all into a huge Claude.md 
+file (or split files) per repo.
 
 But it also does heaps more!
 
