@@ -11,12 +11,14 @@ description: >
 Show the user what's currently active in their Clawness setup.
 
 > **Running the Clawness CLI.** It ships with the plugin but isn't on your PATH.
-> Use the wrapper the SessionStart bootstrap hook writes each session:
+> Use the bundled launcher, falling back to the wrapper the SessionStart bootstrap
+> stashes (older Claude Code doesn't substitute the plugin root in skills):
 > ```bash
-> CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
+> CLAW="${CLAUDE_PLUGIN_ROOT}/scripts/clawness-cli.sh"
+> [ -f "$CLAW" ] || CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
 > bash "$CLAW" <command>          # e.g. bash "$CLAW" stats
 > ```
-> If `$CLAW` doesn't exist, the bootstrap hasn't run yet — start a fresh session.
+> If neither path exists (an older Claude Code before the bootstrap has run), start a fresh session.
 > (Editable/manual installs may instead use `python -m clawness.cli ...`.)
 
 Keep this FAST — it's a quick health check, not a full scan. Step 1 already

@@ -12,6 +12,7 @@ root, silent when there's nothing to say, and fails open on every error. Opt out
 CLAW_NO_HANDOFF=1.
 """
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -37,18 +38,44 @@ def main() -> None:
         sys.exit(0)
 
     try:
-        from clawness.handoff import find_handoff, render_handoff_note
+        from clawness.handoff import (
+            AUTOSTART_USER_MESSAGE, autostart_claimed, autostart_due, find_handoff,
+            render_handoff_note, suggest_session_name,
+        )
 
         path = find_handoff(root)
         if not path:
             sys.exit(0)
-        note = render_handoff_note(path)
+        source = payload.get("source") or "startup"
+        due = autostart_due(root, source)
+        # Interactive auto-start is once per handoff (handoff_autostart claims it);
+        # a second new session gets the ordinary conditional note.
+        fresh = bool(due) and not autostart_claimed(root, due)
+        note = render_handoff_note(path, autostart=fresh)
     except Exception:
         # Deps not ready, unreadable file, anything — a handoff is a convenience.
         sys.exit(0)
 
-    if note:
+    if not note:
+        sys.exit(0)
+    if not due:
         print(note)
+        sys.exit(0)
+
+    # JSON form, to carry fields beyond context. initialUserMessage only applies
+    # under `claude -p` (interactive ignores it), where it makes the pickup the
+    # first turn with no prompt; deliberately not gated on the ledger, so a
+    # scripted loop continues every run. sessionTitle replaces the "carry on"
+    # title the session would otherwise get; Claude Code ignores it on `clear`.
+    out = {"hookEventName": "SessionStart", "additionalContext": note,
+           "initialUserMessage": AUTOSTART_USER_MESSAGE}
+    try:
+        title = suggest_session_name(path.read_text(encoding="utf-8")) if fresh else ""
+    except Exception:
+        title = ""
+    if title:
+        out["sessionTitle"] = title
+    print(json.dumps({"hookSpecificOutput": out}))
     sys.exit(0)
 
 

@@ -44,6 +44,14 @@ DETECTORS: list[tuple[str, list[str], str]] = [
     # framework is both cheaper and more reliable than sniffing file bodies.
     ("astro.config.*",         ["astro", "typescript", "css"],      "Astro"),
     ("capacitor.config.*",     ["capacitor"],                       "Capacitor (mobile)"),
+    # Claude Code extension authoring: a plugin manifest, a plugin hooks file, or a
+    # skill. NOT `.claude/`: nearly every project using Claude Code has one, and
+    # using the tool is not building for it. `.claude` is also a skip dir, so
+    # project-local skills under it never match the SKILL.md detector.
+    (".claude-plugin/plugin.json",      ["claude-code"],            "Claude Code plugin"),
+    (".claude-plugin/marketplace.json", ["claude-code"],            "Claude Code plugin marketplace"),
+    ("hooks/hooks.json",       ["claude-code"],                     "Claude Code hooks"),
+    ("SKILL.md",               ["claude-code"],                     "Claude Code skill"),
     # Bare *.py matters: without it a repo holding paper.tex + analysis.py and no
     # packaging file does NOT detect Python, so Python rules face the off-stack
     # floor in exactly the mixed science+code case.

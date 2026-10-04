@@ -133,12 +133,15 @@ dependency**. No ML models, no services, no Docker.
      prompt that was just sent. Only the last 256KB of the file is read (a transcript
      reaches several MB; a 6MB tail costs ~0.7ms), walking backwards to the newest
      usage record.
-   - **The window can't be read from the transcript** — a 1M session records the same
-     `claude-opus-5` model id as a 200k one. `infer_limit` therefore goes
-     `CLAW_CONTEXT_LIMIT` → the `[1m]` marker on `model` in settings(.local).json →
-     observed-usage tier bump. **Don't drop the settings check**: without it a 1M
-     session false-alarms all through 140k-200k, which is exactly how users learn to
-     ignore the warning.
+   - **The window is read off the model id only where the id determines it.** Fable,
+     Sonnet 5+ and Opus 4.7+ are natively 1M in Claude Code (no `[1m]` variant exists;
+     `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` reverts them to 200k), so `native_window` maps
+     the transcript's `message.model` to 1M. For opt-in-window models the id can't say
+     which window the session got. `infer_limit` therefore goes `CLAW_CONTEXT_LIMIT` →
+     native-1M model id → the `[1m]` marker on `model` in settings(.local).json →
+     observed-usage tier bump. **Don't drop either middle tier**: without them a 1M
+     session false-alarms all through 140k-200k (an Opus 5.5 session at 158k was told
+     "79% full" before 1.19.0), which is exactly how users learn to ignore the warning.
    - Levels: `warn` (70%, brief mention), `urgent` (85%, recommend a fresh session and
      offer a handoff + memory write), and `surge` — a single turn adding >=12% of the
      window with <=5 turns of headroom left, so a session filling fast is flagged while
@@ -178,8 +181,10 @@ dependency**. No ML models, no services, no Docker.
      gated 1.11.0).** An unnamed session is titled from the user's first message, so
      every pickup reads "carry on" in their history — the one phrase all pickups
      share. Claude Code has a built-in `/rename [name]` (alias `/name`; bare, it
-     generates a kebab name from the conversation), but a slash command can only be
-     TYPED: no hook can rename a session and neither can Claude. `suggest_session_name`
+     generates a kebab name from the conversation). Neither Claude nor a manual-pickup
+     note can apply it, since SessionStart can't know yet whether the user will pick
+     the handoff up; the auto-start path (below) DOES title the session, via
+     SessionStart's `sessionTitle` field. `suggest_session_name`
      derives a name from the handoff's `# ` heading and, **when
      `CLAW_HANDOFF_SUGGEST_NAME` is set**, the note surfaces the one-liner once, on
      the pickup branch only — the heading is the wrong name for a session the user
@@ -196,6 +201,26 @@ dependency**. No ML models, no services, no Docker.
      the top. `## Open questions` is last and therefore the first thing truncated away;
      that's the right trade (it usually says "none") and `tests/test_handoff.py` pins it
      rather than leaving it undefined. Opt-out `CLAW_NO_HANDOFF`.
+   - **Auto-start (1.19.0): a handoff marked `**Autostart:** yes` starts itself.**
+     Typing "carry on" was the last interview left. Interactive: `hooks/handoff_autostart.py`
+     is registered with `asyncRewake` and exits 2, which wakes an idle Claude with the
+     instruction as a system reminder; that is the ONLY documented way a hook can start
+     work in an interactive session. Headless: `handoff_check` returns JSON with
+     `initialUserMessage`, which becomes the first `claude -p` turn. The user still has
+     to open a session (or `/clear`): nothing can start one for them.
+     The guards are the design, don't loosen them: consent per handoff (the marker,
+     written only when the user agreed, which the urgent context alert now asks in the
+     same breath as the handoff offer); freshness (`CLAW_HANDOFF_AUTOSTART_HOURS`,
+     default 12; unlike the pickup NOTE, starting work unasked is an action, so an age
+     bound is right here); once per handoff, keyed on its mtime in
+     `.clawness/handoff_autostart.json` so a rewrite re-arms (headless skips the ledger,
+     since a scripted loop wants to continue every run); `startup`/`clear` sources only.
+     The async hook sleeps (`CLAW_HANDOFF_AUTOSTART_DELAY`, default 2s) BEFORE claiming,
+     so `handoff_check` has rendered the autostart note first. **Unverified live:** the
+     docs say the wake "opens the input box with the system reminder already visible";
+     whether Claude then acts before the user types needs a real-session test. If it
+     doesn't, the autostart note still makes any first message ("go") start the work.
+     Opt-out `CLAW_NO_HANDOFF_AUTOSTART`.
 6. **Framework-version awareness** (`VERSION_WATCH_*` in `clawness/init.py`, surfaced by
    `stack_detect`): `scan_project` returns a `versions` dict alongside `domains`, and the
    SessionStart note reads "Next.js 14.2, React 18.3" rather than bare labels.
@@ -330,7 +355,7 @@ dependency**. No ML models, no services, no Docker.
    stayed quiet doesn't burn the one shot. Never creates the file itself; same consent
    shape as `git_check`'s `git init`. Opt-outs: `CLAW_NO_CHANGELOG_CHECK`, or a
    `.clawness/changelog-check-off` marker. **The nag ledgers (`changelog.json`,
-   `model_advice.json`, `claude_md.json`) are deliberately NOT guard control files** —
+   `model_advice.json`, `claude_md.json`, `sast.json`) are deliberately NOT guard control files** —
    forging one suppresses a question, not a guard, and listing them would make routine
    `.clawness/` writes start asking.
 8. **CLAUDE.md size check** (`hooks/claude_md_check.py`, SessionStart) + the routing
@@ -532,6 +557,15 @@ dependency**. No ML models, no services, no Docker.
      class) dedup as native, native winning. SARIF is JSON, so this needs no new
      dependency and no SAST tool installed — output only. Fails open (returns [] on any
      error, a malformed `.sarif` is skipped), never raises.
+   - **The skill RUNS installed scanners; the Python never does (1.19.0).**
+     `/clawness:security-audit` writes SARIF to `.clawness/security/sast/` and passes it
+     via `--sarif`, because `.clawness` is in `_SKIP_DIRS` and auto-detect would miss it.
+     That location is deliberate: gitignored, so a vulnerability map is never committed
+     by accident. Third-party security skills (Semgrep's, Cloudflare's, secureIO's) are
+     NOT vendored. They update independently, they're the untrusted-instructions surface
+     the trust ledger exists for, and none emits ingestible output except via SARIF.
+     `WF-SAST-001` routes requests for them. Semgrep `--config auto` uploads the project
+     URL, so the skill uses `p/default --metrics=off`.
 
 ## Key files
 - `clawness/core.py` — engine (rules loader, tokenizer + `_CONCEPT_GROUPS`, BM25,
@@ -572,6 +606,10 @@ dependency**. No ML models, no services, no Docker.
   truth for "what model is configured?"), keeping only the `[1m]` reading here.
 - `clawness/model_advisor.py` — model-tier advice (`normalize_tier`, `assess`,
   `should_advise`, `render_advice`, `read_settings_model`).
+- `clawness/sast.py` — SAST readiness for the suggested-actions line (`installed_scanners`,
+  `should_offer`, `sast_line`). `which` runs only on prompts that already look like a
+  security request; offers ONE install (Semgrep) once per project via `.clawness/sast.json`,
+  and always names the fallback (the audit on `clawness scan`). Opt-out `CLAW_NO_SAST_OFFER`.
 - `clawness/upgrade.py` — new-coverage-on-upgrade note (`available_domains`,
   `newly_covered`, `check_upgrade`, `render_note`). Ledger `.clawness/version.json`
   keyed on the Clawness version; called only from `stack_detect` (SessionStart).
@@ -582,7 +620,7 @@ dependency**. No ML models, no services, no Docker.
 - `clawness/handoff.py` — session handoff (`find_handoff`, `render_handoff_note`,
   `describe_age`, `HANDOFF_TEMPLATE`).
 - `hooks/` — runtime hooks (`claude_hook`, `compress_output`, `plan_gate`, `access_guard`,
-  `trust_ledger`, `git_check`, `memory_init`, `handoff_check`, `stack_detect`,
+  `trust_ledger`, `git_check`, `memory_init`, `handoff_check`, `handoff_autostart`, `stack_detect`,
   `changelog_check`, `claude_md_check`, `ensure_deps`) + setup helpers
   (`setup_settings/agents/skills` —
   manual install only). `hooks/_hookutil.py` is shared plumbing (UTF-8 stdio pinned at
@@ -590,7 +628,10 @@ dependency**. No ML models, no services, no Docker.
   registered. Every SessionStart note hook uses it; `git_check` keeps its own *downward*
   tree scan because "is git used anywhere relevant?" is a different question from
   `git_root`'s upward walk.
-- `rules/<domain>/*.yml` — the corpus (222 rules / 30 domains; `_mandatory/` = always-on).
+- `rules/<domain>/*.yml` — the corpus (229 rules / 31 domains; `_mandatory/` = always-on).
+  `claude-code/` (`CC-*`) is building Claude Code plugins/hooks/skills, stack-gated and
+  detected from `.claude-plugin/*.json`, `hooks/hooks.json` or a `SKILL.md` — never
+  from `.claude/`, which every project using Claude Code has.
   Beyond the language domains: `llm/` (building with models — stack-gated, detected from
   anthropic/openai/langchain deps), `ml/` (training/evaluating your OWN models — leakage,
   CV, calibration — stack-gated on modelling libs sklearn/xgboost/torch/statsmodels, so it
@@ -686,12 +727,17 @@ dependency**. No ML models, no services, no Docker.
   plans: `--permission-mode plan` behaves exactly like Shift+Tab, clearing the gate on
   ExitPlanMode through the identical `record_session_approval` path. What changes is
   only the modes that mean "edit without asking me" were already chosen up front —
-  `acceptEdits`/`auto`/`dontAsk`/`bypassPermissions` (`PREAUTHORIZED_MODES` in
+  `acceptEdits`/`dontAsk`/`bypassPermissions` (`PREAUTHORIZED_MODES` in
   `plan.py`) — where re-asking isn't a second safeguard, it's the same question twice:
   interactively the harness auto-answers it before a human sees it, headlessly there is
   no human to answer it, so the only effect of asking anyway is stalling a run the user
-  explicitly configured to be unattended. `default`/`plan` are live questions in both
-  contexts and always gate. An unrecognized or missing `permission_mode` (older Claude
+  explicitly configured to be unattended. `default`/`plan`/`auto` are live questions in
+  both contexts and always gate. **`auto` left the set in 1.19.0 and must not return:**
+  since Claude Code 2.1.283 it is the built-in *starting* mode, so it records no choice,
+  and exempting it silenced the gate for nearly every session. A hook `ask` still
+  reaches the human in auto mode, so the intended flow is "plan, approve once, then auto
+  runs freely". Cost: a `claude -p` that starts in auto (third-party providers, 2.1.286)
+  needs `acceptEdits` or `CLAW_NO_PLAN_GATE=1` to run unattended. An unrecognized or missing `permission_mode` (older Claude
   Code build, unexpected value) falls through to asking — same fail-toward-prompt
   direction as the rest of the gate. Don't build a `--headless`/env-detection heuristic
   here: the harness already tells you the thing you'd be inferring.
@@ -741,6 +787,15 @@ dependency**. No ML models, no services, no Docker.
   test that actually catches the bug runs the *generated* wrapper from a non-checkout
   cwd (`tests/test_ensure_deps.py`); the maintainer's editable checkout on `sys.path`
   masks it otherwise — the same maintainer-vs-user blind spot that let it ship.
+  **Launcher first, wrapper as fallback (1.19.0).** #9354 closed in Aug 2026: Claude
+  Code now substitutes `${CLAUDE_PLUGIN_ROOT}` in a SKILL.md *body* at load (the Bash
+  tool's environment still lacks it). Skills now try the static
+  `scripts/clawness-cli.sh` (self-locates the root; `pwd -W` so Git Bash hands
+  Windows Python `C:/…`, not `/c/…`), and `[ -f "$CLAW" ] ||` falls back to the wrapper.
+  The minimum version that substitutes is unknown, and an unsubstituted reference
+  expands to "" in Bash, so **keep the fallback and keep `stash_cli_wrapper`** until
+  that version is established and old enough to drop. `*.sh` is pinned `eol=lf`: a
+  CRLF checkout breaks the launcher. `tests/test_cli_launcher.py` pins both branches.
 - **Naming:** package `clawness`, env vars `CLAW_*`, project dir `.clawness/`. (The
   `infinri/Writ` mentions in README and CHANGELOG are upstream credit / historical
   record — leave those. Everywhere else was renamed to Clawness; `install.ps1` keeps a

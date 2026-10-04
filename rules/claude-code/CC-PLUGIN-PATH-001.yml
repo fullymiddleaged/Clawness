@@ -1,0 +1,18 @@
+id: CC-PLUGIN-PATH-001
+domain: claude-code
+severity: error
+tags: [claude-code, plugin, plugin-root, plugin-data, path, skill, bin, environment]
+triggers: [claude_plugin_root, claude_plugin_data, plugin root, plugin path, plugin cache, plugin data, plugin state, plugin update, bin directory, skill bash, exec form]
+when: Referencing files bundled with a Claude Code plugin, or storing plugin state.
+rule: >
+  Reach bundled files through ${CLAUDE_PLUGIN_ROOT}, never a hardcoded or relative
+  path: the installed copy lives in a versioned cache that moves on every update. In
+  shell-form hook commands wrap it in double quotes (or use exec form with args) so a
+  path with spaces stays one argument. Never write state under the plugin root, since
+  an update replaces it; use ${CLAUDE_PLUGIN_DATA}, which survives updates. The
+  variables are NOT in the environment of commands Claude runs through the Bash tool:
+  in a skill or agent, write the ${CLAUDE_PLUGIN_ROOT} reference in the Markdown body,
+  where it is substituted at load, or ship an executable in bin/, which is on the Bash
+  PATH while the plugin is enabled (but stops claude.ai and Cowork installing it).
+violation: "A skill telling Claude to run `python $CLAUDE_PLUGIN_ROOT/cli.py` in Bash, where the variable is empty"
+correct: "Skill body: python \"${CLAUDE_PLUGIN_ROOT}/cli.py\" (substituted when the skill loads); caches in ${CLAUDE_PLUGIN_DATA}"

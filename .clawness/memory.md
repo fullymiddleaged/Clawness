@@ -16,7 +16,7 @@
 - Plugin skills/hooks load from ~/.claude/plugins/cache/clawness/<version>, so new skills can't be smoke-tested pre-push.
 - Defender blocks pip's console-script shim (clawness.exe): "Access is denied". Test packaging via `python -m clawness.cli`.
 - In tests, `shutil.which("bash")` finds WSL bash, which resolves no python (no .exe); prefer Git Bash — that's what runs hooks.
-- ${CLAUDE_PLUGIN_ROOT} is EMPTY in skill/command Bash (only set in hook/MCP JSON; upstream #9354); skills reach the CLI via ensure_deps' stashed clawness-cli.sh.
+- PLUGIN_ROOT: empty as skill Bash env, substituted as ${...} in SKILL.md body (min CC ver unknown); keep clawness-cli
 - agents/ and skills/ .md carry version-pinned standards (OWASP edition, framework checks) invisible to the staleness mechanism (rules/ only) — review by hand.
 - Smoke-test the OpenClaw adapter offline via `npm run plugin:check` (@openclaw/plugin-inspector); never pull the 87MB `openclaw` pkg for plugin-test-api.
 - Verify OpenClaw SDK type shapes via throwaway `npm i openclaw`+tsc against real .d.ts (not a build dep); plugin-test-api is excluded from the npm pkg.

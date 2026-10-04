@@ -111,8 +111,18 @@ def test_preauthorized_permission_modes_are_not_asked_again():
     --permission-mode acceptEdits` matches an interactive Shift+Tab session,
     because it is the same statement."""
     root = _fresh_project()
-    for mode in ("acceptEdits", "auto", "dontAsk", "bypassPermissions"):
+    for mode in ("acceptEdits", "dontAsk", "bypassPermissions"):
         assert P.gate_decision(root, "Write", "s", None, mode)[0] is False, mode
+
+
+def test_auto_mode_is_gated_until_a_plan_is_approved():
+    """auto is Claude Code's default starting mode since 2.1.283, so it records no
+    choice; exempting it silenced the gate for nearly every session. It asks once,
+    then clears like any other mode."""
+    root = _fresh_project()
+    assert P.gate_decision(root, "Write", "auto-1", None, "auto")[0] is True
+    P.record_session_approval(root, "auto-1")
+    assert P.gate_decision(root, "Write", "auto-1", None, "auto")[0] is False
 
 
 def test_answerable_modes_still_ask():
@@ -120,7 +130,7 @@ def test_answerable_modes_still_ask():
     through to asking — a spurious prompt costs a click, a skipped one costs the
     gate."""
     root = _fresh_project()
-    for mode in ("default", "plan", "", "somethingNew", None):
+    for mode in ("default", "plan", "auto", "", "somethingNew", None):
         assert P.gate_decision(root, "Write", "s", None, mode)[0] is True, mode
 
 

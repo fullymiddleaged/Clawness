@@ -26,17 +26,47 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
-# Known context windows, smallest first. The transcript records a model id like
-# "claude-opus-5" but NOT which window the session was opened with (a 1M-context
-# session records the same id as a 200k one), so the limit can't be read off the
-# model. We assume the smaller window and let `infer_limit` correct upward when
-# observed usage proves otherwise — being wrong low means an early warning, being
-# wrong high means no warning at all, and only one of those is recoverable.
+# Known context windows, smallest first. For models where the window is a choice
+# (an opt-in `[1m]` variant), the transcript's model id can't say which one the
+# session got, so we assume the smaller window and let `infer_limit` correct upward
+# when observed usage proves otherwise — being wrong low means an early warning,
+# being wrong high means no warning at all, and only one of those is recoverable.
 _WINDOW_TIERS = (200_000, 1_000_000)
 DEFAULT_LIMIT = _WINDOW_TIERS[0]
+
+# Models whose window is NATIVELY 1M in Claude Code — no `[1m]` variant, no opt-in
+# — per the model-config docs: "Fable 5.1, Fable 5, Sonnet 5 and later, and Opus
+# 4.7 and later run with the 1M window on every plan". For these the id IS a
+# reliable statement of the window, and assuming 200k told a 150k Opus 5.5 session
+# it was 76% full when it was 15% — the false alarm that teaches users to ignore
+# the real one. `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` makes Claude Code treat them as
+# 200k again, so that env var turns this off. Matched with `search`, so Bedrock
+# (`us.anthropic.claude-opus-4-7-v1:0`) and Vertex ids resolve too.
+_NATIVE_1M_RE = re.compile(r"claude-(opus|sonnet|fable|mythos)-(\d+)(?:-(\d+))?")
+
+
+def native_window(model: str | None) -> int | None:
+    """1M when *model* runs with a native 1M window, else None (unknown/opt-in)."""
+    if not model or os.environ.get("CLAUDE_CODE_DISABLE_1M_CONTEXT", "") not in ("", "0"):
+        return None
+    m = _NATIVE_1M_RE.search(model.lower())
+    if not m:
+        return None
+    family, major = m.group(1), int(m.group(2))
+    # A long second component is a date suffix (claude-sonnet-4-20250514), not
+    # a minor version.
+    minor = int(m.group(3)) if m.group(3) and len(m.group(3)) <= 2 else 0
+    if family in ("fable", "mythos"):
+        return 1_000_000
+    if family == "sonnet" and major >= 5:
+        return 1_000_000
+    if family == "opus" and (major, minor) >= (4, 7):
+        return 1_000_000
+    return None
 
 DEFAULT_WARN = 0.70
 DEFAULT_URGENT = 0.85
@@ -99,6 +129,15 @@ def read_context_tokens(transcript_path: str | Path) -> int | None:
     Current context size in tokens, read from the transcript's most recent
     assistant message. None when the file is missing/unreadable or carries no
     usage record yet (e.g. the very first prompt of a session).
+    """
+    found = read_context(transcript_path)
+    return found[0] if found else None
+
+
+def read_context(transcript_path: str | Path) -> tuple[int, str] | None:
+    """
+    (tokens, model) from the transcript's most recent usage record, or None.
+    The model id rides the same entry, so the window lookup costs no second read.
 
     Reads only the tail of the file: transcripts reach several MB in a long
     session and this runs on every prompt.
@@ -133,7 +172,8 @@ def read_context_tokens(transcript_path: str | Path) -> int | None:
             except (TypeError, ValueError):
                 continue
         if total > 0:
-            return total
+            model = (entry.get("message") or {}).get("model")
+            return total, model if isinstance(model, str) else ""
     return None
 
 
@@ -156,25 +196,30 @@ def limit_from_settings() -> int | None:
     return None
 
 
-def infer_limit(tokens: int, configured: int | None = None) -> int:
+def infer_limit(tokens: int, configured: int | None = None,
+                model: str | None = None) -> int:
     """
     The window this session is most likely running in.
 
-    Three tiers of confidence, best first:
+    Four tiers of confidence, best first:
       1. An explicit `CLAW_CONTEXT_LIMIT` (or *configured*) — the user said so.
-      2. The `[1m]` marker on the configured model in settings.json.
-      3. Observed usage: assume the smallest known window and step up when usage
+      2. The transcript's *model* id, for models whose window is natively 1M.
+      3. The `[1m]` marker on the configured model in settings.json.
+      4. Observed usage: assume the smallest known window and step up when usage
          exceeds it — a session sitting at 300k tokens is self-evidently not a
          200k session.
 
-    Tier 3 alone would nag a 1M session through its 140k-200k stretch before the
+    Tier 4 alone would nag a 1M session through its 140k-200k stretch before the
     evidence arrives to correct it, which is exactly the false alarm that teaches
-    users to ignore the warning. Tier 2 is what prevents that.
+    users to ignore the warning. Tiers 2 and 3 are what prevent that.
     """
     if configured is None:
         configured = _env_int("CLAW_CONTEXT_LIMIT", 0)
     if configured and configured > 0:
         return configured
+    native = native_window(model)
+    if native and tokens < native:
+        return native
     from_settings = limit_from_settings()
     if from_settings and tokens < from_settings:
         return from_settings
@@ -191,6 +236,7 @@ def assess(
     warn: float | None = None,
     urgent: float | None = None,
     surge_fraction: float | None = None,
+    model: str | None = None,
 ) -> Alert | None:
     """
     Decide whether this turn deserves an alert, and at what level.
@@ -202,7 +248,7 @@ def assess(
     if tokens < MIN_TOKENS_TO_REPORT:
         return None
 
-    limit = limit if limit is not None else infer_limit(tokens)
+    limit = limit if limit is not None else infer_limit(tokens, model=model)
     warn = warn if warn is not None else _env_float("CLAW_CONTEXT_WARN", DEFAULT_WARN)
     urgent = (urgent if urgent is not None
               else _env_float("CLAW_CONTEXT_URGENT", DEFAULT_URGENT))
@@ -244,9 +290,10 @@ def render_alert(alert: Alert) -> str:
         body = (
             "Tell the user plainly that this session is near its limit and a fresh "
             "session will work better than continuing. Offer first to write a handoff "
-            "to .clawness/handoff.md (where you were, current state, next step) — "
-            "Clawness injects that file automatically when the next session in this "
-            "project starts, so they don't have to remember it. Add any durable lesson "
+            "to .clawness/handoff.md (where you were, current state, next step) that "
+            "the next session picks up and starts on by itself: on a yes, write it with "
+            "'**Autostart:** yes', then tell them to type /clear or open a new session, "
+            "and work resumes without them typing anything else. Add any durable lesson "
             "to .clawness/memory.md too. Don't write either unless they say yes."
         )
     elif alert.level == "warn":

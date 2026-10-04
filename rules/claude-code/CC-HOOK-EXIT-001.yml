@@ -1,0 +1,17 @@
+id: CC-HOOK-EXIT-001
+domain: claude-code
+severity: error
+tags: [claude-code, hook, hooks, exit-code, fail-open, plugin, interpreter]
+triggers: [hook, hooks, exit code, exit 2, hooks.json, plugin.json, sessionstart, userpromptsubmit, pretooluse, posttooluse, hook error]
+when: Writing or registering a Claude Code hook command.
+rule: >
+  Know the three exit codes: 0 succeeds, 2 blocks the action and feeds stderr to
+  Claude, and anything else is a non-blocking error the user sees as a "hook error"
+  notice on every firing. Make the hook fail open: catch its own exceptions and exit 0
+  when something unexpected happens, so a bug degrades to "hook did nothing" rather
+  than an error on every prompt. If the command is shell glue (an interpreter picker,
+  a missing-binary check), end it with `; exit 0`: when no interpreter is found the
+  shell's status is the last failed test, exit 1, with empty output, an unexplained
+  error the user can't diagnose. Reserve exit 2 for a deliberate block.
+violation: "\"command\": \"for p in python3 python; do command -v $p && exec $p hook.py; done\"   # exits 1 on a box with no python"
+correct: "\"command\": \"for p in python3 python py; do command -v $p >/dev/null && exec $p hook.py; done; exit 0\""

@@ -26,7 +26,9 @@ whole point is that the user shouldn't have to shepherd this.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import time
 from pathlib import Path
 
@@ -43,10 +45,10 @@ DEFAULT_BUDGET = 2000
 
 # Claude Code titles an unnamed session from the user's first message, so every pickup
 # lands in their history as "carry on" — the one phrase every pickup shares, and so the
-# one title that tells none of them apart. It ships a built-in `/rename [name]` for
-# exactly this, but a slash command can only be TYPED: a hook cannot rename the session
-# and neither can Claude. So the note carries a suggestion and the user spends one
-# keystroke on it. Matches the shape Claude Code's own generator produces — 2-4
+# one title that tells none of them apart. A SessionStart hook can now set
+# `sessionTitle` (same effect as `/rename`), which the auto-start path uses; on a
+# manual pickup the note can only suggest `/rename`, since the hook can't know yet
+# whether the user will pick the handoff up at all. Matches the shape Claude Code's own generator produces — 2-4
 # lowercase words, hyphen-separated — so a suggested name sits alongside a generated
 # one without looking foreign.
 SESSION_NAME_WORDS = 4
@@ -72,6 +74,8 @@ HANDOFF_TEMPLATE = """\
 **Uncommitted:** <files left dirty or half-finished, or 'nothing'>
 
 **Open questions:** <none — or the decisions genuinely blocked on the user, one line each>
+
+**Autostart:** <yes if the user wants the next session to start on this without being asked, else no>
 """
 
 
@@ -180,12 +184,14 @@ def render_handoff_note(
     handoff_path: str | Path,
     budget: int | None = None,
     now: float | None = None,
+    autostart: bool = False,
 ) -> str:
     """
     Build the SessionStart note for an existing handoff, or "" if unusable.
 
     Written as an instruction to Claude, since a hook can't address the user
-    directly — the same pattern `git_check` and `memory_init` use.
+    directly — the same pattern `git_check` and `memory_init` use. *autostart*
+    swaps the conditional pickup for "begin on your first turn" (see autostart_due).
     """
     path = Path(handoff_path)
     try:
@@ -225,6 +231,20 @@ def render_handoff_note(
         "then wait. When they say it's done (or you write a new handoff), move this "
         "file to .clawness/handoffs/done/ with a timestamped name instead of deleting it."
     )
+    if autostart:
+        # The user already answered "carry on" when they marked it, so the
+        # conditional above becomes the default. The escape hatch survives: a first
+        # message that is plainly a different task still wins.
+        instruction = (
+            "It is marked Autostart: the user asked for this session to continue it "
+            "without being asked. Begin on Next at your first turn (an auto-start "
+            "reminder may wake you before they type), going straight to the work "
+            "and asking only what it lists under Open questions. Open with one line "
+            "saying you're continuing from the handoff. If their first message is "
+            "plainly a different task, do that instead and mention the handoff in one "
+            "line. When the work is done (or you write a new handoff), move this file "
+            "to .clawness/handoffs/done/ with a timestamped name instead of deleting it."
+        )
 
     # Only on the pickup branch: if they opened with a fresh task instead, the handoff's
     # heading is the wrong name for the session they're actually in.
@@ -233,7 +253,9 @@ def render_handoff_note(
     # on every pickup was more nagging than it was worth, so the clause is silent unless
     # a user turns it on. `suggest_session_name` stays fully functional for anyone who
     # does — this gates only whether the note mentions it.
-    name = suggest_session_name(text) if os.environ.get("CLAW_HANDOFF_SUGGEST_NAME") else ""
+    # Auto-start sets the title itself (sessionTitle), so there's nothing to suggest.
+    name = (suggest_session_name(text)
+            if os.environ.get("CLAW_HANDOFF_SUGGEST_NAME") and not autostart else "")
     if name:
         instruction += (
             " One aside, on the pickup branch only: an unnamed session takes its "
@@ -254,3 +276,97 @@ def render_handoff_note(
         parts.append("(...truncated — full note in .clawness/handoff.md)")
     parts.append("--- END HANDOFF ---")
     return "\n".join(parts)
+
+
+# --- Auto-start --------------------------------------------------------------
+# A handoff exists so the next session needs no interview, and typing "carry on"
+# is the last bit of interview left. A handoff marked `**Autostart:** yes` lets the
+# next session begin by itself:
+#
+#   * interactive: a SessionStart hook registered with `asyncRewake` exits 2, which
+#     wakes Claude with AUTOSTART_INSTRUCTION as a system reminder;
+#   * headless (`claude -p`): handoff_check returns `initialUserMessage`, which
+#     becomes the first turn with no prompt needed.
+#
+# Three guards keep it from ambushing someone who opened a session for something
+# else, and they are the whole design:
+#   1. Consent per handoff. The marker is written only when the user agreed to an
+#      automatic pickup; a handoff without it behaves exactly as before.
+#   2. Freshness (CLAW_HANDOFF_AUTOSTART_HOURS, default 12). Unlike the pickup NOTE,
+#      which deliberately has no age cutoff, starting work unasked is an action, and
+#      "continue what I left an hour ago" is not "continue what I left last month".
+#   3. Once per handoff (interactive). The ledger stores the handoff's mtime, so a
+#      second new session doesn't start the same work again, while a rewritten
+#      handoff re-arms. Headless runs skip the ledger on purpose: a scripted loop
+#      re-running `claude -p` is asking to continue every time.
+# Only `startup` and `clear` sources qualify: resume/compact/fork are continuations
+# of a conversation that already knows what it was doing.
+
+DEFAULT_AUTOSTART_HOURS = 12
+AUTOSTART_SOURCES = frozenset({"startup", "clear"})
+_AUTOSTART_LEDGER = "handoff_autostart.json"
+_AUTOSTART_RE = re.compile(r"^[\s*_>-]*autostart\s*[*_]*\s*:\s*[*_]*\s*(yes|true|on)\b",
+                           re.IGNORECASE | re.MULTILINE)
+
+AUTOSTART_INSTRUCTION = (
+    "[Clawness] Auto-start: the previous session's handoff (.clawness/handoff.md) is "
+    "marked Autostart, so the user asked for this session to pick it up without "
+    "waiting for them. Start now: go straight to Next and begin work, asking only "
+    "what it lists under Open questions. If the handoff isn't already in your "
+    "context, read .clawness/handoff.md first. Open with one line saying you're "
+    "continuing from the handoff, so the user can stop you if they meant something else."
+)
+AUTOSTART_USER_MESSAGE = "Carry on from the handoff in .clawness/handoff.md."
+
+
+def wants_autostart(text: str) -> bool:
+    """True when the handoff carries `Autostart: yes` (any bold/list decoration)."""
+    return bool(_AUTOSTART_RE.search(text or ""))
+
+
+def autostart_due(project_root: str | Path, source: str,
+                  now: float | None = None) -> Path | None:
+    """The handoff path when this session should start on it unasked, else None.
+    Does not consult the once-per-handoff ledger; see claim_autostart."""
+    try:
+        if os.environ.get("CLAW_NO_HANDOFF_AUTOSTART"):
+            return None
+        if source not in AUTOSTART_SOURCES:
+            return None
+        path = find_handoff(project_root)
+        if path is None:
+            return None
+        if not wants_autostart(path.read_text(encoding="utf-8")):
+            return None
+        hours = _env_int("CLAW_HANDOFF_AUTOSTART_HOURS", DEFAULT_AUTOSTART_HOURS)
+        age = (now if now is not None else time.time()) - path.stat().st_mtime
+        if age > hours * 3600:
+            return None
+        return path
+    except (OSError, UnicodeError):
+        return None
+
+
+def autostart_claimed(project_root: str | Path, handoff_path: str | Path) -> bool:
+    """True when this exact handoff (by mtime) has already auto-started."""
+    try:
+        mtime = Path(handoff_path).stat().st_mtime
+        ledger = Path(project_root) / ".clawness" / _AUTOSTART_LEDGER
+        return json.loads(ledger.read_text(encoding="utf-8")).get("mtime") == mtime
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def claim_autostart(project_root: str | Path, handoff_path: str | Path) -> bool:
+    """Record that this handoff has auto-started; False if it already had.
+    Keyed on the handoff's mtime, so rewriting the handoff re-arms it."""
+    try:
+        if autostart_claimed(project_root, handoff_path):
+            return False
+        mtime = Path(handoff_path).stat().st_mtime
+        ledger = Path(project_root) / ".clawness" / _AUTOSTART_LEDGER
+        from clawness.plan import atomic_write_text
+        atomic_write_text(ledger, json.dumps({"mtime": mtime}) + "\n")
+        return True
+    except OSError:
+        return False

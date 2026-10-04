@@ -1,0 +1,17 @@
+id: CC-SKILL-001
+domain: claude-code
+severity: warning
+tags: [claude-code, skill, skills, skill.md, frontmatter, description, auto-invoke, agent]
+triggers: [skill.md, skill, skills, frontmatter, description, auto invoke, slash command, subagent, agents]
+when: Writing a SKILL.md or an agent definition for Claude Code.
+rule: >
+  The frontmatter description is what decides when the skill runs, so state what it
+  does AND when to use it, in the words a user would type. Write the body as
+  instructions to Claude in the imperative, and keep it to what the model wouldn't do
+  unprompted: the body loads into context every time it's invoked. A skill can be
+  auto-invoked without the user typing it, so anything expensive, destructive or
+  outward-facing (spawning sub-agents, writing many files, publishing) must stop and
+  confirm first. Instructions for Claude belong in a skill, not a CLAUDE.md at the
+  plugin root, which a plugin does not load.
+violation: "description: 'Security helper.'  — then a body that fans out five sub-agents without asking"
+correct: "description: 'Run a security audit… Use when the user asks for a security review or vulnerability scan.' Body confirms before spawning agents."

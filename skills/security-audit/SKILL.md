@@ -25,15 +25,16 @@ judgment accumulates in a ledger (`.clawness/security/findings.json`), so runs
 > that first to show the surface, then ask before fanning out agents. If the user
 > explicitly invoked `/clawness:security-audit` or already said yes, skip the question.
 
-The CLI isn't on PATH — reach it through the stashed wrapper:
+The CLI isn't on PATH. Reach it through the bundled launcher, falling back to the wrapper the SessionStart bootstrap stashes on older Claude Code:
 
 ```bash
-CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
+CLAW="${CLAUDE_PLUGIN_ROOT}/scripts/clawness-cli.sh"
+[ -f "$CLAW" ] || CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
 bash "$CLAW" scan --project .          # enumerate + accumulate the ledger
 bash "$CLAW" scan status --project .   # show coverage without re-scanning
 ```
 
-If `$CLAW` doesn't exist, the bootstrap hasn't run yet — start a fresh session.
+If neither path exists (an older Claude Code before the bootstrap has run), start a fresh session.
 
 ## Steps
 
@@ -43,6 +44,36 @@ If `$CLAW` doesn't exist, the bootstrap hasn't run yet — start a fresh session
    with a CWE, a mapped rule id, and a stable id, and merges them into the ledger.
    Note the **coverage line** it prints. Use `--new-only` to see just what hasn't
    been adjudicated yet, `--class <name>` to focus one category.
+
+   **SAST pass (when a scanner is installed).** Check which of these are on PATH
+   (`command -v`) and run each one present, writing SARIF into one directory, then
+   re-run the scan with `--sarif` so the results merge into the same ledger, dedup
+   against the native candidates, and get adjudicated in step 3 like everything else:
+
+   ```bash
+   OUT=.clawness/security/sast; mkdir -p "$OUT"
+   semgrep scan --config p/default --metrics=off --sarif-output="$OUT/semgrep.sarif" .
+   bandit -r . -f sarif -o "$OUT/bandit.sarif"          # Python
+   gitleaks dir . --report-format sarif --report-path "$OUT/gitleaks.sarif"
+   trivy fs --format sarif --output "$OUT/trivy.sarif" .  # dependencies, IaC
+   bash "$CLAW" scan --project . --sarif "$OUT"
+   ```
+
+   - **Never install a scanner, and never pick a ruleset that phones home, without
+     asking.** Semgrep's `--config auto` sends the project URL to Semgrep's registry,
+     which is why it isn't used above. If the user supplied their own Semgrep rules or
+     CodeQL queries (common for researchers), run those instead. For CodeQL, build the
+     database, then `codeql database analyze <db> --format=sarif-latest
+     --output="$OUT/codeql.sarif"`.
+   - If no scanner is installed, say which ones would add coverage for this stack
+     and carry on with the native scan. Don't stall.
+   - `.clawness/` is gitignored and skipped by auto-detection, so this SARIF never
+     gets committed by accident (it maps where the vulnerabilities are). `--sarif`
+     is what folds it in. If the project also commits `*.sarif` elsewhere, run
+     `scan` once without `--sarif` to pick those up as well.
+   - Tools that don't emit SARIF (TruffleHog's JSON, or a third-party skill's
+     markdown report, such as secureIO's `security-scan`) can't enter the ledger.
+     Read them as leads for the red team, not as adjudicated findings.
 
 2. **Scope** — If the user named a module or directory, pass it as `--project` and
    focus there. Otherwise let the scan cover the tree and prioritise the
@@ -76,7 +107,8 @@ If `$CLAW` doesn't exist, the bootstrap hasn't run yet — start a fresh session
 
 `clawness scan` is a **regex/heuristic tripwire, not a SAST engine** (CodeQL/
 Semgrep). It makes discovery reproducible and routes attention; it will miss
-cross-file taint and obfuscation, and it over-reports. The value is that
+cross-file taint and obfuscation, and it over-reports. Say whether a real SAST pass
+ran: without one, the report rests on the tripwire alone. The value is that
 adjudicating a fixed short list is far more stable than open-ended discovery, and
 the ledger means a verdict is recorded once, not re-derived every run.
 

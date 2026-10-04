@@ -127,8 +127,8 @@ approved section, smallest first:
 1. Write the new file (or add the rule / memory line).
 2. Verify it:
    - `.clawness/rules/` → confirm the new ID retrieves. The `clawness` CLI ships with the
-     plugin but isn't on PATH; run it via the wrapper the SessionStart bootstrap writes:
-     `CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"`, then
+     plugin but isn't on PATH; run it via the bundled launcher (or the bootstrap's wrapper on older Claude Code):
+     `CLAW="${CLAUDE_PLUGIN_ROOT}/scripts/clawness-cli.sh"; [ -f "$CLAW" ] || CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"`, then
      `bash "$CLAW" query "<a prompt this should match>"` and check the ID appears.
      (Editable/manual installs may use `python -m clawness.cli query ...`.)
    - `.clawness/memory.md` → the entry is one line under `## Lessons`.

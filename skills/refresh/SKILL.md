@@ -149,9 +149,9 @@ Stamping the rules you write closes the loop: when this project later moves 17�
 ### 7. Verify
 
 The `clawness` CLI ships with the plugin but isn't on your PATH; run it via the
-wrapper the SessionStart bootstrap writes each session:
-`CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"`. If `$CLAW`
-is missing the bootstrap hasn't run — start a fresh session. (Editable/manual
+bundled launcher, falling back to the wrapper the SessionStart bootstrap writes:
+`CLAW="${CLAUDE_PLUGIN_ROOT}/scripts/clawness-cli.sh"; [ -f "$CLAW" ] || CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"`. If neither
+path exists, start a fresh session. (Editable/manual
 installs may use `python -m clawness.cli` instead.)
 
 - `bash "$CLAW" lint` — validates the stamp mechanically: unknown framework label,

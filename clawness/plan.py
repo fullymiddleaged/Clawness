@@ -17,7 +17,7 @@ requires zero clawness-specific commands:
     same `permission_mode` field on every hook call that an interactive session
     does, and the gate reads it the same way either way. `--permission-mode
     plan` plans and clears the gate on ExitPlanMode exactly like Shift+Tab does;
-    `--permission-mode acceptEdits` (or `auto`/`dontAsk`/`bypassPermissions`)
+    `--permission-mode acceptEdits` (or `dontAsk`/`bypassPermissions`)
     has already told Claude Code "edit without asking me", so the gate treats
     that as the same yes it would get from a clicked dialog and doesn't ask
     again — there is no one to ask in a headless run, and re-asking would just
@@ -246,11 +246,16 @@ DENY_REASON = ASK_REASON
 # interactive path.
 #
 # "default" and "plan" are deliberately absent: in both, a permission prompt is
-# still a live question. Values come from the documented `permission_mode` field
+# still a live question. So is "auto" (removed 1.19.0). Since Claude Code 2.1.283
+# auto is the built-in STARTING mode, so it no longer records a choice anyone
+# made — exempting it left the gate silent for nearly every session, the
+# absent-prompt failure the gate exists to prevent. And a hook's "ask" still
+# reaches the human in auto mode (the docs say so), so asking isn't redundant:
+# plan first, approve once, then auto runs freely for the rest of the session. Values come from the documented `permission_mode` field
 # on the hook payload; an unknown or missing value falls through to asking,
 # which is the safe direction (a spurious prompt costs one click, a skipped one
 # costs the whole point of the gate).
-PREAUTHORIZED_MODES = frozenset({"acceptEdits", "auto", "dontAsk", "bypassPermissions"})
+PREAUTHORIZED_MODES = frozenset({"acceptEdits", "dontAsk", "bypassPermissions"})
 
 
 def gate_decision(

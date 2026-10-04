@@ -1773,6 +1773,114 @@
         "css",
         "general"
       ]
+    },
+    {
+      "q": "run semgrep on this repo and show me what it finds",
+      "expect": [
+        "WF-SAST-001"
+      ]
+    },
+    {
+      "q": "set up codeql static analysis for this codebase",
+      "expect": [
+        "WF-SAST-001"
+      ]
+    },
+    {
+      "q": "use the cloudflare security-audit-skill to scan the project",
+      "expect": [
+        "WF-SAST-001"
+      ]
+    },
+    {
+      "q": "import the bandit sarif output into the findings ledger",
+      "expect": [
+        "WF-SAST-001"
+      ]
+    },
+    {
+      "q": "my hook shows a hook error on every prompt",
+      "expect": [
+        "CC-HOOK-EXIT-001"
+      ],
+      "stack": [
+        "claude-code",
+        "python",
+        "bash",
+        "general"
+      ]
+    },
+    {
+      "q": "should my PreToolUse hook deny or ask",
+      "expect": [
+        "CC-HOOK-DECISION-001"
+      ],
+      "stack": [
+        "claude-code",
+        "python",
+        "bash",
+        "general"
+      ]
+    },
+    {
+      "q": "the hook output is garbled on windows",
+      "expect": [
+        "CC-HOOK-IO-001"
+      ],
+      "stack": [
+        "claude-code",
+        "python",
+        "bash",
+        "general"
+      ]
+    },
+    {
+      "q": "how do I reference a script bundled in my plugin from a skill",
+      "expect": [
+        "CC-PLUGIN-PATH-001"
+      ],
+      "stack": [
+        "claude-code",
+        "python",
+        "bash",
+        "general"
+      ]
+    },
+    {
+      "q": "write the SKILL.md description for this skill",
+      "expect": [
+        "CC-SKILL-001"
+      ],
+      "stack": [
+        "claude-code",
+        "python",
+        "bash",
+        "general"
+      ]
+    },
+    {
+      "q": "how do I know which model the session is using from a hook",
+      "expect": [
+        "CC-HARNESS-001"
+      ],
+      "stack": [
+        "claude-code",
+        "python",
+        "bash",
+        "general"
+      ]
+    },
+    {
+      "q": "where should the plugin store its cache between updates",
+      "expect": [
+        "CC-PLUGIN-PATH-001"
+      ],
+      "stack": [
+        "claude-code",
+        "python",
+        "bash",
+        "general"
+      ]
     }
   ]
 }

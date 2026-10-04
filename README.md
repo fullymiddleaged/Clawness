@@ -17,7 +17,7 @@ But it also does heaps more!
 
 What you get:
 
-- **222 rules** across 30 domains: general coding, plus scientific computing, machine
+- **229 rules** across 31 domains: general coding, plus scientific computing, machine
   learning, research method, and building with LLMs. Only the ones that match your task
   are injected.
 - **7 review sub-agents**: security red/blue team, code critic, architecture challenger,
@@ -29,7 +29,7 @@ What you get:
 - **Session continuity**: a per-project lessons memory, a warning when your context window
   is filling up, and a handoff the next session picks up on its own.
 - **Low token cost.** Only the matching rules are injected, never the whole set. A typical
-  turn is around 1,700 tokens instead of loading all 222 rules every turn.
+  turn is around 1,700 tokens instead of loading all 229 rules every turn.
 
 Under 1 MB, no services, no ML models, about 4 ms per prompt. Pure Python, with PyYAML as
 the only dependency.
@@ -128,7 +128,7 @@ only the few that fit, plus an always-on mandatory set. So a developer moving be
 frontend, backend, and SQL always has the right rules and never the rest. The same hook
 carries the rest of what's [in the box](#clawness), each covered under [Using It](#using-it).
 
-**Make them *your* standards.** The 222 built-in rules are a starting point. Run
+**Make them *your* standards.** The 229 built-in rules are a starting point. Run
 `/clawness:add describe your rule` and Clawness writes the tagged YAML for you, or drop
 `.yml` files in `.clawness/rules/`. Commit `.clawness/rules/` and `.clawness/memory.md` to
 share them with your team. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
@@ -352,6 +352,12 @@ and injects the content.
 
 - **Say "carry on" and Claude carries on**, straight to the next step. Open with something
   else and it just tells you where things stood and waits.
+- **Or don't say anything.** When the context watch offers a handoff and you say yes, it's
+  marked `**Autostart:** yes`. Type `/clear` (or open a new session) and the next session
+  starts on it by itself and names itself after the handoff. It fires once per handoff,
+  only within 12 hours (`CLAW_HANDOFF_AUTOSTART_HOURS`), and a first message that's
+  plainly a different task still wins. Under `claude -p` a marked handoff needs no prompt
+  at all. Off with `CLAW_NO_HANDOFF_AUTOSTART=1`.
 - **Blockers go under `## Open questions`**, so Claude asks those and only those. Usually
   it says "none".
 - **Writing a new handoff archives the old one** to `.clawness/handoffs/done/`; nothing is
@@ -386,8 +392,10 @@ overrides into `.clawness/rules/` on your approval. Off with `CLAW_NO_STALENESS_
 Before the first edit of a session, Clawness asks rather than editing blind, riding Claude
 Code's plan mode. Approve a plan (Shift+Tab), or approve the native "proceed without a plan?"
 dialog if the agent edits first; either clears the gate for the session, so you're asked at
-most once. Headless is the same: `--permission-mode plan` clears it, and `acceptEdits`/`auto`/
-`dontAsk`/`bypassPermissions` count as pre-approved.
+most once. Auto mode (Claude Code's default) is gated too: plan first, then auto runs freely.
+Headless is the same: `--permission-mode plan` clears it, and `acceptEdits`/`dontAsk`/
+`bypassPermissions` count as pre-approved. An unattended `claude -p` run that starts in auto
+mode needs one of those three, or `CLAW_NO_PLAN_GATE=1`.
 
 Turn it off globally with `CLAW_NO_PLAN_GATE=1` or `{"plan_gate":{"enabled":false}}` in
 `~/.claude/clawness/config.json` (there's no per-project switch, on purpose). `clawness plan
@@ -447,7 +455,11 @@ If your project already runs a SAST tool, drop its **SARIF** output anywhere in 
 (or pass `--sarif <path>`) and the scan folds those findings in too — re-keyed to stable
 ids, mapped onto the same finding classes, and deduped against the native hits. No SAST
 tool need be installed; Clawness ingests the `*.sarif` output only, so PyYAML stays the
-one dependency.
+one dependency. If Semgrep, Bandit, Gitleaks, Trivy or CodeQL *is* installed,
+`/clawness:security-audit` runs it for you and folds the results into the ledger. It never
+installs one, and never uses Semgrep's `--config auto`, which uploads your project URL. If
+none is installed, the first security-scan prompt in a project offers a one-line Semgrep
+install; decline and the audit runs on Clawness's own scan.
 
 > **Plugin install (most users): you don't type these.** The `clawness` CLI ships only
 > with the manual install; on the plugin path you run the audit through **`/clawness:security-audit`**
@@ -809,6 +821,7 @@ Type these in any Claude Code session (terminal, VS Code, or web). All are names
 | `/clawness:perf` | Performance audit (N+1s, re-renders, leaks, bundle size, slow algorithms) |
 | `/clawness:test` | Generate tests matching the project's existing style |
 | `/clawness:user-docs` | Draft task-oriented user or API docs from a codebase scan |
+| `/clawness:messaging [surface]` | Rewrite landing/UI copy with the customer as the hero; brief first, edits after approval |
 
 **Project hygiene** (usually prompted by a session-start note)
 
@@ -885,10 +898,10 @@ clawness agents-md --write
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Rules** | 222 across 30 domains | Coding, science, ML, research, and LLM standards, injected per prompt |
+| **Rules** | 229 across 31 domains | Coding, science, ML, research, and LLM standards, injected per prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
-| **Skills** | 13 slash commands | See [Slash Commands](#slash-commands) — `security-audit`, `review`, `test`, `perf`, `add`, `status`, `user-docs`, plus hygiene and maintainer commands |
-| **Hooks** | 12 | Rule injection, context watch, model-tier check, output compression, plan gate, access guard, trust ledger, and the session-start checks |
+| **Skills** | 14 slash commands | See [Slash Commands](#slash-commands) — `security-audit`, `review`, `test`, `perf`, `add`, `status`, `user-docs`, `messaging`, plus hygiene and maintainer commands |
+| **Hooks** | 13 | Rule injection, context watch, model-tier check, output compression, plan gate, access guard, trust ledger, handoff auto-start, and the session-start checks |
 | **CLI** | 11 commands | query, init, stats, lint, bench, eval, scan, plan, agents-md, audit-rules, audit-skills |
 | **Installers** | bash + PowerShell | With matching uninstallers, for Windows/macOS/Linux |
 
@@ -900,7 +913,7 @@ clawness agents-md --write
 | `science` | 18 | Physics/maths/engineering: dimensional consistency, numerical stability, matrix conditioning, uncertainty propagation, statistical discipline, derivation checking, solver validation and convergence, RNG and seeding, reproducibility, paper claims, figure standards, array/dataframe correctness, notebook hygiene |
 | `research` | 14 | Source hygiene, citation verification, date-bounded sweeps, reporting standards (PRISMA/CONSORT/STROBE/ARRIVE), data/code availability with a DOI, pre-registration, peer-review responses, falsifiable questions, novelty search, structured synthesis |
 | `security` | 11 | Auth, secrets, deps, untrusted-content/exfil *(4 mandatory)*; SQLi, XSS, supply-chain, SSRF, path traversal, IDOR, password hashing *(ranked)* |
-| `workflows` | 11 | Multi-agent orchestration, session handoff, sub-agent cost/vetting, lessons-memory upkeep *(1 mandatory)* |
+| `workflows` | 12 | Multi-agent orchestration, session handoff, sub-agent cost/vetting, lessons-memory upkeep, SAST scanner use *(1 mandatory)* |
 | `nextjs` | 10 | Server/Client components, data fetching, caching, layouts, metadata, Server Actions |
 | `fastapi` | 8 | Pydantic v2, dependency injection, async, error handling, CORS, DB sessions |
 | `meta` | 8 | Rebuttals to common AI shortcuts ("too simple to test", "I'll refactor later", trusting input) |
@@ -909,6 +922,7 @@ clawness agents-md --write
 | `llm` | 7 | Building with models: eval sets, prompt injection, schema-constrained output, token cost, non-determinism, model-id pinning, retrieval |
 | `python` | 7 | Async I/O, imports, error handling, type hints, mutable defaults, context managers, pathlib |
 | `testing` | 7 | Coverage for new code *(1 mandatory)*; watching a test fail, boundary testing, determinism, mocking, assertions, isolation *(ranked)* |
+| `claude-code` | 6 | Building Claude Code plugins, hooks and skills: exit codes and fail-open, ask vs deny, hook I/O and UTF-8, plugin paths and data, skill descriptions, harness facts that move |
 | `capacitor` | 6 | Platform detection, permissions, lifecycle, WebView, sync, App Store |
 | `css` | 6 | `!important`, relative units, flex/grid, custom properties, responsive, focus states |
 | `docker` | 6 | Layer caching, multi-stage builds, non-root, secrets, tag pinning, slim images |
@@ -958,12 +972,16 @@ you).
 | `CLAW_NO_STALENESS_NOTE` | (unset) | Don't warn on a framework version past the range its rules were verified against |
 | `CLAW_NO_MODEL_ADVISOR` | (unset) | Don't check the session's model tier (Claude Code) |
 | `CLAW_NO_CONTEXT_WATCH` | (unset) | Disable context-pressure warnings (Claude Code) |
+| `CLAW_NO_SAST_OFFER` | (unset) | Don't offer to install a SAST scanner on security-scan prompts |
 | `CLAW_CONTEXT_LIMIT` | (auto) | Your context window in tokens. Auto-detected, set explicitly if the guess is wrong |
 | `CLAW_CONTEXT_WARN` | `0.70` | Fraction of the window at which to mention context is filling |
 | `CLAW_CONTEXT_URGENT` | `0.85` | Fraction at which to recommend a fresh session |
 | `CLAW_CONTEXT_SURGE` | `0.12` | A single turn adding this fraction is flagged (when ≤5 turns of headroom remain) |
 | `CLAW_NO_HANDOFF` | (unset) | Don't pick up `.clawness/handoff.md` at session start |
 | `CLAW_HANDOFF_BUDGET` | `2000` | Max characters of the handoff injected (keeps the head) |
+| `CLAW_NO_HANDOFF_AUTOSTART` | (unset) | Never start work on an `Autostart`-marked handoff unasked |
+| `CLAW_HANDOFF_AUTOSTART_HOURS` | `12` | How recent a marked handoff must be to auto-start |
+| `CLAW_HANDOFF_AUTOSTART_DELAY` | `2` | Seconds the auto-start waits for the session to finish starting |
 | `CLAW_VERBOSE` | (unset) | Render mandatory rules in full and show retrieval metadata. More tokens per turn |
 | `CLAW_COMPACT` | (unset) | Render ranked rules compactly too. Fewer tokens per turn |
 | `CLAW_FULL_EVERY` | `5` | Show the full mandatory block on prompt 1 and every Nth after (id list in between) |

@@ -1,0 +1,16 @@
+id: CC-HARNESS-001
+domain: claude-code
+severity: warning
+tags: [claude-code, harness, hook, permission-mode, model, context-window, version, plugin-validate]
+triggers: [permission_mode, auto mode, model field, context window, 1m, plugin validate, claude code version, new session, reload plugin]
+when: Writing extension code that depends on how the Claude Code harness behaves.
+rule: >
+  Check harness behaviour against the current docs instead of assuming it, because it
+  moves monthly. Facts that have broken extensions: only SessionStart receives
+  `model`, and not always; auto is the default permission mode since v2.1.283, so it
+  no longer means the user opted out of prompts; Opus 4.7+, Sonnet 5+ and Fable run a
+  1M window natively, so a 200k assumption misreports usage. Plugin and hook changes
+  load only in a new session. Run `claude plugin validate` before shipping, and
+  handle an unknown field value by falling back, not by crashing.
+violation: "Treating permission_mode == 'auto' as 'the user chose to skip approvals', or computing context % against 200k for every model"
+correct: "Read documented payload fields with fallbacks; verify version-dependent behaviour in the docs; claude plugin validate in CI"

@@ -5,6 +5,57 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.19.0] - 2026-10-04
+
+### Added
+
+- **Handoffs can pick themselves up.** When the context watch offers a handoff and you
+  say yes, it's marked `**Autostart:** yes`. Type `/clear` or open a new session and Claude
+  starts on it without you typing "carry on", and the session is titled after the
+  handoff. It fires once per handoff and only within 12 hours; under `claude -p` a marked
+  handoff becomes the first turn. Turn it off with `CLAW_NO_HANDOFF_AUTOSTART=1`.
+- **Rules for building Claude Code plugins, hooks and skills** (`claude-code` domain, 6
+  rules), on automatically in any project with a `.claude-plugin/` manifest,
+  `hooks/hooks.json` or a `SKILL.md`.
+- **`/clawness:messaging` rewrites landing and UI copy around your customer.** It scans
+  your existing copy, drafts a seven-part message brief (customer, problem, guide, plan,
+  call to action, stakes, success), and changes nothing until you approve it.
+- **`/clawness:security-audit` runs your installed SAST tools.** If Semgrep, Bandit,
+  Gitleaks, Trivy or CodeQL is on PATH, the audit runs it, merges the SARIF into the
+  findings ledger and has it adjudicated with everything else. Nothing is installed for
+  you, and Semgrep runs with `p/default --metrics=off` rather than `--config auto`.
+- **Asking for SAST or a named scanner now gets the same treatment**, including
+  third-party security skills: Claude offers the install command and audits the skill
+  before using it.
+- **No scanner installed? Clawness offers one, once.** The first time you ask for a
+  security scan in a project without Semgrep, Bandit, Gitleaks, Trivy or CodeQL, Claude
+  offers a one-line Semgrep install. Decline and the audit runs on Clawness's own scan.
+  Silence it with `CLAW_NO_SAST_OFFER=1`.
+- **Security questions about your current changes point to `/security-review`.** Asking
+  whether a change, diff or PR is secure now names Claude Code's built-in review as the
+  quick option, alongside the whole-repo `/clawness:security-audit`.
+
+### Changed
+
+- **The plan gate now applies in auto mode.** Claude Code starts sessions in auto mode
+  by default, and the gate treated auto as pre-approved, so it had stopped firing. It
+  now asks once; approve a plan and auto runs freely. Unattended `claude -p` runs that
+  start in auto need `--permission-mode acceptEdits` or `CLAW_NO_PLAN_GATE=1`.
+- **Replies default to under 100 words.** The always-on voice rule now also rules out
+  caveats and options you didn't ask for, and defines jargon in a clause. Longer replies
+  still come when you ask for detail or the content needs it.
+
+### Fixed
+
+- **Clawness's slash commands work in the first session after install.** Skills now run
+  the CLI bundled with the plugin directly, instead of waiting for a session-start hook
+  to write a helper first. Older Claude Code versions still use that helper.
+- **The context warning no longer false-alarms on 1M-window models.** Opus 4.7+,
+  Sonnet 5+ and Fable sessions run with a 1M window by default, but Clawness assumed
+  200k unless `model` in settings said `[1m]`. A session at 158k was told "79% full".
+  The window is now read from the session's model; `CLAUDE_CODE_DISABLE_1M_CONTEXT=1`
+  is honoured.
+
 ## [1.18.0] - 2026-08-29
 
 ### Added

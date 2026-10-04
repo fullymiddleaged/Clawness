@@ -1,0 +1,16 @@
+id: CC-HOOK-DECISION-001
+domain: claude-code
+severity: error
+tags: [claude-code, hook, pretooluse, permission, permissiondecision, ask, deny, auto-mode]
+triggers: [permissiondecision, pretooluse, deny, ask, block tool, permission hook, guard hook, auto mode, approve]
+when: Returning a permission decision (allow / ask / deny) from a PreToolUse hook.
+rule: >
+  Prefer "ask" to "deny". "ask" shows the user an approve dialog, even in auto mode,
+  so a false positive costs one click; "deny" is a hard block with no override in the
+  session, so a false positive strands the user and the retry just re-fires. Reserve
+  deny for actions with essentially no legitimate use, and write its reason to name a
+  real escape hatch (run it yourself, an env var to disable the hook), never "proceed
+  once the user confirms", which the model cannot do. A hook's "allow" does not
+  override the user's deny or ask permission rules, so don't build on it as a bypass.
+violation: "permissionDecision: 'deny' on every write outside the repo, with reason 'ask the user to confirm and retry'"
+correct: "permissionDecision: 'ask' with a reason saying what's unusual; 'deny' only for e.g. reading a credential into a network call"

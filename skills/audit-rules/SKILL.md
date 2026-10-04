@@ -28,11 +28,12 @@ failure per-rule stamping exists to prevent.
 Run the mechanical checks first, so the review has the numbers in front of it:
 
 The `clawness` CLI ships with the plugin but isn't on your PATH; run it via the
-wrapper the SessionStart bootstrap writes each session (editable/manual installs may
-use `python -m clawness.cli` instead):
+bundled launcher, falling back to the bootstrap's wrapper on older Claude Code
+(editable/manual installs may use `python -m clawness.cli` instead):
 
 ```bash
-CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
+CLAW="${CLAUDE_PLUGIN_ROOT}/scripts/clawness-cli.sh"
+[ -f "$CLAW" ] || CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
 bash "$CLAW" audit-rules --stale --overlap
 ```
 

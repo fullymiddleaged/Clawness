@@ -20,6 +20,8 @@ from clawness.context_watch import (  # noqa: E402
     find_transcript,
     infer_limit,
     limit_from_settings,
+    native_window,
+    read_context,
     read_context_tokens,
     render_alert,
 )
@@ -160,6 +162,48 @@ def test_observed_usage_corrects_an_understated_window():
     with _Env(CLAUDE_CONFIG_DIR=str(cfg), CLAW_CONTEXT_LIMIT=None):
         # A session sitting at 300k is self-evidently not a 200k session.
         assert infer_limit(300_000) == 1_000_000
+
+
+def test_native_1m_models_are_recognised_at_the_version_boundary():
+    with _Env(CLAUDE_CODE_DISABLE_1M_CONTEXT=None):
+        # Docs: "Fable 5.1, Fable 5, Sonnet 5 and later, and Opus 4.7 and later".
+        assert native_window("claude-opus-4-7") == 1_000_000
+        assert native_window("claude-opus-4-6") is None
+        assert native_window("claude-opus-5-5") == 1_000_000
+        assert native_window("claude-sonnet-5") == 1_000_000
+        assert native_window("claude-sonnet-4-6") is None
+        assert native_window("claude-fable-5-1") == 1_000_000
+        assert native_window("claude-mythos-5-1") == 1_000_000
+        assert native_window("claude-haiku-4-5") is None
+        # A date suffix is not a minor version.
+        assert native_window("claude-sonnet-4-20250514") is None
+        # Bedrock-shaped ids resolve too.
+        assert native_window("us.anthropic.claude-opus-4-7-v1:0") == 1_000_000
+        assert native_window("") is None
+        assert native_window(None) is None
+
+
+def test_disable_1m_env_turns_native_detection_off():
+    with _Env(CLAUDE_CODE_DISABLE_1M_CONTEXT="1"):
+        assert native_window("claude-opus-5-5") is None
+
+
+def test_transcript_model_prevents_the_200k_false_alarm():
+    # The live case that motivated this: an Opus 5.5 session at ~152k was told
+    # it was 76% full of an assumed 200k window.
+    cfg = Path(tempfile.mkdtemp())
+    with _Env(CLAUDE_CONFIG_DIR=str(cfg), CLAW_CONTEXT_LIMIT=None,
+              CLAUDE_CODE_DISABLE_1M_CONTEXT=None):
+        assert infer_limit(152_000, model="claude-opus-5-5") == 1_000_000
+        assert assess(152_000, 150_000, model="claude-opus-5-5") is None
+        # A model with an opt-in window still assumes the small one.
+        assert infer_limit(152_000, model="claude-haiku-4-5") == 200_000
+        assert assess(152_000, 150_000, model="claude-haiku-4-5").level == "warn"
+
+
+def test_read_context_returns_the_model_alongside_tokens():
+    p = _transcript(_assistant(0, 0, 80_000))
+    assert read_context(p) == (80_000, "claude-opus-5")
 
 
 def test_missing_settings_file_is_not_an_error():
@@ -317,3 +361,8 @@ if __name__ == "__main__":
             fn()
             print(f"ok  {name}")
     print("all context-watch tests passed")
+
+
+def test_urgent_text_offers_an_autostart_handoff():
+    out = render_alert(Alert("urgent", Usage(tokens=180_000, limit=200_000)))
+    assert "**Autostart:** yes" in out and "/clear" in out

@@ -78,11 +78,12 @@ The shape (identical to `tests/ground_truth.json`):
 
 ### 3. Run it
 
-The `clawness` CLI ships with the plugin but isn't on PATH; use the wrapper the
-SessionStart bootstrap writes each session:
+The `clawness` CLI ships with the plugin but isn't on PATH; use the bundled
+launcher, falling back to the bootstrap's wrapper on older Claude Code:
 
 ```bash
-CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
+CLAW="${CLAUDE_PLUGIN_ROOT}/scripts/clawness-cli.sh"
+[ -f "$CLAW" ] || CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
 bash "$CLAW" eval --data .clawness/eval/cases.json
 ```
 

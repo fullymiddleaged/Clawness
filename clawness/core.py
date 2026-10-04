@@ -737,6 +737,9 @@ def _estimate_tokens(text: str) -> int:
 _STACK_DOMAINS = frozenset({
     "python", "fastapi", "typescript", "react", "nextjs", "capacitor",
     "astro", "go", "rust", "java", "sql", "bash", "css", "docker",
+    # Building Claude Code plugins/hooks/skills. Stack-gated: "hook" and "skill"
+    # are ordinary words elsewhere (React hooks, a git hook).
+    "claude-code",
     # "llm" is stack-gated like a language/framework: prompt-caching and
     # eval-set rules are noise in a repo that calls no model. Detected from
     # anthropic/openai/langchain deps (see init.py).

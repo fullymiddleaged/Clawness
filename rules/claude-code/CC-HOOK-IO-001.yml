@@ -1,0 +1,17 @@
+id: CC-HOOK-IO-001
+domain: claude-code
+severity: warning
+tags: [claude-code, hook, stdin, stdout, stderr, utf-8, encoding, payload, latency]
+triggers: [hook payload, stdin, stdout, additionalcontext, hookspecificoutput, transcript_path, hook output, slow hook, encoding]
+when: Reading a hook's input payload or writing its output.
+rule: >
+  Read the payload as JSON from stdin and pin UTF-8 on stdin and stdout explicitly:
+  on Windows the default is cp1252 and non-ASCII text turns to mojibake. Stdout is not
+  a log. For SessionStart and UserPromptSubmit it is injected into Claude's context
+  as written, and for decision events it must be the JSON object alone, so send
+  diagnostics to stderr or a file. Treat missing payload fields as normal (several are
+  optional or version-dependent) and fall back rather than crash. A hook is a fresh
+  process on every firing, so keep imports light; anything slow belongs in an async
+  hook or a cache, not on the per-prompt path.
+violation: "print(f'debug: {payload}')  # in a UserPromptSubmit hook: lands in every prompt's context"
+correct: "sys.stdin.reconfigure(encoding='utf-8'); payload = json.load(sys.stdin); log to stderr; print only the block"

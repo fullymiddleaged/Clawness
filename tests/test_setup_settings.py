@@ -67,8 +67,8 @@ def test_all_expected_hooks_present(tmp_path):
     data = _install(tmp_path)
     assert _scripts_on(data, "UserPromptSubmit") == {"claude_hook.py"}
     assert _scripts_on(data, "SessionStart") == {
-        "git_check.py", "memory_init.py", "handoff_check.py", "stack_detect.py",
-        "trust_ledger.py", "changelog_check.py", "claude_md_check.py",
+        "git_check.py", "memory_init.py", "handoff_check.py", "handoff_autostart.py",
+        "stack_detect.py", "trust_ledger.py", "changelog_check.py", "claude_md_check.py",
     }
     assert "compress_output.py" in _scripts_on(data, "PostToolUse")
     assert "plan_gate.py" in _scripts_on(data, "PreToolUse")
@@ -309,3 +309,19 @@ if __name__ == "__main__":
         passed += 1
         print(f"  ok  {fn.__name__}")
     print(f"\n{passed}/{len(fns)} tests passed")
+
+
+def test_handoff_autostart_is_async_rewake_on_both_install_paths(tmp_path):
+    """asyncRewake is what lets the hook wake an idle session; without it the
+    exit 2 would block SessionStart instead. Both install paths must set it."""
+    data = _install(tmp_path)
+    manifest = json.loads(
+        (Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json")
+        .read_text(encoding="utf-8")
+    )
+    for hooks in (data["hooks"], manifest["hooks"]):
+        entries = [h for g in hooks["SessionStart"] for h in g["hooks"]
+                   if "handoff_autostart.py" in h.get("command", "")]
+        assert len(entries) == 1
+        assert entries[0].get("asyncRewake") is True
+        assert "async" not in entries[0]   # mutually exclusive with asyncRewake

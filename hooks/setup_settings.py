@@ -52,7 +52,8 @@ NO_PYTHON_NOTICE = (
 )
 
 
-def build_hook_entry(hook_script: Path, timeout: int = 30, notice: bool = False) -> dict:
+def build_hook_entry(hook_script: Path, timeout: int = 30, notice: bool = False,
+                     async_rewake: bool = False) -> dict:
     """Build the hook JSON object pointing at our script.
 
     Uses a portable interpreter picker (python3 -> python -> py) rather than a
@@ -86,11 +87,17 @@ def build_hook_entry(hook_script: Path, timeout: int = 30, notice: bool = False)
     if notice:
         command += f'; echo "{NO_PYTHON_NOTICE}"'
     command += "; exit 0"
-    return {
+    entry = {
         "type": "command",
         "command": command,
         "timeout": timeout,
     }
+    # asyncRewake: runs in the background and wakes Claude on exit 2. `exec`
+    # hands the script's own exit code through, so the trailing `exit 0` above
+    # only fires when no interpreter was found — and never wakes anything.
+    if async_rewake:
+        entry["asyncRewake"] = True
+    return entry
 
 
 def hook_already_present(events: list, hook_script: Path) -> bool:
@@ -114,6 +121,7 @@ CLAW_HOOK_SCRIPTS = (
     "ensure_deps.py",
     "memory_init.py",
     "handoff_check.py",
+    "handoff_autostart.py",
     "stack_detect.py",
     "changelog_check.py",
     "claude_md_check.py",
@@ -343,6 +351,19 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
                 "hooks": [build_hook_entry(handoff_script, timeout=10)],
             })
             results.append("handoff-check: added")
+
+    # --- SessionStart: wake Claude to continue an Autostart-marked handoff ---
+    autostart_script = hook_script.resolve().parent / "handoff_autostart.py"
+    if autostart_script.exists():
+        start_events = data["hooks"].setdefault("SessionStart", [])
+        if hook_already_present(start_events, autostart_script):
+            results.append("handoff-autostart: already configured")
+        else:
+            start_events.append({
+                "hooks": [build_hook_entry(autostart_script, timeout=30,
+                                           async_rewake=True)],
+            })
+            results.append("handoff-autostart: added")
 
     # --- SessionStart: project stack awareness (injects detected stack note) ---
     stack_script = hook_script.resolve().parent / "stack_detect.py"

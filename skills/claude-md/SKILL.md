@@ -116,9 +116,9 @@ approved section, in order, smallest first:
 1. Write the new file (or add the rule).
 2. Verify it:
    - `.clawness/rules/` → confirm the new ID retrieves. The `clawness` CLI ships
-     with the plugin but isn't on PATH; run it via the wrapper the SessionStart
-     bootstrap writes each session:
-     `CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"`, then
+     with the plugin but isn't on PATH; run it via the bundled launcher (or,
+     on older Claude Code, the wrapper the SessionStart bootstrap writes):
+     `CLAW="${CLAUDE_PLUGIN_ROOT}/scripts/clawness-cli.sh"; [ -f "$CLAW" ] || CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"`, then
      `bash "$CLAW" query "<a prompt this should match>"` and check the ID appears.
      (Editable/manual installs may use `python -m clawness.cli query ...`.)
    - `.claude/rules/` with `paths:` → confirm the glob matches a real file in the

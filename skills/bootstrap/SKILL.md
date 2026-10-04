@@ -99,18 +99,19 @@ Present each proposed rule — id, one-line intent, and source URL — as a tabl
 
 ### 5. Write the approved rules, then validate
 
-Write the approved files, then lint them through the wrapper the SessionStart
-bootstrap stashes each session (the `clawness` CLI ships with the plugin but isn't
-on your PATH):
+Write the approved files, then lint them through the bundled launcher, falling back to the
+bootstrap's wrapper on older Claude Code (the `clawness` CLI ships with the plugin
+but isn't on your PATH):
 
 ```bash
-CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
+CLAW="${CLAUDE_PLUGIN_ROOT}/scripts/clawness-cli.sh"
+[ -f "$CLAW" ] || CLAW="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/clawness/clawness-cli.sh"
 bash "$CLAW" --rules-dir .clawness/rules lint
 ```
 
 Note `--rules-dir` comes **before** `lint` (it's a global flag), and points at the
-project rules so lint checks what you just wrote, not the shipped corpus. If `$CLAW`
-is missing the bootstrap hasn't run — start a fresh session. (Editable/manual
+project rules so lint checks what you just wrote, not the shipped corpus. If neither
+path exists, start a fresh session. (Editable/manual
 installs may use `python -m clawness.cli --rules-dir .clawness/rules lint`.)
 
 Lint catches malformed YAML, missing fields, non-UTF-8, and vague phrasing — it

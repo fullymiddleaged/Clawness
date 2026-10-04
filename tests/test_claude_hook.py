@@ -33,12 +33,12 @@ def _run_hook(prompt: str, session_id: str, cwd: str, env_extra: "dict | None" =
     )
 
 
-def _transcript(tokens: int) -> str:
+def _transcript(tokens: int, model: str = "claude-opus-5") -> str:
     d = Path(tempfile.mkdtemp())
     p = d / "session.jsonl"
     p.write_text(json.dumps({
         "type": "assistant",
-        "message": {"model": "claude-opus-5", "usage": {
+        "message": {"model": model, "usage": {
             "input_tokens": 0, "cache_creation_input_tokens": 0,
             "cache_read_input_tokens": tokens}},
     }) + "\n", encoding="utf-8")
@@ -216,6 +216,21 @@ def test_escalation_from_warn_to_urgent_still_speaks_up():
     urgent = _run_hook("two", sid, str(root), CTX, transcript=_transcript(180_000))
     assert "CLAWNESS CONTEXT" in warn.stdout and "carry on" in warn.stdout
     assert "CLAWNESS CONTEXT" in urgent.stdout and "fresh session" in urgent.stdout
+
+
+def test_hook_reads_the_window_from_the_transcript_model():
+    """No CLAW_CONTEXT_LIMIT, no settings: the transcript's model id alone decides.
+    180k is 90% of 200k but 18% of a native 1M window."""
+    root = _project()
+    env = {"CLAW_CONTEXT_LIMIT": "0", "CLAUDE_CODE_DISABLE_1M_CONTEXT": "0",
+           "CLAUDE_CONFIG_DIR": tempfile.mkdtemp()}
+    native = _run_hook("implement a feature", str(uuid.uuid4()), str(root), env,
+                       transcript=_transcript(180_000, "claude-opus-5-5"))
+    opt_in = _run_hook("implement a feature", str(uuid.uuid4()), str(root), env,
+                       transcript=_transcript(180_000, "claude-haiku-4-5"))
+    assert native.returncode == 0, native.stderr
+    assert "CLAWNESS CONTEXT" not in native.stdout
+    assert "CLAWNESS CONTEXT" in opt_in.stdout
 
 
 def test_context_watch_can_be_disabled():

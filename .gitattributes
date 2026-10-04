@@ -2,3 +2,7 @@
 # committed JS is build output. Pin it to LF so a Windows checkout doesn't rewrite
 # line endings and make the CI "dist in sync" diff fail on EOL alone.
 openclaw/dist/src/*.js text eol=lf
+
+# Shell scripts run under sh/Git Bash; a CRLF checkout breaks them with
+# "$'\r': command not found". scripts/clawness-cli.sh is run by skills directly.
+*.sh text eol=lf

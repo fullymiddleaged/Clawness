@@ -18,6 +18,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -121,7 +122,7 @@ def detect_stack(cwd: str) -> set[str] | None:
         return None
 
 
-def suggest_actions(prompt: str) -> str:
+def suggest_actions(prompt: str, cwd: str = "") -> str:
     """Detect audit/review/perf intent and return a short, deterministic nudge
     so Claude reliably *offers* the relevant skill (auto-invocation alone isn't
     reliable). The skills themselves confirm before spawning agents, so this only
@@ -132,9 +133,29 @@ def suggest_actions(prompt: str) -> str:
         return any(ph in p for ph in phrases)
 
     lines: list[str] = []
-    if has("security audit", "pentest", "penetration test", "red team", "blue team",
-           "vulnerability", "is this secure", "is it secure", "security review",
-           "security check", "owasp", "threat model", "exploit"):
+    security = has("security audit", "pentest", "penetration test", "red team",
+                   "blue team", "vulnerabilit", "is this secure", "is it secure",
+                   "security review", "security check", "owasp", "threat model",
+                   "exploit")
+    # A scan request is a narrower ask than an audit, but it lands in the same
+    # skill, and it's the moment a missing scanner matters.
+    # "sast" needs word boundaries: as a substring it matches "disaster".
+    scan = bool(re.search(r"\bsast\b", p)) or has(
+        "security scan", "static analysis", "secret scan",
+        "semgrep", "codeql", "bandit", "gitleaks", "trivy")
+    # Scoped to what's changing now: Claude Code's built-in /security-review covers
+    # exactly that, and is cheaper than a whole-repo audit, so it's named first.
+    diff = has("this change", "my change", "these changes", "this diff", "my diff",
+               "this pr", "my pr", "pending change", "staged", "before i commit",
+               "before i push", "this commit", "this branch")
+    diff_security = diff and has("secure", "security", "vulnerab")
+    if diff_security:
+        lines.append(
+            "This asks about the pending changes. Claude Code's built-in /security-review "
+            "reviews exactly those; mention it as the quick option. /clawness:security-audit "
+            "is the whole-repo pass with a findings ledger."
+        )
+    if security or scan or diff_security:
         lines.append(
             "This resembles a security audit. Offer to run /clawness:security-audit — it "
             "enumerates the attack surface deterministically first (clawness scan, "
@@ -143,6 +164,14 @@ def suggest_actions(prompt: str) -> str:
             "converge instead of re-scanning blind. It spawns several sub-agents, so "
             "ask before running."
         )
+        if not os.environ.get("CLAW_NO_SAST_OFFER"):
+            try:
+                from clawness.sast import sast_line
+                line = sast_line(cwd)
+                if line:
+                    lines.append(line)
+            except Exception:
+                pass
     if has("code review", "review my code", "review the code", "review my changes",
            "review my pr", "pr review", "pull request", "before merging",
            "before i merge", "ready to merge"):
@@ -169,17 +198,18 @@ def context_note(event: dict, cwd: str, session_id: str) -> str:
     Imported lazily inside the function so a broken/absent context_watch can
     never stop the rules block from printing."""
     from clawness.context_watch import (
-        assess, find_transcript, read_context_tokens, render_alert,
+        assess, find_transcript, read_context, render_alert,
     )
 
     transcript = find_transcript(event, cwd, session_id)
     if not transcript:
         return ""
-    tokens = read_context_tokens(transcript)
-    if not tokens:
+    found = read_context(transcript)
+    if not found:
         return ""
+    tokens, model = found
     previous = context_snapshot(session_id, tokens)
-    alert = assess(tokens, previous_tokens=previous)
+    alert = assess(tokens, previous_tokens=previous, model=model)
     if not alert or not should_alert_context(session_id, alert.level):
         return ""
     return render_alert(alert)
@@ -330,7 +360,7 @@ def main() -> None:
         except Exception:
             pass
 
-    suggestions = suggest_actions(prompt)
+    suggestions = suggest_actions(prompt, cwd)
     if suggestions:
         block = block + "\n" + suggestions
     print(block)

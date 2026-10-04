@@ -81,6 +81,11 @@ def stash_cli_wrapper(config_dirs: "list[Path] | None" = None) -> None:
     hook can self-locate from __file__ — onto PYTHONPATH, giving skills a working
     invocation without touching the user's Python environment.
 
+    Since #9354 was fixed, skills try scripts/clawness-cli.sh via the substituted
+    ${CLAUDE_PLUGIN_ROOT} first; this wrapper is the fallback for Claude Code
+    versions that leave the reference literal. Keep it until the minimum version
+    that substitutes is known and old enough to drop.
+
     Rewritten every session, so a plugin update that relocates the install dir
     self-heals before any skill runs. Best-effort: a failure is logged, never
     raised (same contract as the rest of this file). The baked path uses POSIX

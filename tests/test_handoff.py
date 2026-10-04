@@ -390,3 +390,132 @@ if __name__ == "__main__":
             fn()
             print(f"ok  {name}")
     print("all handoff tests passed")
+
+
+# --- auto-start -----------------------------------------------------------
+
+from clawness.handoff import (  # noqa: E402
+    AUTOSTART_INSTRUCTION,
+    DEFAULT_AUTOSTART_HOURS,
+    autostart_claimed,
+    autostart_due,
+    claim_autostart,
+    wants_autostart,
+)
+
+AUTOSTART_HOOK = REPO / "hooks" / "handoff_autostart.py"
+MARKED = "# Handoff - split the session store\n\nMid-refactor.\n\n**Next:** run pytest\n\n**Autostart:** yes\n"
+
+
+def test_the_marker_is_read_in_any_decoration():
+    assert wants_autostart("**Autostart:** yes")
+    assert wants_autostart("- autostart: TRUE")
+    assert not wants_autostart("**Autostart:** no")
+    assert not wants_autostart("Autostart: yesterday")
+    assert not wants_autostart(SAMPLE)
+
+
+def test_the_unfilled_template_never_autostarts():
+    assert not wants_autostart(HANDOFF_TEMPLATE.format(date="2026-10-04"))
+
+
+def test_autostart_needs_the_marker_and_a_new_session(monkeypatch):
+    monkeypatch.delenv("CLAW_NO_HANDOFF_AUTOSTART", raising=False)
+    root = _project(MARKED)
+    assert autostart_due(root, "startup") is not None
+    assert autostart_due(root, "clear") is not None
+    for source in ("resume", "compact", "fork"):
+        assert autostart_due(root, source) is None, source
+    assert autostart_due(_project(SAMPLE), "startup") is None
+
+
+def test_autostart_freshness_boundary(monkeypatch):
+    monkeypatch.delenv("CLAW_HANDOFF_AUTOSTART_HOURS", raising=False)
+    monkeypatch.delenv("CLAW_NO_HANDOFF_AUTOSTART", raising=False)
+    root = _project(MARKED)
+    mtime = (root / ".clawness" / "handoff.md").stat().st_mtime
+    limit = DEFAULT_AUTOSTART_HOURS * 3600
+    assert autostart_due(root, "startup", now=mtime + limit) is not None
+    assert autostart_due(root, "startup", now=mtime + limit + 1) is None
+
+
+def test_autostart_opt_out(monkeypatch):
+    monkeypatch.setenv("CLAW_NO_HANDOFF_AUTOSTART", "1")
+    assert autostart_due(_project(MARKED), "startup") is None
+
+
+def test_autostart_fires_once_per_handoff_and_rearms_on_rewrite():
+    root = _project(MARKED)
+    path = root / ".clawness" / "handoff.md"
+    assert not autostart_claimed(root, path)
+    assert claim_autostart(root, path) is True
+    assert claim_autostart(root, path) is False
+    assert autostart_claimed(root, path)
+    later = path.stat().st_mtime + 60
+    os.utime(path, (later, later))   # a rewritten handoff
+    assert claim_autostart(root, path) is True
+
+
+def test_autostart_note_starts_work_but_keeps_the_escape_hatch():
+    path = _project(MARKED) / ".clawness" / "handoff.md"
+    note = render_handoff_note(path, autostart=True)
+    assert "Begin on Next at your first turn" in note
+    assert "plainly a different task" in note
+    assert "then wait" not in note
+    assert "then wait" in render_handoff_note(path)
+
+
+def _run_autostart(cwd: Path, source: str = "startup", env_extra: "dict | None" = None):
+    env = dict(os.environ)
+    for k in ("CLAW_NO_HANDOFF", "CLAW_NO_HANDOFF_AUTOSTART"):
+        env.pop(k, None)
+    env["CLAW_HANDOFF_AUTOSTART_DELAY"] = "0"
+    if env_extra:
+        env.update(env_extra)
+    return subprocess.run(
+        [sys.executable, str(AUTOSTART_HOOK)],
+        input=json.dumps({"cwd": str(cwd), "source": source}),
+        capture_output=True, text=True, env=env,
+    )
+
+
+@needs_git
+def test_autostart_hook_wakes_once_with_exit_2():
+    repo = _git_repo(_project(MARKED))
+    first = _run_autostart(repo)
+    assert first.returncode == 2, first.stderr
+    assert AUTOSTART_INSTRUCTION in first.stderr
+    second = _run_autostart(repo)
+    assert second.returncode == 0 and second.stderr == ""
+
+
+@needs_git
+def test_autostart_hook_stays_quiet_without_consent_or_on_resume():
+    assert _run_autostart(_git_repo(_project(SAMPLE))).returncode == 0
+    assert _run_autostart(_git_repo(_project(MARKED)), source="resume").returncode == 0
+    assert _run_autostart(_git_repo(_project(MARKED)),
+                          env_extra={"CLAW_NO_HANDOFF_AUTOSTART": "1"}).returncode == 0
+
+
+@needs_git
+def test_pickup_hook_returns_json_for_a_marked_handoff():
+    repo = _git_repo(_project(MARKED))
+    env = dict(os.environ)
+    for k in ("CLAW_NO_HANDOFF", "CLAW_NO_HANDOFF_AUTOSTART"):
+        env.pop(k, None)
+    r = subprocess.run([sys.executable, str(HOOK)],
+                       input=json.dumps({"cwd": str(repo), "source": "startup"}),
+                       capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stderr
+    out = json.loads(r.stdout)["hookSpecificOutput"]
+    assert out["hookEventName"] == "SessionStart"
+    assert "Begin on Next" in out["additionalContext"]
+    assert out["initialUserMessage"]
+    assert out["sessionTitle"] == "split-the-store"   # "session" is a skip word
+
+
+@needs_git
+def test_pickup_hook_stays_plain_text_for_an_unmarked_handoff():
+    r = _run_hook(_git_repo(_project(SAMPLE)))
+    assert r.returncode == 0
+    assert not r.stdout.lstrip().startswith("{")
