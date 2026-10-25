@@ -17,8 +17,8 @@ But it also does heaps more!
 
 What you get:
 
-- **229 rules** across 31 domains: general coding, plus scientific computing, machine
-  learning, research method, and building with LLMs. Only the ones that match your task
+- **236 rules** across 32 domains: general coding, plus scientific computing, machine
+  learning, research method, building with LLMs, and vulnerability research. Only the ones that match your task
   are injected.
 - **7 review sub-agents**: security red/blue team, code critic, architecture challenger,
   and more.
@@ -29,7 +29,7 @@ What you get:
 - **Session continuity**: a per-project lessons memory, a warning when your context window
   is filling up, and a handoff the next session picks up on its own.
 - **Low token cost.** Only the matching rules are injected, never the whole set. A typical
-  turn is around 1,700 tokens instead of loading all 229 rules every turn.
+  turn is around 1,700 tokens instead of loading all 236 rules every turn.
 
 Under 1 MB, no services, no ML models, about 4 ms per prompt. Pure Python, with PyYAML as
 the only dependency.
@@ -128,7 +128,7 @@ only the few that fit, plus an always-on mandatory set. So a developer moving be
 frontend, backend, and SQL always has the right rules and never the rest. The same hook
 carries the rest of what's [in the box](#clawness), each covered under [Using It](#using-it).
 
-**Make them *your* standards.** The 229 built-in rules are a starting point. Run
+**Make them *your* standards.** The 236 built-in rules are a starting point. Run
 `/clawness:add describe your rule` and Clawness writes the tagged YAML for you, or drop
 `.yml` files in `.clawness/rules/`. Commit `.clawness/rules/` and `.clawness/memory.md` to
 share them with your team. → [Per-Project Setup](#per-project-setup) · [Writing Rules](#writing-rules)
@@ -329,7 +329,9 @@ session's transcript each prompt and tells you when to move on:
 
 Each level fires at most once per session. The token count is read from the transcript; the
 window *size* is inferred from the `[1m]` marker on your model and corrected upward if usage
-exceeds it. Set `CLAW_CONTEXT_LIMIT` if the guess is wrong, or off with
+exceeds it. On a gateway or non-Claude model (GLM via OpenRouter, say), the window you give
+Claude Code with `CLAUDE_CODE_MAX_CONTEXT_TOKENS` is used, so you set it once. Set
+`CLAW_CONTEXT_LIMIT` if the guess is still wrong, or turn the watch off with
 `CLAW_NO_CONTEXT_WATCH=1`.
 
 ### Session handoff (Claude Code, on by default)
@@ -817,6 +819,8 @@ Type these in any Claude Code session (terminal, VS Code, or web). All are names
 | `/clawness:status` | Show which rules, agents, and hooks are active — confirm you're live |
 | `/clawness:add <description>` | Write a new rule from a plain-English description |
 | `/clawness:security-audit` | Stateful red/blue-team security audit with a converging findings ledger |
+| `/clawness:vuln-hunt [path or CVE]` | Hunt for new vulnerabilities in someone else's open-source code: contained, variant analysis first, only reachable + new + reproducible findings survive |
+| `/clawness:vuln-report [finding]` | Write a short, advisory-shaped vulnerability report (CVSS 4.0, CWE, pinned file:line, PoC) or an audit summary; saved locally, you submit it |
 | `/clawness:review` | Adversarial code review of staged changes or a file |
 | `/clawness:perf` | Performance audit (N+1s, re-renders, leaks, bundle size, slow algorithms) |
 | `/clawness:test` | Generate tests matching the project's existing style |
@@ -898,9 +902,9 @@ clawness agents-md --write
 
 | Component | Count | Purpose |
 |-----------|-------|---------|
-| **Rules** | 229 across 31 domains | Coding, science, ML, research, and LLM standards, injected per prompt |
+| **Rules** | 236 across 32 domains | Coding, science, ML, research, LLM and vulnerability-research standards, injected per prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
-| **Skills** | 14 slash commands | See [Slash Commands](#slash-commands) — `security-audit`, `review`, `test`, `perf`, `add`, `status`, `user-docs`, `messaging`, plus hygiene and maintainer commands |
+| **Skills** | 16 slash commands | See [Slash Commands](#slash-commands) — `security-audit`, `vuln-hunt`, `vuln-report`, `review`, `test`, `perf`, `add`, `status`, `user-docs`, `messaging`, plus hygiene and maintainer commands |
 | **Hooks** | 13 | Rule injection, context watch, model-tier check, output compression, plan gate, access guard, trust ledger, handoff auto-start, and the session-start checks |
 | **CLI** | 11 commands | query, init, stats, lint, bench, eval, scan, plan, agents-md, audit-rules, audit-skills |
 | **Installers** | bash + PowerShell | With matching uninstallers, for Windows/macOS/Linux |
@@ -997,16 +1001,11 @@ you).
 
 ### Agent model configuration
 
-Split by what the agent is for, not by role:
-
-- **Judgment and adversarial work inherits your session's model.** A security review or a
-  code critique is only as good as the model making the call, so `model:` is omitted on
-  these (Claude Code's `inherit` default).
-- **Mechanical work is pinned to `sonnet`.** Test generation and pattern scans don't need
-  your top tier.
-
-Clawness never hardcodes a frontier model in a shipped agent, since it can't know your plan,
-access, or budget.
+Every agent runs on your session's model: `model:` is omitted, which is Claude Code's
+`inherit` default. If you run Claude Code against a non-Claude model through a gateway (GLM
+via OpenRouter, say), the agents run on that model too, not on a Claude model you didn't
+pick. Clawness never pins a model in a shipped agent, since it can't know your provider,
+plan, access, or budget. To run the agents cheaper, set `CLAUDE_CODE_SUBAGENT_MODEL`.
 
 | Agent | Model | Effort | Max Turns |
 |-------|-------|--------|-----------|
@@ -1014,9 +1013,9 @@ access, or budget.
 | `security-blue-team` | inherit | high | 25 |
 | `arch-challenger` | inherit | high | 15 |
 | `code-critic` | inherit | medium | 15 |
-| `test-writer` | `sonnet` | medium | 20 |
-| `perf-auditor` | `sonnet` | medium | 15 |
-| `refactor-advisor` | `sonnet` | medium | 15 |
+| `test-writer` | inherit | medium | 20 |
+| `perf-auditor` | inherit | medium | 15 |
+| `refactor-advisor` | inherit | medium | 15 |
 
 **Override** by editing an agent's `.md` in `~/.claude/agents/`. `model:` takes aliases
 (`haiku`/`sonnet`/`opus`/`fable`), a pinned ID, or `inherit`; `effort:` runs `low` through

@@ -5,6 +5,37 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.20.0] - 2026-10-25
+
+### Added
+
+- **`/clawness:vuln-hunt` hunts for new vulnerabilities in open-source code you don't
+  own.** It keeps the target contained (nothing from the repo runs on your machine), reads
+  the project's own threat model, starts from variant analysis of its past security fixes,
+  then runs `clawness scan` and any installed SAST. A finding survives only if it's
+  reachable, not already known, and reproducible in a sandbox.
+- **`/clawness:vuln-report` writes the report.** You get an advisory-shaped disclosure:
+  summary, affected versions, CVSS 4.0 vector, CWE, pinned file:line links, a minimal PoC
+  and a suggested fix. It can also write a one-page audit summary. Drafts are saved to
+  `.clawness/security/reports/`, and it never submits anything for you.
+- **Vulnerability-research rules** (`vuln-research` domain, 7 rules): treat the target repo
+  as hostile, check scope against `SECURITY.md`, variant analysis, dedupe against known
+  advisories, safe PoCs, honest CVSS, and coordinated disclosure. They only surface on
+  prompts that are actually about hunting, so ordinary dev work doesn't see them.
+
+### Changed
+
+- **All agents now run on your session's model.** `test-writer`, `perf-auditor` and
+  `refactor-advisor` were pinned to `sonnet`. Through a gateway serving a non-Claude model
+  (GLM via OpenRouter, say), that sent their work to Claude Sonnet instead of your model.
+  To run them cheaper, set `CLAUDE_CODE_SUBAGENT_MODEL`.
+
+### Fixed
+
+- **The context warning uses the window you gave Claude Code.** On a gateway or non-Claude
+  model, set `CLAUDE_CODE_MAX_CONTEXT_TOKENS` and Clawness measures against it too. Before
+  this change it assumed 200k and warned too early or too late.
+
 ## [1.19.0] - 2026-10-04
 
 ### Added

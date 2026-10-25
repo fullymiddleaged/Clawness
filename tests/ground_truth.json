@@ -1881,6 +1881,106 @@
         "bash",
         "general"
       ]
+    },
+    {
+      "q": "set up the target repository in a sandbox for vuln hunting",
+      "expect": [
+        "VR-CLONE-001"
+      ],
+      "stack": [
+        "python",
+        "general"
+      ]
+    },
+    {
+      "q": "I cloned an open source repo to hunt for CVEs, how do I build it safely",
+      "expect": [
+        "VR-CLONE-001"
+      ],
+      "stack": [
+        "python",
+        "general"
+      ]
+    },
+    {
+      "q": "is this bug actually exploitable or out of scope per security.md",
+      "expect": [
+        "VR-SCOPE-001"
+      ],
+      "stack": [
+        "python",
+        "general"
+      ]
+    },
+    {
+      "q": "look at past security fix commits for variant analysis",
+      "expect": [
+        "VR-VARIANT-001"
+      ],
+      "stack": [
+        "python",
+        "general"
+      ]
+    },
+    {
+      "q": "check whether the fix for the previous cve is incomplete",
+      "expect": [
+        "VR-VARIANT-001"
+      ],
+      "stack": [
+        "python",
+        "general"
+      ]
+    },
+    {
+      "q": "check if this vulnerability is already a known cve or advisory",
+      "expect": [
+        "VR-DEDUPE-001"
+      ],
+      "stack": [
+        "python",
+        "general"
+      ]
+    },
+    {
+      "q": "write a proof of concept for this path traversal",
+      "expect": [
+        "VR-POC-001"
+      ],
+      "stack": [
+        "python",
+        "general"
+      ]
+    },
+    {
+      "q": "what cvss score should this vulnerability get",
+      "expect": [
+        "VR-SEVERITY-001"
+      ],
+      "stack": [
+        "python",
+        "general"
+      ]
+    },
+    {
+      "q": "how do I report this vulnerability to the maintainers",
+      "expect": [
+        "VR-DISCLOSE-001"
+      ],
+      "stack": [
+        "python",
+        "general"
+      ]
+    },
+    {
+      "q": "request a cve and agree an embargo date",
+      "expect": [
+        "VR-DISCLOSE-001"
+      ],
+      "stack": [
+        "python",
+        "general"
+      ]
     }
   ]
 }

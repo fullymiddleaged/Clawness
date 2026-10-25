@@ -774,7 +774,13 @@ _STACK_DOMAINS = frozenset({
 # -> RES-NOVELTY-001). A middle floor keeps them un-gated while demanding a real
 # match. Genuine science/research questions score 0.20-0.45, far above it, so the
 # bare-directory case is unaffected; the noise band is 0.06-0.12.
-_TOPICAL_DOMAINS = frozenset({"science", "research"})
+# vuln-research/ has the same shape: a hunt runs inside someone else's repo, whose
+# stack says nothing about the activity, so it can't be gated — but its words
+# ("repo", "install", "severity", "report") are everyday dev words. Measured at
+# the base floor, "clone the repo and set up the dev environment" pulled in
+# VR-CLONE-001 (treat the repo as hostile) at 0.14, and "harden the upload
+# endpoint" pulled VR-DISCLOSE-001 at 0.08; genuine hunting prompts score 0.15-0.35.
+_TOPICAL_DOMAINS = frozenset({"science", "research", "vuln-research"})
 
 # The mirror of _TOPICAL_DOMAINS: stack-gated AND vocabulary-colliding, so they take
 # a floor ABOVE the ordinary off-stack one when the project isn't theirs.

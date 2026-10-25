@@ -17,6 +17,7 @@ from clawness.context_watch import (  # noqa: E402
     Alert,
     Usage,
     assess,
+    declared_window,
     find_transcript,
     infer_limit,
     limit_from_settings,
@@ -199,6 +200,59 @@ def test_transcript_model_prevents_the_200k_false_alarm():
         # A model with an opt-in window still assumes the small one.
         assert infer_limit(152_000, model="claude-haiku-4-5") == 200_000
         assert assess(152_000, 150_000, model="claude-haiku-4-5").level == "warn"
+
+
+_DECLARED_OFF = dict(CLAUDE_CODE_MAX_CONTEXT_TOKENS=None, DISABLE_COMPACT=None,
+                     CLAUDE_CODE_DISABLE_1M_CONTEXT=None, CLAW_CONTEXT_LIMIT=None)
+
+
+def test_declared_window_applies_to_a_non_claude_model():
+    # GLM over OpenRouter: the user told Claude Code the window, so Clawness
+    # measures against the same number instead of the 200k guess.
+    cfg = Path(tempfile.mkdtemp())
+    with _Env(**{**_DECLARED_OFF, "CLAUDE_CONFIG_DIR": str(cfg),
+                 "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "400000"}):
+        assert declared_window("z-ai/glm-5.3") == 400_000
+        assert infer_limit(150_000, model="z-ai/glm-5.3") == 400_000
+        # 150k of 400k is 37% — under the 200k guess it would have been 75% (warn).
+        assert assess(150_000, 149_000, model="z-ai/glm-5.3") is None
+        # No usage record read yet: still honoured.
+        assert declared_window(None) == 400_000
+
+
+def test_declared_window_accepts_the_documented_number_forms():
+    with _Env(**{**_DECLARED_OFF, "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "400_000"}):
+        assert declared_window("glm-5.3") == 400_000
+    with _Env(**{**_DECLARED_OFF, "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "4e5"}):
+        assert declared_window("glm-5.3") == 400_000
+    for bad in ("", "lots", "0", "-5"):
+        with _Env(**{**_DECLARED_OFF, "CLAUDE_CODE_MAX_CONTEXT_TOKENS": bad}):
+            assert declared_window("glm-5.3") is None
+
+
+def test_declared_window_is_ignored_where_claude_code_ignores_it():
+    # A leftover variable must not shrink a native-1M Opus session: Claude Code
+    # honours it on a recognized Claude id only under DISABLE_COMPACT.
+    cfg = Path(tempfile.mkdtemp())
+    with _Env(**{**_DECLARED_OFF, "CLAUDE_CONFIG_DIR": str(cfg),
+                 "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "300000"}):
+        assert declared_window("claude-opus-5-5") is None
+        assert declared_window("anthropic/claude-sonnet-5") is None
+        assert infer_limit(152_000, model="claude-opus-5-5") == 1_000_000
+        # An unrecognized id carrying [1m] is sized 1M by Claude Code instead.
+        assert declared_window("my-gateway-model[1m]") is None
+    with _Env(**{**_DECLARED_OFF, "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "300000",
+                 "DISABLE_COMPACT": "1"}):
+        assert declared_window("claude-opus-5-5") == 300_000
+    with _Env(**{**_DECLARED_OFF, "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "300000",
+                 "CLAUDE_CODE_DISABLE_1M_CONTEXT": "1"}):
+        assert declared_window("my-gateway-model[1m]") == 300_000
+
+
+def test_claw_context_limit_still_beats_the_declared_window():
+    with _Env(**{**_DECLARED_OFF, "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "400000",
+                 "CLAW_CONTEXT_LIMIT": "128000"}):
+        assert infer_limit(50_000, model="glm-5.3") == 128_000
 
 
 def test_read_context_returns_the_model_alongside_tokens():

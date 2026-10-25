@@ -1,0 +1,18 @@
+id: VR-VARIANT-001
+domain: vuln-research
+severity: warning
+tags: [variant-analysis, patch, fix, regression, incomplete-fix, git-history, hunting]
+triggers: [variant analysis, past security fix, previous cve, patch diff, incomplete fix, fix commit, bypass the patch, similar bugs, security fix commit, regression of a cve]
+when: Hunting for vulnerabilities in a codebase that has fixed security bugs before.
+rule: >
+  Start from the project's own past fixes, since a fixed bug marks a pattern the code
+  is known to get wrong. Find them with `git log -i --grep='cve\|security\|vuln\|ghsa'`
+  and the project's published advisories, read each fix diff, and state the root cause
+  as a pattern (sink, missing check, input shape). Then check two things: whether the
+  fix is complete (other encodings, other callers, the same check on a sibling code
+  path) and whether the pattern recurs elsewhere — grep or a Semgrep rule written from
+  the diff. Incomplete patches and unfixed siblings are among the most common sources
+  of new CVEs, and they come with a ready-made proof that the class matters to the
+  maintainers.
+violation: "Reading the codebase top to bottom for 'anything suspicious' while ignoring the three path-traversal fixes in its git history"
+correct: "git log --grep=CVE finds a traversal fix that normalises '../' in serve_file(); grep shows serve_thumbnail() still joins the raw path"

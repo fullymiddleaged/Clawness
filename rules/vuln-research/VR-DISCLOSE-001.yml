@@ -1,0 +1,18 @@
+id: VR-DISCLOSE-001
+domain: vuln-research
+severity: error
+tags: [disclosure, coordinated, embargo, report, advisory, cve, security-policy, maintainers, hunting]
+triggers: [report the vulnerability, disclose, responsible disclosure, coordinated disclosure, request a cve, contact the maintainers, file a security report, private vulnerability reporting, embargo]
+when: Reporting a vulnerability found in someone else's project.
+rule: >
+  Disclose privately, through the channel the project names: its SECURITY.md, or
+  GitHub's private vulnerability reporting ("Report a vulnerability" on the Security
+  tab). Never through a public issue, pull request, commit message, discussion or
+  social post, and never push a fix branch that reveals the bug. If no channel is
+  listed, email a maintainer privately and ask for one. Agree a disclosure date: use
+  the project's stated policy, else offer the common 90-day window. Request the CVE
+  through the project's advisory (GitHub is a CNA) rather than independently, and
+  don't publish the PoC or details until the fix ships or the agreed date passes.
+  Draft the report with /clawness:vuln-report; the user submits it, never you.
+violation: "Opening a public GitHub issue titled 'RCE in upload handler' with the PoC attached"
+correct: "Submit via the repo's private vulnerability reporting with the advisory draft, propose a 90-day date, let the maintainers request the CVE"

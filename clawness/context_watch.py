@@ -68,6 +68,57 @@ def native_window(model: str | None) -> int | None:
         return 1_000_000
     return None
 
+
+# A Claude family name anywhere in the id — Claude Code resolves
+# `anthropic/claude-opus-4-8` and `us.anthropic.claude-…-v1:0` to the model they
+# name, so these are "recognized" for the declared-window rules below.
+_CLAUDE_ID_RE = re.compile(r"claude-(opus|sonnet|haiku|fable|mythos)")
+
+
+def declared_window(model: str | None) -> int | None:
+    """
+    The window the user declared to Claude Code itself, where Claude Code honours it.
+
+    `CLAUDE_CODE_MAX_CONTEXT_TOKENS` is how a session on a gateway or non-Claude
+    model (GLM via OpenRouter, a LiteLLM alias) tells Claude Code its real window,
+    and Claude Code compacts at it — so reading the same variable keeps our
+    percentages on the window Claude Code is actually working to, with nothing for
+    the user to set twice. Per the model-config docs it applies only to an id
+    Claude Code doesn't resolve to a Claude model, and not when that id carries
+    `[1m]` (unless `CLAUDE_CODE_DISABLE_1M_CONTEXT` is set); a recognized Claude id
+    honours it only under `DISABLE_COMPACT`. Mirroring those cases matters: a
+    variable left over in the shell must not shrink a native-1M Opus session's
+    window here when Claude Code itself is ignoring it.
+
+    An unknown *model* (no usage record read yet) honours it — the user set it for
+    this session's model, and the only id it wouldn't apply to is a Claude one.
+    """
+    raw = os.environ.get("CLAUDE_CODE_MAX_CONTEXT_TOKENS", "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        # The env-var docs accept scientific notation and digit separators;
+        # int() already takes `400_000`, float() covers `4e5`.
+        try:
+            value = int(float(raw))
+        except (ValueError, OverflowError):
+            return None
+    if value <= 0:
+        return None
+
+    def _on(name: str) -> bool:
+        return os.environ.get(name, "") not in ("", "0")
+
+    if model:
+        low = model.lower()
+        if _CLAUDE_ID_RE.search(low):
+            return value if _on("DISABLE_COMPACT") else None
+        if "[1m]" in low and not _on("CLAUDE_CODE_DISABLE_1M_CONTEXT"):
+            return None
+    return value
+
 DEFAULT_WARN = 0.70
 DEFAULT_URGENT = 0.85
 # Below this many tokens, don't discuss context at all — a fresh session should
@@ -201,13 +252,16 @@ def infer_limit(tokens: int, configured: int | None = None,
     """
     The window this session is most likely running in.
 
-    Four tiers of confidence, best first:
+    Five tiers of confidence, best first:
       1. An explicit `CLAW_CONTEXT_LIMIT` (or *configured*) — the user said so.
-      2. The transcript's *model* id, for models whose window is natively 1M.
-      3. The `[1m]` marker on the configured model in settings.json.
-      4. Observed usage: assume the smallest known window and step up when usage
+      2. `CLAUDE_CODE_MAX_CONTEXT_TOKENS`, where Claude Code itself honours it —
+         the user said so to the harness (`declared_window`).
+      3. The transcript's *model* id, for models whose window is natively 1M.
+      4. The `[1m]` marker on the configured model in settings.json.
+      5. Observed usage: assume the smallest known window and step up when usage
          exceeds it — a session sitting at 300k tokens is self-evidently not a
-         200k session.
+         200k session. This is also Claude Code's own default for an id it
+         doesn't recognize (200K), so an undeclared GLM session agrees with it.
 
     Tier 4 alone would nag a 1M session through its 140k-200k stretch before the
     evidence arrives to correct it, which is exactly the false alarm that teaches
@@ -217,6 +271,9 @@ def infer_limit(tokens: int, configured: int | None = None,
         configured = _env_int("CLAW_CONTEXT_LIMIT", 0)
     if configured and configured > 0:
         return configured
+    declared = declared_window(model)
+    if declared:
+        return declared
     native = native_window(model)
     if native and tokens < native:
         return native

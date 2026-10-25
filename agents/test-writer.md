@@ -4,7 +4,6 @@ description: >
   Generates comprehensive tests for code. Reads existing test patterns
   in the project and matches the style (Jest, Vitest, pytest, etc.).
   Covers happy paths, edge cases, error cases, and boundary conditions.
-model: sonnet
 effort: medium
 maxTurns: 20
 tools: Read, Grep, Glob, Bash, Write

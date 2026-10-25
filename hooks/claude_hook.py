@@ -149,13 +149,39 @@ def suggest_actions(prompt: str, cwd: str = "") -> str:
                "this pr", "my pr", "pending change", "staged", "before i commit",
                "before i push", "this commit", "this branch")
     diff_security = diff and has("secure", "security", "vulnerab")
+    # Hunting in someone else's code is a different workflow from auditing your
+    # own: it ends in private disclosure, not a fix. It takes the place of the
+    # audit offer rather than joining it, since the two would contradict.
+    hunt = has("cve hunt", "hunt for cve", "hunting for cve", "hunt cves", "vuln hunt",
+               "vulnerability research", "bug bounty", "variant analysis")
+    # The verb alone ("report", "write up") is everyday; it needs a security object.
+    report = has("write up", "writeup", "write-up", "write a report", "write the report",
+                 "draft a report", "draft the report", "advisory", "disclos",
+                 "report this to", "report it to", "to the maintainers") and has(
+                 "vulnerab", "cve", "advisory", "exploit", "security finding", "bounty",
+                 "disclos")
+    if hunt:
+        lines.append(
+            "This resembles vulnerability research in someone else's code. Offer "
+            "/clawness:vuln-hunt: it contains the target, reads its threat model, runs "
+            "variant analysis on past fixes and clawness scan, and keeps only findings "
+            "that are reachable, new and reproducible. It spawns a sub-agent, so ask "
+            "before running."
+        )
+    if report:
+        lines.append(
+            "This asks for a vulnerability write-up. Offer /clawness:vuln-report: a "
+            "short, advisory-shaped draft saved locally, which the user submits "
+            "privately themselves."
+        )
     if diff_security:
         lines.append(
             "This asks about the pending changes. Claude Code's built-in /security-review "
             "reviews exactly those; mention it as the quick option. /clawness:security-audit "
             "is the whole-repo pass with a findings ledger."
         )
-    if security or scan or diff_security:
+    # A write-up is about a finding already in hand; offering an audit there is noise.
+    if (security or scan or diff_security) and not hunt and not report:
         lines.append(
             "This resembles a security audit. Offer to run /clawness:security-audit — it "
             "enumerates the attack surface deterministically first (clawness scan, "
@@ -164,14 +190,15 @@ def suggest_actions(prompt: str, cwd: str = "") -> str:
             "converge instead of re-scanning blind. It spawns several sub-agents, so "
             "ask before running."
         )
-        if not os.environ.get("CLAW_NO_SAST_OFFER"):
-            try:
-                from clawness.sast import sast_line
-                line = sast_line(cwd)
-                if line:
-                    lines.append(line)
-            except Exception:
-                pass
+    # A hunt runs SAST too (vuln-hunt step 3), so it gets the scanner line as well.
+    if (security or scan or diff_security or hunt) and not os.environ.get("CLAW_NO_SAST_OFFER"):
+        try:
+            from clawness.sast import sast_line
+            line = sast_line(cwd)
+            if line:
+                lines.append(line)
+        except Exception:
+            pass
     if has("code review", "review my code", "review the code", "review my changes",
            "review my pr", "pr review", "pull request", "before merging",
            "before i merge", "ready to merge"):

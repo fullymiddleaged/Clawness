@@ -1,0 +1,17 @@
+id: VR-SCOPE-001
+domain: vuln-research
+severity: error
+tags: [reachability, threat-model, scope, exploitability, security-policy, triage, hunting]
+triggers: [is this exploitable, is this reachable, threat model, security.md, out of scope, attacker controlled, real vulnerability, is this a cve, vulnerability triage, default configuration]
+when: Deciding whether a suspected bug in someone else's code is a real, reportable vulnerability.
+rule: >
+  Read the project's SECURITY.md and documented threat model before judging a finding,
+  because many projects declare inputs out of scope (trusted config files, untrusted
+  templates, admin-only APIs). A finding is a vulnerability only when you can trace
+  attacker-controlled input from an entry point the project exposes, under its default
+  configuration, to an impact it promises to prevent. A library being misused by its
+  caller is the caller's bug unless the API's own documentation invites that use. Write
+  down the trust boundary crossed and the exact entry point; if you can't name both,
+  the finding is a hardening suggestion, not a vulnerability.
+violation: "Reporting a path traversal in a CLI's --config flag as a CVE, when SECURITY.md says local config files are trusted"
+correct: "Trace HTTP param `file` from routes/download.py:41 (unauthenticated, default config) to open() at storage.py:88, a boundary SECURITY.md promises to enforce"

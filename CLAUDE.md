@@ -138,8 +138,15 @@ dependency**. No ML models, no services, no Docker.
      `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` reverts them to 200k), so `native_window` maps
      the transcript's `message.model` to 1M. For opt-in-window models the id can't say
      which window the session got. `infer_limit` therefore goes `CLAW_CONTEXT_LIMIT` →
-     native-1M model id → the `[1m]` marker on `model` in settings(.local).json →
-     observed-usage tier bump. **Don't drop either middle tier**: without them a 1M
+     `CLAUDE_CODE_MAX_CONTEXT_TOKENS` (`declared_window`) → native-1M model id → the
+     `[1m]` marker on `model` in settings(.local).json → observed-usage tier bump.
+     `declared_window` is Claude Code's own window override for gateway/non-Claude
+     ids (GLM via OpenRouter), and it mirrors the docs' cases for when Claude Code
+     honours it — not on a recognized Claude id unless `DISABLE_COMPACT`, not on an
+     unrecognized `[1m]` id unless `CLAUDE_CODE_DISABLE_1M_CONTEXT` — so a variable
+     left in the shell can't shrink a native-1M session that Claude Code isn't
+     shrinking. An undeclared non-Claude id falls to the 200k tier, which is also
+     Claude Code's assumption for it. **Don't drop either middle tier**: without them a 1M
      session false-alarms all through 140k-200k (an Opus 5.5 session at 158k was told
      "79% full" before 1.19.0), which is exactly how users learn to ignore the warning.
    - Levels: `warn` (70%, brief mention), `urgent` (85%, recommend a fresh session and
@@ -628,7 +635,7 @@ dependency**. No ML models, no services, no Docker.
   registered. Every SessionStart note hook uses it; `git_check` keeps its own *downward*
   tree scan because "is git used anywhere relevant?" is a different question from
   `git_root`'s upward walk.
-- `rules/<domain>/*.yml` — the corpus (229 rules / 31 domains; `_mandatory/` = always-on).
+- `rules/<domain>/*.yml` — the corpus (236 rules / 32 domains; `_mandatory/` = always-on).
   `claude-code/` (`CC-*`) is building Claude Code plugins/hooks/skills, stack-gated and
   detected from `.claude-plugin/*.json`, `hooks/hooks.json` or a `SKILL.md` — never
   from `.claude/`, which every project using Claude Code has.
@@ -645,11 +652,23 @@ dependency**. No ML models, no services, no Docker.
   the `astro` dependency; that detector also implies `css`, because scoped `<style>`
   blocks inside a component file are a large share of how CSS is written in that stack
   and no filename glob can see them (the same will hold for Vue/Svelte if they land).
+  `vuln-research/` (`VR-*`) is hunting in someone ELSE's code toward private disclosure:
+  containment, scope, variant analysis, dedupe, PoC, CVSS, disclosure. It is topical
+  (`_TOPICAL_DOMAINS`), not stack-gated — the target repo's stack says nothing about
+  the activity — and must stay apart from `security/`, which is about writing your own
+  code safely: at the base floor `VR-CLONE-001` ("treat the repo as hostile") fired on
+  "clone the repo and set up the dev environment". Keep its triggers to research
+  vocabulary; "repo", "install" and "report" alone are everyday words.
 - `agents/*.md`, `skills/<name>/SKILL.md` — auto-discovered by the plugin. `skills/user-docs`
   authors user/developer documentation from a codebase scan (Diátaxis + brevity,
-  approval-gated writes); `skills/security-audit` runs the stateful security audit (see §11).
-  **Two rules name a skill** — `GEN-USERDOCS-001` names `/clawness:user-docs`, and
-  `WF-SECURITY-AUDIT-001` names `/clawness:security-audit` — a small deliberate pattern that
+  approval-gated writes); `skills/security-audit` runs the stateful security audit (see §11);
+  `skills/vuln-hunt` reuses its scan + ledger + red team on third-party code, swapping the
+  blue team's fix for a suggested patch, and `skills/vuln-report` writes the disclosure.
+  `suggest_actions` offers vuln-hunt INSTEAD of security-audit on a hunting prompt — the
+  two end differently (private disclosure vs. a fix), so offering both contradicts.
+  **Four rules name a skill** — `GEN-USERDOCS-001` names `/clawness:user-docs`,
+  `WF-SECURITY-AUDIT-001` names `/clawness:security-audit`, `VR-CLONE-001` names
+  `/clawness:vuln-hunt` and `VR-DISCLOSE-001` names `/clawness:vuln-report` — a small deliberate pattern that
   lightly couples those rules to the skill inventory; each rule's substance is its
   standard, which stands even if the skill is renamed.
 - `.claude-plugin/{plugin.json,marketplace.json}` — plugin + marketplace manifests.
@@ -741,16 +760,19 @@ dependency**. No ML models, no services, no Docker.
   Code build, unexpected value) falls through to asking — same fail-toward-prompt
   direction as the rest of the gate. Don't build a `--headless`/env-detection heuristic
   here: the harness already tells you the thing you'd be inferring.
-- **Agent `model:` is split by task type, and the judgment agents must stay on
-  `inherit`.** Subagent `model:` defaults to `inherit`, so pinning it is an ACTIVE
-  override of the user's choice — until 1.4.0 all seven agents pinned `sonnet`, which
-  meant an Opus user's `/clawness:security-audit` silently ran a tier below what they picked.
-  `security-red-team`, `security-blue-team`, `arch-challenger` and `code-critic` now
-  omit `model:` entirely; `test-writer`, `perf-auditor` and `refactor-advisor` keep
-  `sonnet` (mechanical work, and `sonnet` is an alias so it won't rot). **Never
-  hardcode `opus`/`fable` in a shipped agent** — a distributed plugin can't know the
-  user's plan, access or budget, and forcing a frontier tier is the same error as the
-  old downgrade pointed the other way. `effort:`/`maxTurns:` are unrelated and stay.
+- **Every shipped agent inherits the session model — no `model:` pin, ever.**
+  Subagent `model:` defaults to `inherit`, so pinning it is an ACTIVE override of the
+  user's choice. Until 1.4.0 all seven pinned `sonnet`, so an Opus user's
+  `/clawness:security-audit` silently ran a tier below what they picked. 1.4.0 freed
+  the judgment agents but kept `sonnet` on `test-writer`/`perf-auditor`/`refactor-advisor`
+  as a cost saving; that broke differently on a gateway serving a non-Claude model
+  (GLM via OpenRouter): the alias resolves through `ANTHROPIC_DEFAULT_SONNET_MODEL`,
+  and unset it sends that work to Claude Sonnet, a model the user never chose. All
+  three inherit now. Frontmatter can't be conditional on the backend, so there is no
+  "pin on Anthropic, inherit elsewhere"; a user who wants cheaper mechanical agents
+  sets `CLAUDE_CODE_SUBAGENT_MODEL`. **Never hardcode `opus`/`fable` either** — same
+  error pointed the other way. `tests/test_agents.py` pins this.
+  `effort:`/`maxTurns:` are unrelated and stay.
 - **`.clawness/rules/` overrides by id, and the asymmetry with mandatory is
   deliberate (1.9.0).** `add_rules` used to be a pure append, so a project rule and
   the global rule it meant to override both entered the corpus and competed on

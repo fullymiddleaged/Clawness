@@ -141,3 +141,33 @@ def test_whole_repo_audits_do_not_name_the_builtin_review(monkeypatch):
 def test_diff_scope_alone_is_not_a_security_request():
     hook = _hook()
     assert "/security-review" not in hook.suggest_actions("tidy up this change", "")
+
+
+def test_hunting_prompts_offer_vuln_hunt_instead_of_the_audit(monkeypatch):
+    # The audit fixes your own code; a hunt ends in private disclosure. Offering
+    # both would contradict, so the hunt replaces the audit offer.
+    hook = _hook()
+    monkeypatch.setenv("CLAW_NO_SAST_OFFER", "1")
+    out = hook.suggest_actions("help me hunt for CVEs in this cloned repo, find vulnerabilities", "")
+    assert "/clawness:vuln-hunt" in out and "/clawness:security-audit" not in out
+    assert "/clawness:vuln-hunt" in hook.suggest_actions("do variant analysis on the old fix", "")
+
+
+def test_a_hunt_still_gets_the_scanner_line(monkeypatch):
+    hook = _hook()
+    monkeypatch.setattr(sast.shutil, "which", _which())
+    monkeypatch.delenv("CLAW_NO_SAST_OFFER", raising=False)
+    out = hook.suggest_actions("start a bug bounty hunt on this repo", str(_project()))
+    assert "/clawness:vuln-hunt" in out and "SAST scanner" in out
+
+
+def test_write_up_requests_offer_vuln_report_only_with_a_security_object(monkeypatch):
+    hook = _hook()
+    monkeypatch.setenv("CLAW_NO_SAST_OFFER", "1")
+    out = hook.suggest_actions("write up this vulnerability for the maintainers", "")
+    assert "/clawness:vuln-report" in out and "/clawness:security-audit" not in out
+    assert "/clawness:vuln-report" in hook.suggest_actions("draft the security advisory", "")
+    # The verb alone is everyday writing, not a disclosure.
+    assert "/clawness:vuln-report" not in hook.suggest_actions("write up the release notes", "")
+    assert "/clawness:vuln-report" not in hook.suggest_actions(
+        "report this to the maintainers as a feature request", "")

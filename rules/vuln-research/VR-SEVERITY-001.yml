@@ -1,0 +1,17 @@
+id: VR-SEVERITY-001
+domain: vuln-research
+severity: warning
+tags: [cvss, severity, score, cwe, rating, report, hunting]
+triggers: [cvss, cvss score, severity rating, how severe, critical or high, cwe, score this vulnerability, rate the severity, base score]
+when: Assigning a severity or CVSS score to a vulnerability.
+rule: >
+  Score with the current CVSS version from FIRST (4.0 at the time of writing) and
+  publish the full vector string, not just the number. Score the default
+  configuration and the attacker the evidence supports: if exploitation needs
+  authentication, a non-default setting or user interaction, the vector says so.
+  Justify every metric that isn't the obvious reading with one line of evidence, and
+  never round a High up to Critical for attention. Inflated scores cost the reporter
+  credibility and the maintainers time. Name the most specific CWE that fits, not a
+  catch-all like CWE-20.
+violation: "Critical 9.8 for a stored XSS that needs an admin account to plant, with CWE-20 and no vector"
+correct: "CVSS:4.0/AV:N/AC:L/AT:N/PR:H/UI:A/VC:L/VI:L/VA:N/SC:L/SI:L/SA:N — PR:H because only admins can edit the banner (settings.py:72); CWE-79"

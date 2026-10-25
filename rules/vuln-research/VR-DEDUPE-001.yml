@@ -1,0 +1,17 @@
+id: VR-DEDUPE-001
+domain: vuln-research
+severity: warning
+tags: [duplicate, advisory, ghsa, osv, nvd, known-cve, hunting, disclosure]
+triggers: [already disclosed, known cve, duplicate cve, existing advisory, ghsa, osv, nvd, is this new, already fixed, check advisories]
+when: About to disclose a vulnerability found in someone else's code as new.
+rule: >
+  Before calling a finding new, check that it isn't already known or fixed. Search the
+  project's published advisories (GitHub Security tab), the GitHub Advisory Database
+  and OSV for the package (`api.github.com/advisories?affects=<pkg>`, OSV's
+  `/v1/query`), NVD for the product, and the project's issues and recent commits for
+  the affected function. Re-test against the latest release and the default branch
+  HEAD, not only the version you cloned: a bug fixed upstream last week is a duplicate,
+  and a bug fixed on main but unreleased changes what the report asks for. Record what
+  you searched, so the report can state it was checked.
+violation: "Filing a report for an XXE in v2.3.1 that the maintainers fixed in v2.4.0 and published as GHSA-xxxx two months ago"
+correct: "No GHSA/OSV entry for the package mentions parse_feed(); reproduced on v2.4.0 and on main @ 9f3c2e1"

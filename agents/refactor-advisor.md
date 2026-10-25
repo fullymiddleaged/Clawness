@@ -4,7 +4,6 @@ description: >
   Analyzes code for refactoring opportunities. Identifies code smells,
   duplications, overly complex functions, tight coupling, and suggests
   specific improvements. Read-only — reports findings, doesn't modify.
-model: sonnet
 effort: medium
 maxTurns: 15
 tools: Read, Grep, Glob

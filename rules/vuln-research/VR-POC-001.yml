@@ -1,0 +1,16 @@
+id: VR-POC-001
+domain: vuln-research
+severity: error
+tags: [poc, proof-of-concept, exploit, reproduction, sandbox, hunting, safety]
+triggers: [proof of concept, poc, write an exploit, reproduce the vulnerability, demonstrate the bug, exploit script, reproduction steps, trigger the bug]
+when: Writing a proof of concept for a vulnerability found in someone else's code.
+rule: >
+  Build the smallest PoC that proves impact, against a local build at a pinned commit,
+  inside the sandbox. Never point it at a live service, a third party's infrastructure
+  or anyone's real data. Demonstrate impact with a harmless marker (write /tmp/poc, read
+  a canary file, return an attacker-chosen string), never a reverse shell, persistence,
+  data exfiltration or a payload that spreads. Record the exact commit, configuration
+  and steps so the maintainer reproduces it in one try, and keep the PoC with the
+  report rather than publishing it before the fix is released.
+violation: "A PoC that opens a reverse shell and is tested against the project's public demo instance"
+correct: "docker build at commit 9f3c2e1, then `curl 'localhost:8080/dl?file=..%2f..%2fetc%2fhostname'` returns the container hostname"
