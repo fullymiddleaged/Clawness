@@ -37,7 +37,7 @@ jobs:
         run: python -m clawness.cli --rules-dir ./rules bench
 
       - name: Retrieval quality (MRR@5 + hit-rate floors)
-        run: python -m clawness.cli --rules-dir ./rules eval --floor-mrr 0.85 --floor-hit 0.95
+        run: python -m clawness.cli --rules-dir ./rules eval --floor-mrr 0.85 --floor-hit 0.95 --floor-acc1 0.97
 
   openclaw:
     runs-on: ubuntu-latest

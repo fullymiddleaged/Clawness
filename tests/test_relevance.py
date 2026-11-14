@@ -86,12 +86,14 @@ def test_bm25_rescue_surfaces_a_rare_term_match_tfidf_alone_would_drop(tmp_path)
     floor (gauged on TF-IDF alone) dropped it despite BM25's confident #1 rank,
     silently defeating half the RRF fusion. Reproduced with a synthetic corpus
     since it doesn't occur naturally in the real (short-document) rule corpus."""
-    filler = (
-        "common word filler text about generic programming practices software "
-        "engineering conventions style guidelines architecture patterns "
-        "maintainability readability documentation "
-    )
-    _write_rule(tmp_path, "general", "GEN-RARE-001", "zzzrareterm " + filler * 15)
+    # Distinct words, not one phrase repeated: TF-IDF damps repeated terms, so
+    # repetition stops diluting the cosine once the rare word is also a trigger.
+    filler = " ".join(f"fillerword{n}" for n in range(1000)) + " "
+    # The rare word is a TRIGGER: the rescue only lifts a curated match (a
+    # prose-only one is what a topic-less prompt hits — see
+    # test_bm25_rescue_needs_a_curated_match).
+    _write_rule(tmp_path, "general", "GEN-RARE-001", "zzzrareterm " + filler,
+                triggers=("zzzrareterm",))
     for i in range(20):
         _write_rule(tmp_path, "general", f"GEN-DECOY-{i:03d}",
                     f"decoy rule number {i} about topic {i} unrelated database css docker python testing")
@@ -425,3 +427,57 @@ def test_bm25_rescue_will_not_rescue_a_narrow_rule_outside_its_project():
     wl = Clawness(RULES_DIR)
     for rid in wl.rank_ids("why is this converging so slowly", top_k=5):
         assert not rid.startswith(("CFD-", "JL-", "FT-", "ML-", "R-"))
+
+
+# --- precision (1.22) ---------------------------------------------------------
+
+from clawness.core import is_chatter  # noqa: E402
+
+HERE = {"python", "bash", "claude-code", "typescript"}
+
+
+def test_chatter_is_only_a_prompt_made_entirely_of_filler():
+    for q in ("ok", "yes go ahead", "status check", "what did you just do?",
+              "sounds good", "let's do it", "thanks, that worked"):
+        assert is_chatter(q), q
+    # One content word keeps the prompt, even beside filler words in the set.
+    for q in ("update the readme", "check the tests", "ok now fix the login bug",
+              "status of the migration", "", "   "):
+        assert not is_chatter(q), q
+    # Long all-filler text is not an acknowledgement; don't silence it.
+    assert not is_chatter(" ".join(["ok"] * 13))
+
+
+def test_chatter_retrieves_no_ranked_rules_but_floor_off_disables_the_gate():
+    assert Clawness(RULES_DIR, stack_domains=HERE).rank_ids("yes go ahead") == []
+    assert Clawness(RULES_DIR, min_relevance=0.0).rank_ids("yes go ahead")
+
+
+def test_bm25_rescue_needs_a_curated_match():
+    """The rescue exists for a rare trigger word. Before the curated check it
+    also gave a topic-less prompt one rule matched on prose — "interesting"
+    pulled in RES-CONFLICT-001."""
+    assert Clawness(RULES_DIR, stack_domains=HERE).rank_ids("interesting") == []
+
+
+def test_an_off_stack_homonym_is_explained_away():
+    """In a Claude Code plugin repo a hook is not a React hook. RCT-HOOKS-001
+    scores 0.17 here, over the 0.15 off-stack floor, so only the structural
+    check keeps it out."""
+    ids = Clawness(RULES_DIR, stack_domains=HERE).rank_ids("why is the hook slow")
+    assert "CC-HOOK-IO-001" in ids
+    assert not any(i.startswith("RCT-") for i in ids)
+
+
+def test_a_genuine_cross_stack_ask_survives_the_explain_away():
+    """Nothing on-stack explains "rag", so the LLM rule stays — at 0.155 it sits
+    in the same score band as the homonyms, which is why no floor could do this."""
+    ids = Clawness(RULES_DIR, stack_domains={"python"}).rank_ids(
+        "build a rag pipeline over our docs")
+    assert "LLM-RETRIEVE-001" in ids
+
+
+def test_explain_away_is_inert_without_a_stack():
+    wl = Clawness(RULES_DIR)
+    ranked = [(0, 0.5), (1, 0.4)]
+    assert wl._explain_away(ranked, ["hook"]) is ranked

@@ -5,6 +5,30 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.22.0] - 2026-11-14
+
+### Fixed
+
+- **Short acknowledgements no longer inject rules.** "ok", "sounds good", "yes go
+  ahead", "status check" and the like matched a stray word in some rule and pulled it
+  in on every go-ahead. A prompt made only of conversational filler now gets the
+  mandatory rules and nothing else; one real word ("update the readme") is enough to
+  retrieve as before.
+- **Fewer rules from the wrong stack on words with two meanings.** In a Claude Code
+  plugin repo, "why is the hook slow" pulled in React's hook rules; in a Python repo,
+  "refactor the session state module" pulled in FastAPI's database-session rules. A
+  rule from a stack your project doesn't use is now dropped when every word it matched
+  is already explained by a better-ranked rule that does belong, and research/science
+  rules are held to the same test. Measured across 349 genuine cross-stack questions
+  and 228 research questions, none lost its rule.
+
+### Added
+
+- `clawness eval` reports **accuracy@1** (the first rule is the right one), with an
+  opt-in `--floor-acc1` gate, and supports two new kinds of case in the ground-truth
+  file: `reject` (rules that must not be retrieved for that prompt) and `expect: []`
+  (a prompt that should retrieve nothing). Either kind failing makes the run fail.
+
 ## [1.21.0] - 2026-11-14
 
 ### Fixed

@@ -298,6 +298,38 @@ def render_memory_block(
 
 _TOKEN_RE = re.compile(r"[a-z0-9_]+")
 
+# Conversational filler: acknowledgements, go-aheads and status pings. A prompt
+# made ONLY of these words ("ok", "yes go ahead", "status check", "what did you
+# just do?") carries nothing to retrieve on, yet every one of them used to inject
+# rules: whatever rare word it had matched some rule's prose ("ok" hit
+# GEN-NESTING-001's `if (ok)` example). The test is all-words-in-set, so a word
+# like "update" or "check" here never silences "update the readme" — the content
+# word keeps the prompt. Contractions split on the apostrophe, hence the
+# fragments. Don't add technical words ("test", "fix", "commit", "next").
+# "interesting" is left out on purpose: tests/ground_truth.json uses it to pin
+# the BM25-rescue curated gate, which this set would otherwise mask.
+_CHATTER = frozenset("""
+    ok okay k kk yes yeah yep yup ya y no nope nah sure fine alright right
+    correct exactly agreed agree lgtm thanks thank thx ty cheers great good nice
+    cool perfect awesome brilliant lovely excellent wonderful amazing sounds sound
+    looks look seems go ahead continue proceed carry on keep going done let lets
+    s t m re ll ve d please pls do did does doing just now then again still what
+    why how who which where when you your i me my we us our it its that this
+    these those there here is was are be been can could would will should may
+    the a an and so but well also too to of for in with about hmm hm ah oh hi
+    hello hey status check update progress worked works working work fixed
+    explain mean meant say said tell show repeat more detail details wait hold
+    stop up nevermind try trying ready all set lol haha oops whoops sorry bad
+    weird odd strange fantastic stuff one
+""".split())
+_CHATTER_MAX_WORDS = 12
+
+
+def is_chatter(query: str) -> bool:
+    """True for a short prompt with nothing to retrieve on (see _CHATTER)."""
+    words = _TOKEN_RE.findall(query.lower())
+    return 0 < len(words) <= _CHATTER_MAX_WORDS and all(w in _CHATTER for w in words)
+
 # Maps a surface term to one or more shared concept markers. Applied to both
 # documents and queries, so any two terms sharing a concept become matchable.
 _CONCEPT_GROUPS: dict[str, tuple[str, ...]] = {
@@ -1048,6 +1080,10 @@ class Clawness:
         # ranked rules); narrow both so the type checker is satisfied below.
         if not self._ranked_rules or self._bm25 is None or self._tfidf is None:
             return []
+        # A pure acknowledgement has no topic; anything ranked would be noise.
+        # Part of the floor system, so min_relevance=0 turns it off too.
+        if self.min_relevance > 0 and is_chatter(query):
+            return []
 
         limit = limit or self.top_k
 
@@ -1120,7 +1156,8 @@ class Clawness:
                 return True
             return curated_map.get(i, 0.0) >= self.min_curated_relevance
 
-        floored = [(i, rel) for (i, rel) in ranked if _passes(i, rel)]
+        floored = self._explain_away(
+            [(i, rel) for (i, rel) in ranked if _passes(i, rel)], query_tokens)
 
         # --- BM25 rescue ---
         # RRF fuses both signals, but the floor above is gauged on TF-IDF cosine
@@ -1147,10 +1184,77 @@ class Clawness:
                 or (self.stack_domains is not None
                     and top_domain in self.stack_domains)
             )
+            # It skips the score floor, not the curated gate: a rescue exists for a
+            # rare TRIGGER token, which is curated by definition. Without this the
+            # rescue is how a signal-less prompt still got one rule, matched on a
+            # word in its example code.
+            if gate_on and curated_map.get(top_idx, 0.0) < self.min_curated_relevance:
+                rescuable = False
             if top_score > 0 and rescuable:
                 floored = [(top_idx, tfidf_map.get(top_idx, 0.0))]
 
         return floored
+
+    def _off_stack(self, domain: str) -> bool:
+        return (self.stack_domains is not None
+                and domain in _STACK_DOMAINS
+                and domain not in self.stack_domains)
+
+    def _explain_away(
+        self, ranked: list[tuple[int, float]], query_tokens: list[str]
+    ) -> list[tuple[int, float]]:
+        """Drop an off-stack rule whose every matched query word is already
+        matched by a higher-ranked rule that belongs here.
+
+        This is the homonym case: in a Python repo, "why is the hook slow" means
+        a Claude Code or git hook, yet RCT-HOOKS-001 cleared the off-stack floor
+        at 0.17 because "hook" is one of its words. No score threshold separates
+        that from a genuine cross-stack ask — "build a rag pipeline over our
+        docs" scores 0.155 against an LLM rule — so the evidence has to be
+        structural: if an on-stack or cross-cutting rule above it already
+        accounts for every content word it matched, the off-stack rule adds a
+        second meaning of the same word, not a second topic. A genuine
+        cross-stack ask matches on a word nothing on-stack explains ("rag",
+        "dockerfile", "n+1"), so it stays.
+
+        Content words only: function words match nearly every rule and would
+        make "covered" unreachable. Concept markers are excluded too, since two
+        rules sharing a marker is exactly what a homonym looks like. Inert
+        without a stack (CLI/eval), like the off-stack floor itself.
+
+        Topical domains (science/research/vuln-research) are held to the same
+        test and likewise never count as covering a word. They are cross-cutting
+        but narrow, and dropping a homonym frees a top-k slot one of them would
+        otherwise fill: with the React rules gone, "cache the response" handed
+        its fifth slot to RES-REVIEW-001 (peer-review "response")."""
+        if self.stack_domains is None or self._bm25 is None:
+            return ranked
+        words = {t for t in query_tokens
+                 if not t.startswith("__") and t not in _CHATTER}
+        if not words:
+            return ranked
+        tfs = self._bm25._term_freqs
+        covered_here: set[str] = set()  # by rules that belong in this project
+        covered_any: set[str] = set()   # by any rule kept so far
+        kept: list[tuple[int, float]] = []
+        for i, rel in ranked:
+            matched = {t for t in words if t in tfs[i]}
+            domain = self._ranked_rules[i].domain
+            if self._off_stack(domain):
+                if matched and matched <= covered_here:
+                    continue
+            elif domain in _TOPICAL_DOMAINS:
+                # Narrow topics yield to ANY rule above that already explains
+                # the word: in a TypeScript repo "response" in "cache the
+                # response" was matched by two off-stack rules above it, which
+                # still says the word meant HTTP, not peer review.
+                if matched and matched <= covered_any:
+                    continue
+            else:
+                covered_here |= matched
+            covered_any |= matched
+            kept.append((i, rel))
+        return kept
 
     def _floor_for(self, domain: str) -> float:
         """Relevance floor for a rule's domain. Language/framework rules from a

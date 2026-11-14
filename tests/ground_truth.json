@@ -1981,6 +1981,263 @@
         "python",
         "general"
       ]
+    },
+    {
+      "q": "ok",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "sure",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "thanks, that worked",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "yes go ahead",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "sounds good",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "lets do it",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "status check",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "status update",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "progress check",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "what did you just do?",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "can you explain that again",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "ok continue",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "perfect, thanks",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "agreed",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "why is the hook slow",
+      "expect": [
+        "CC-HOOK-IO-001",
+        "WF-PERF-001"
+      ],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ],
+      "reject": [
+        "RCT-HOOKS-001",
+        "RCT-FORM-001"
+      ]
+    },
+    {
+      "q": "refactor the session state module",
+      "expect": [
+        "WF-REFACTOR-001"
+      ],
+      "stack": [
+        "python"
+      ],
+      "reject": [
+        "FA-DEPENDS-001",
+        "FA-DBSESSION-001"
+      ]
+    },
+    {
+      "q": "vectorize this dataframe loop",
+      "stack": [
+        "python"
+      ],
+      "reject": [
+        "ML-VECTOR-001"
+      ]
+    },
+    {
+      "q": "this session changes behaviour globally for every package",
+      "stack": [
+        "python"
+      ],
+      "reject": [
+        "JL-DISPATCH-001"
+      ]
+    },
+    {
+      "q": "the solver is not converging, fix the residual bug",
+      "stack": [
+        "python"
+      ],
+      "reject": [
+        "CFD-CONVERGE-001"
+      ]
+    },
+    {
+      "q": "interesting",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "hmm interesting thought",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "lol nice one",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "that is weird",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "oops my bad",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
+    },
+    {
+      "q": "fantastic stuff",
+      "expect": [],
+      "stack": [
+        "python",
+        "bash",
+        "claude-code",
+        "typescript"
+      ]
     }
   ]
 }

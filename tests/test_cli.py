@@ -259,6 +259,49 @@ def test_eval_fails_below_the_hit_floor(tmp_path):
     assert "FAIL: hit-rate 0.500 < floor 0.51" in r.stderr
 
 
+def _gt(tmp_path: Path, queries: list) -> Path:
+    path = tmp_path / "gt2.json"
+    path.write_text(json.dumps({"queries": queries}), encoding="utf-8")
+    return path
+
+
+def test_eval_fails_when_a_rejected_rule_is_retrieved(tmp_path):
+    """Reject cases gate with no floor flag: they are curated must-nots."""
+    rules = _tiny_corpus(tmp_path)
+    gt = _gt(tmp_path, [
+        {"q": "kubernetes pod affinity scheduling", "expect": ["GEN-KUBE-001"]},
+        {"q": "kubernetes pod affinity", "reject": ["GEN-KUBE-001"]},
+    ])
+    r = _cli("--rules-dir", str(rules), "eval", "--data", str(gt))
+    assert r.returncode == 1
+    assert "LEAK" in r.stdout and "rejected rule(s) retrieved" in r.stderr
+    # The reject-only case is not scored as a recall miss.
+    assert "hit-rate  : 1.000  (1/1)" in r.stdout
+
+
+def test_eval_fails_when_a_silent_case_retrieves_anything(tmp_path):
+    rules = _tiny_corpus(tmp_path)
+    gt = _gt(tmp_path, [
+        {"q": "kubernetes pod affinity scheduling", "expect": ["GEN-KUBE-001"]},
+        {"q": "ok thanks", "expect": []},
+        {"q": "espresso grinder", "expect": []},
+    ])
+    r = _cli("--rules-dir", str(rules), "eval", "--data", str(gt))
+    assert r.returncode == 1
+    assert "silent    : 1/2 retrieved nothing" in r.stdout
+    assert 'NOISE: "espresso grinder"' in r.stdout
+
+
+def test_eval_accuracy_at_1_floor(tmp_path):
+    rules = _tiny_corpus(tmp_path)
+    gt = _ground_truth(tmp_path)  # one rank-1 hit, one miss: accuracy@1 = 0.5
+    ok = _cli("--rules-dir", str(rules), "eval", "--data", str(gt), "--floor-acc1", "0.5")
+    low = _cli("--rules-dir", str(rules), "eval", "--data", str(gt), "--floor-acc1", "0.51")
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    assert "accuracy@1: 0.500  (1/2)" in ok.stdout
+    assert low.returncode == 1 and "FAIL: accuracy@1 0.500 < floor 0.51" in low.stderr
+
+
 def test_eval_missing_data_file_exits_2(tmp_path):
     r = _cli("eval", "--data", str(tmp_path / "absent.json"))
     assert r.returncode == 2                      # 2 = can't run, distinct from 1 = below floor

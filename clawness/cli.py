@@ -495,7 +495,8 @@ def cmd_audit_skills(args: argparse.Namespace) -> None:
 
 def cmd_eval(args: argparse.Namespace) -> None:
     """Measure retrieval quality against a labeled ground-truth set.
-    Reports MRR@k and hit-rate; fails (exit 1) if below the given floors."""
+    Reports MRR@k, hit-rate and accuracy@1; fails (exit 1) if below the given
+    floors, or if any `reject` or silent (`expect: []`) case is violated."""
     data_path = (
         Path(args.data) if args.data
         else Path(__file__).resolve().parent.parent / "tests" / "ground_truth.json"
@@ -512,7 +513,19 @@ def cmd_eval(args: argparse.Namespace) -> None:
     k = args.top_k
     rr_sum = 0.0
     hits = 0
+    top1 = 0
     misses: list[tuple[str, list[str], list[str]]] = []
+    # Recall alone saturated at 1.000 and could no longer fail: a rule from the
+    # wrong stack sitting at #4 costs nothing on MRR or hit-rate. Three checks
+    # see what those don't. accuracy@1 is the share of cases whose FIRST rule is
+    # right. `reject` lists ids that must not reach top-k for that prompt (a
+    # homonym from another stack). `expect: []` marks a prompt that should
+    # retrieve nothing at all ("ok", "status check"). The last two are curated
+    # must-nots, so any violation fails the run, floors or not.
+    leaks: list[tuple[str, list[str]]] = []
+    noisy: list[tuple[str, list[str]]] = []
+    silent_cases = 0
+    scored = 0
 
     for entry in queries:
         q = entry["q"]
@@ -526,30 +539,59 @@ def cmd_eval(args: argparse.Namespace) -> None:
         # index, so this needs no rebuild between cases.
         wl.stack_domains = set(entry["stack"]) if entry.get("stack") else None
         ids = wl.rank_ids(q, top_k=k)
+        leaked = [rid for rid in ids if rid in set(entry.get("reject", []))]
+        if leaked:
+            leaks.append((q, leaked))
+        if "expect" not in entry:
+            continue  # a reject-only case: no right answer to score, only a wrong one
+        if not expect:
+            silent_cases += 1
+            if ids:
+                noisy.append((q, ids))
+            continue
+        scored += 1
         rank = next((i + 1 for i, rid in enumerate(ids) if rid in expect), None)
         if rank:
             rr_sum += 1.0 / rank
             hits += 1
+            top1 += rank == 1
         else:
             misses.append((q, sorted(expect), ids))
 
-    n = len(queries)
-    mrr, hit_rate = rr_sum / n, hits / n
-    print(f"Eval: {n} queries  |  top-k={k}")
+    n = scored
+    if n <= 0:
+        print("No recall cases (no query has a non-empty expect).", file=sys.stderr)
+        sys.exit(2)
+    mrr, hit_rate, acc1 = rr_sum / n, hits / n, top1 / n
+    print(f"Eval: {len(queries)} queries  |  top-k={k}")
     print(f"  MRR@{k}    : {mrr:.3f}")
     print(f"  hit-rate  : {hit_rate:.3f}  ({hits}/{n})")
+    print(f"  accuracy@1: {acc1:.3f}  ({top1}/{n})")
+    print(f"  rejects   : {len(leaks)} leak(s)")
+    print(f"  silent    : {silent_cases - len(noisy)}/{silent_cases} retrieved nothing")
     if misses:
         print(f"\n  {len(misses)} miss(es):")
         for q, expect, ids in misses:
             print(f"    - \"{q}\"")
             print(f"        expected one of {expect}; got {ids}")
+    for q, leaked in leaks:
+        print(f"  LEAK: \"{q}\" retrieved rejected {leaked}")
+    for q, ids in noisy:
+        print(f"  NOISE: \"{q}\" should retrieve nothing; got {ids}")
 
-    failed = False
+    failed = bool(leaks or noisy)
+    if leaks:
+        print(f"\nFAIL: {len(leaks)} rejected rule(s) retrieved", file=sys.stderr)
+    if noisy:
+        print(f"FAIL: {len(noisy)} silent case(s) retrieved rules", file=sys.stderr)
     if args.floor_mrr is not None and mrr < args.floor_mrr:
         print(f"\nFAIL: MRR@{k} {mrr:.3f} < floor {args.floor_mrr}", file=sys.stderr)
         failed = True
     if args.floor_hit is not None and hit_rate < args.floor_hit:
         print(f"FAIL: hit-rate {hit_rate:.3f} < floor {args.floor_hit}", file=sys.stderr)
+        failed = True
+    if args.floor_acc1 is not None and acc1 < args.floor_acc1:
+        print(f"FAIL: accuracy@1 {acc1:.3f} < floor {args.floor_acc1}", file=sys.stderr)
         failed = True
     if failed:
         sys.exit(1)
@@ -917,6 +959,8 @@ def main() -> None:
     p_eval.add_argument("--top-k", "-k", type=int, default=5)
     p_eval.add_argument("--floor-mrr", type=float, default=None, help="Fail if MRR below this")
     p_eval.add_argument("--floor-hit", type=float, default=None, help="Fail if hit-rate below this")
+    p_eval.add_argument("--floor-acc1", type=float, default=None,
+                        help="Fail if accuracy@1 (first rule correct) is below this")
 
     # audit-rules (corpus health: provenance, eval coverage, overlap, reachability)
     p_audit_rules = sub.add_parser(

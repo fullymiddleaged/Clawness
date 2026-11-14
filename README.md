@@ -166,8 +166,10 @@ Pure Python, one dependency (PyYAML), nothing to download at query time:
 - **Project memory is searched the same way**, so a long lessons log stays a few lines per
   turn. See [Project Memory](#project-memory).
 
-**Quality is measured.** `clawness eval` scores retrieval against 249 known-answer
-questions: **MRR@5 = 0.990**, **hit-rate = 1.000**, both CI-enforced.
+**Quality is measured.** `clawness eval` scores retrieval against 280 known-answer
+questions: **MRR@5 = 0.986**, **hit-rate = 1.000**, **accuracy@1 = 0.971**, all
+CI-enforced. It also checks that 20 throwaway prompts ("ok", "status check") retrieve
+nothing and that known homonyms from other stacks stay out.
 
 **Cost.** About 2 ms and roughly 850 tokens for the always-on mandatory block, plus the few
 matched rules (a typical turn is near 1,700). The mandatory block renders in full on prompt
@@ -785,7 +787,7 @@ it for security gates and testing requirements.
 
 ```bash
 clawness lint     # required fields, and rejects vague phrasing ("where appropriate")
-clawness eval     # MRR@5 + hit-rate against tests/ground_truth.json
+clawness eval     # MRR@5, hit-rate, accuracy@1 against tests/ground_truth.json
 ```
 
 If you add rules in a new area, add a query or two to `tests/ground_truth.json` so the test
@@ -890,8 +892,8 @@ clawness scan --fail-on high               # opt-in CI gate on unresolved findin
 clawness stats             # rule counts by domain + per-turn token estimate
 clawness lint              # validate rule files (incl. vague-phrasing check)
 clawness bench             # benchmark retrieval latency
-clawness eval              # retrieval quality: MRR@5 + hit-rate
-clawness eval --floor-mrr 0.85 --floor-hit 0.95   # fail below floors (CI gate)
+clawness eval              # retrieval quality: MRR@5, hit-rate, accuracy@1
+clawness eval --floor-mrr 0.85 --floor-hit 0.95 --floor-acc1 0.97   # CI gate
 
 # Corpus health (maintainers)
 clawness audit-rules                       # all checks

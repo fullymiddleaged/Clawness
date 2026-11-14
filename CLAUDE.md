@@ -24,6 +24,19 @@ dependency**. No ML models, no services, no Docker.
    floor (`CLAW_OFFSTACK_MIN_RELEVANCE`, default 0.15) so e.g. a Python repo doesn't
    surface SQL/React noise, while strong cross-domain matches still pass. Cross-cutting
    domains (general/meta/workflows/security/testing) are never penalized.
+   **Two precision checks sit beside the floors (1.22.0), because no score can do
+   their job.** `is_chatter` returns no ranked rules for a prompt made only of
+   `_CHATTER` words ("ok", "yes go ahead", "status check"); it's all-words-in-set, so
+   one content word keeps the prompt — never add a technical word to the set.
+   `_explain_away` drops an off-stack rule whose every matched content word is already
+   matched by a HIGHER-RANKED on-stack/cross-cutting rule (homonyms: "hook" → React,
+   "session" → FastAPI), and drops a topical rule whose words any higher kept rule
+   explains. A floor can't separate these: homonyms score 0.15-0.18, genuine
+   cross-stack asks 0.155-0.20 ("build a rag pipeline" 0.155). **Rank order is
+   load-bearing**: counting ALL on-stack rules (not just those above) lost 10 of 349
+   genuine cross-stack hits; the ranked-above version lost none. The BM25 rescue now
+   also needs a curated match (a rare TRIGGER is its whole purpose); without that it
+   was how "ok" got GEN-NESTING-001 via `if (ok)` in its example.
    **`science`/`research` are cross-cutting but topically NARROW** (`_TOPICAL_DOMAINS`),
    so they take a middle floor (`CLAW_TOPICAL_MIN_RELEVANCE`, default 0.12) between the
    base and off-stack floors: un-gated, so a researcher in a bare/LaTeX-only directory
@@ -877,7 +890,11 @@ dependency**. No ML models, no services, no Docker.
   edits in this repo — but **unset it before running the suite**, since the plan-gate
   tests assert the gate is on and will fail with it disabled).
 - Rules: `clawness lint` (rejects missing fields **and vague phrasing**),
-  `clawness eval --floor-mrr 0.85 --floor-hit 0.95` (MRR@5/hit-rate; CI-gated),
+  `clawness eval --floor-mrr 0.85 --floor-hit 0.95 --floor-acc1 0.97` (CI-gated).
+  Recall saturated at 1.000 and could no longer fail, so the eval also scores
+  accuracy@1 and fails on any `reject` leak or noisy `expect: []` case. Floors are
+  set at the measured value so they ratchet. Grow `reject`/silent cases when a leak
+  is found; `_explain_away` is inert without a stack, so a reject case needs `stack`.
   `clawness stats`, `clawness bench`.
 - CI (`.github/workflows/ci.yml`) runs lint + tests + eval across ubuntu/macOS/windows × py3.10–3.14.
 

@@ -289,6 +289,16 @@ def test_a_compaction_restates_the_mandatory_rules_next_prompt():
     assert "MANDATORY (in context above, still binding):" in fourth.stdout
 
 
+def test_an_acknowledgement_injects_no_ranked_rules():
+    """"sounds good" has nothing to retrieve on. The mandatory block still
+    ships; the ranked section must not, or every go-ahead costs a few rules."""
+    root = _project()
+    r = _run_hook("sounds good, lets do it", str(uuid.uuid4()), str(root))
+    assert r.returncode == 0, r.stderr
+    assert "# MANDATORY" in r.stdout
+    assert "# RELEVANT" not in r.stdout
+
+
 def test_context_watch_can_be_disabled():
     root = _project()
     env = dict(CTX, CLAW_NO_CONTEXT_WATCH="1")
