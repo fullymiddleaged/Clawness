@@ -81,6 +81,16 @@ def main() -> None:
         except Exception:
             pass
 
+    # A compaction keeps the session id but summarises the rules text away; flag
+    # it so the next prompt re-states everything. Before the opt-out for the same
+    # reason as the model stash: independent of the stack note.
+    if payload.get("source") == "compact":
+        try:
+            from clawness.session_state import mark_compacted
+            mark_compacted(payload.get("session_id", "") or "")
+        except Exception:
+            pass
+
     if os.environ.get("CLAW_NO_STACK_NOTE"):
         sys.exit(0)
 

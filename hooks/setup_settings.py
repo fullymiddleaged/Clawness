@@ -53,7 +53,7 @@ NO_PYTHON_NOTICE = (
 
 
 def build_hook_entry(hook_script: Path, timeout: int = 30, notice: bool = False,
-                     async_rewake: bool = False) -> dict:
+                     async_rewake: bool = False, async_: bool = False) -> dict:
     """Build the hook JSON object pointing at our script.
 
     Uses a portable interpreter picker (python3 -> python -> py) rather than a
@@ -97,6 +97,9 @@ def build_hook_entry(hook_script: Path, timeout: int = 30, notice: bool = False,
     # only fires when no interpreter was found — and never wakes anything.
     if async_rewake:
         entry["asyncRewake"] = True
+    # async: runs in the background and never delays the event (no wake).
+    elif async_:
+        entry["async"] = True
     return entry
 
 
@@ -122,6 +125,7 @@ CLAW_HOOK_SCRIPTS = (
     "memory_init.py",
     "handoff_check.py",
     "handoff_autostart.py",
+    "compaction_scan.py",
     "stack_detect.py",
     "changelog_check.py",
     "claude_md_check.py",
@@ -184,7 +188,7 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
       - PreToolUse + PostToolUse: plan gate (plan_gate.py)
       - PreToolUse + PostToolUse: access guard (access_guard.py)
       - SessionStart: git check, memory init, stack detect, trust ledger,
-        changelog check, CLAUDE.md size check
+        changelog check, CLAUDE.md size check, compaction scan (async)
 
     Kept in sync with .claude-plugin/plugin.json (the plugin-install path) — the
     two install methods must wire the same hooks. (ensure_deps.py is plugin-only:
@@ -364,6 +368,18 @@ def merge(settings_path: Path, hook_script: Path, dry_run: bool = False) -> str:
                                            async_rewake=True)],
             })
             results.append("handoff-autostart: added")
+
+    # --- SessionStart: learn where this user's sessions compact (background) ---
+    scan_script = hook_script.resolve().parent / "compaction_scan.py"
+    if scan_script.exists():
+        start_events = data["hooks"].setdefault("SessionStart", [])
+        if hook_already_present(start_events, scan_script):
+            results.append("compaction-scan: already configured")
+        else:
+            start_events.append({
+                "hooks": [build_hook_entry(scan_script, timeout=30, async_=True)],
+            })
+            results.append("compaction-scan: added")
 
     # --- SessionStart: project stack awareness (injects detected stack note) ---
     stack_script = hook_script.resolve().parent / "stack_detect.py"

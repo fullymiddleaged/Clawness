@@ -46,7 +46,7 @@ DEFAULT_LIMIT = _WINDOW_TIERS[0]
 # the real one. `CLAUDE_CODE_DISABLE_1M_CONTEXT=1` makes Claude Code treat them as
 # 200k again, so that env var turns this off. Matched with `search`, so Bedrock
 # (`us.anthropic.claude-opus-4-7-v1:0`) and Vertex ids resolve too.
-_NATIVE_1M_RE = re.compile(r"claude-(opus|sonnet|fable|mythos)-(\d+)(?:-(\d+))?")
+_NATIVE_1M_RE = re.compile(r"claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d+))?")
 
 
 def native_window(model: str | None) -> int | None:
@@ -65,6 +65,9 @@ def native_window(model: str | None) -> int | None:
     if family == "sonnet" and major >= 5:
         return 1_000_000
     if family == "opus" and (major, minor) >= (4, 7):
+        return 1_000_000
+    # "Haiku 5.5 ... run with the 1M window by default" (model-config docs).
+    if family == "haiku" and (major, minor) >= (5, 5):
         return 1_000_000
     return None
 
@@ -119,8 +122,26 @@ def declared_window(model: str | None) -> int | None:
             return None
     return value
 
-DEFAULT_WARN = 0.70
-DEFAULT_URGENT = 0.85
+# Thresholds as a fraction of the COMPACTION LINE — where this session will
+# actually compact (`compaction_line`), not the raw window.
+DEFAULT_WARN = 0.75
+DEFAULT_URGENT = 0.90
+# The pre-1.21 thresholds, as a fraction of the window. Still used when the
+# window is all there is to go on: an explicit CLAW_CONTEXT_LIMIT, or
+# compaction switched off (nothing compacts, so the window really is the edge).
+WINDOW_WARN = 0.70
+WINDOW_URGENT = 0.85
+# Claude Code's idle compaction: past this size, the first message after a
+# break compacts the session. Default and floor per the env-var docs for
+# CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS ("Values below 100000 are raised").
+DEFAULT_IDLE_FLOOR = 200_000
+_IDLE_FLOOR_MIN = 100_000
+# Where limit compaction fires below the window. The docs give ~967K for a
+# native 1M window and "the 200K boundary" for 200k models; the user's own
+# transcripts put the latter at ~167.6k. Both points fit window - 33k, so that
+# is the default for any window; `compaction.learned_hard_point` overrides it
+# per model wherever a real compaction has been seen.
+_COMPACT_RESERVE = 33_000
 # Below this many tokens, don't discuss context at all — a fresh session should
 # never be told it's filling up, whatever the percentages say.
 MIN_TOKENS_TO_REPORT = 20_000
@@ -133,10 +154,17 @@ _TAIL_BYTES = 256_000
 
 @dataclass
 class Usage:
-    """A snapshot of one session's context occupancy."""
+    """A snapshot of one session's context occupancy.
+
+    *line* is where the session will compact and *kind* what fires there:
+    "limit" (auto-compact), "idle" (the next message after a break) or
+    "window" (no compaction expected; the window itself is the edge).
+    """
 
     tokens: int
     limit: int
+    line: "int | None" = None
+    kind: str = "window"
 
     @property
     def fraction(self) -> float:
@@ -159,6 +187,7 @@ class Alert:
     usage: Usage
     added: int = 0      # tokens added since the previous prompt
     turns_left: int | None = None
+    switched: bool = False  # a model switch put the session past its new line
 
 
 def _env_int(name: str, default: int) -> int:
@@ -286,6 +315,108 @@ def infer_limit(tokens: int, configured: int | None = None,
     return _WINDOW_TIERS[-1]
 
 
+def _parse_tokens(raw) -> "int | None":
+    """A token count as Claude Code accepts one: 400000, "400_000", "4e5",
+    "200k", "1M". None for anything else, zero or negative."""
+    if isinstance(raw, bool):
+        return None
+    if isinstance(raw, (int, float)):
+        value = raw
+    elif isinstance(raw, str):
+        s = raw.strip().lower().replace("_", "").replace(",", "")
+        scale = 1
+        if s.endswith("k"):
+            s, scale = s[:-1], 1_000
+        elif s.endswith("m"):
+            s, scale = s[:-1], 1_000_000
+        try:
+            value = float(s) * scale
+        except ValueError:
+            return None
+    else:
+        return None
+    try:
+        value = int(value)
+    except (OverflowError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _on(name: str) -> bool:
+    return os.environ.get(name, "") not in ("", "0")
+
+
+def compaction_disabled(layers: "list[dict] | None" = None) -> bool:
+    """True when Claude Code won't auto-compact: then the window is the edge."""
+    if _on("DISABLE_COMPACT") or _on("DISABLE_AUTO_COMPACT"):
+        return True
+    from clawness.model_advisor import read_setting
+    return read_setting("autoCompactEnabled", layers) is False
+
+
+def idle_floor() -> int:
+    """Size past which the first message after a break compacts the session."""
+    value = _parse_tokens(os.environ.get("CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS", ""))
+    return max(_IDLE_FLOOR_MIN, value) if value else DEFAULT_IDLE_FLOOR
+
+
+def auto_compact_window(layers: "list[dict] | None" = None) -> "int | None":
+    """The user's auto-compact window, env var first (it "takes precedence over
+    the command, the flag, and the `autoCompactWindow` setting"), else None.
+    Values outside the documented 100K-1M range are ignored, not clamped."""
+    value = _parse_tokens(os.environ.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW", ""))
+    if value is None:
+        from clawness.model_advisor import read_setting
+        value = _parse_tokens(read_setting("autoCompactWindow", layers))
+    if value is None or not (100_000 <= value <= 1_000_000):
+        return None
+    return value
+
+
+def compaction_line(tokens: int, model: "str | None" = None,
+                    window: "int | None" = None) -> "tuple[int, str]":
+    """
+    (line, kind): the size at which this session will compact, and why.
+
+    The hard point is the lowest of: the window's default (window - 33k), the
+    user's auto-compact window, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` (which the docs
+    say can only lower it), and what this model has been SEEN to compact at
+    (`clawness.compaction`). Idle compaction then caps it: past the idle floor,
+    a break compacts the session whatever the hard point says — which, on a 1M
+    model, is what actually happens. Nothing here depends on a model list, so a
+    new model with a bigger window needs no change.
+    """
+    from clawness.model_advisor import read_settings
+    window = window or infer_limit(tokens, model=model)
+    layers = read_settings()   # once: each file read costs ~0.3ms on Windows
+    if compaction_disabled(layers):
+        return window, "window"
+
+    hard = max(window // 2, window - _COMPACT_RESERVE)
+    acw = auto_compact_window(layers)
+    if acw:
+        hard = min(hard, acw, window)
+    pct = _env_float("CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", 0.0)
+    if 1 <= pct <= 100:
+        hard = min(hard, int(min(acw or window, window) * pct / 100))
+    try:
+        from clawness.compaction import learned_hard_point
+        learned = learned_hard_point(model)
+    except Exception:
+        learned = None
+    # Ignore a learned point under half the current hard point: it was recorded
+    # under different settings (CLAUDE_CODE_DISABLE_1M_CONTEXT on a 1M model,
+    # a small auto-compact window since removed), and once those are gone the
+    # model never limit-compacts at that size again, so it would never age out.
+    if learned and learned >= hard // 2:
+        hard = min(hard, learned)
+
+    floor = idle_floor()
+    if floor < hard:
+        return floor, "idle"
+    return hard, "limit"
+
+
 def assess(
     tokens: int,
     previous_tokens: int = 0,
@@ -294,38 +425,62 @@ def assess(
     urgent: float | None = None,
     surge_fraction: float | None = None,
     model: str | None = None,
+    previous_model: str | None = None,
 ) -> Alert | None:
     """
     Decide whether this turn deserves an alert, and at what level.
 
-    *previous_tokens* is what the last prompt measured, used for the growth
-    signal. Returns None when the session is comfortable — the common case, and
+    Thresholds are fractions of the compaction line, so the alert lands before
+    compaction rather than before a 1M window fills — which it never does. An
+    explicit *limit* (or `CLAW_CONTEXT_LIMIT`) keeps the old percentage-of-window
+    behaviour. *previous_tokens* is what the last prompt measured, used for the
+    growth signal; across a model switch (*previous_model* differs) there is no
+    meaningful growth, but a switch that lands the session past its new line is
+    flagged. Returns None when the session is comfortable — the common case, and
     the one that must stay silent.
     """
     if tokens < MIN_TOKENS_TO_REPORT:
         return None
 
-    limit = limit if limit is not None else infer_limit(tokens, model=model)
-    warn = warn if warn is not None else _env_float("CLAW_CONTEXT_WARN", DEFAULT_WARN)
-    urgent = (urgent if urgent is not None
-              else _env_float("CLAW_CONTEXT_URGENT", DEFAULT_URGENT))
+    explicit = limit if limit is not None else (_env_int("CLAW_CONTEXT_LIMIT", 0) or None)
+    if explicit and explicit > 0:
+        window, line, kind = explicit, explicit, "window"
+    else:
+        window = infer_limit(tokens, model=model)
+        line, kind = compaction_line(tokens, model=model, window=window)
+    by_window = kind == "window"
+
+    warn = warn if warn is not None else _env_float(
+        "CLAW_CONTEXT_WARN", WINDOW_WARN if by_window else DEFAULT_WARN)
+    urgent = urgent if urgent is not None else _env_float(
+        "CLAW_CONTEXT_URGENT", WINDOW_URGENT if by_window else DEFAULT_URGENT)
     surge_fraction = (surge_fraction if surge_fraction is not None
                       else _env_float("CLAW_CONTEXT_SURGE", DEFAULT_SURGE_FRACTION))
 
-    usage = Usage(tokens=tokens, limit=limit)
-    added = max(0, tokens - previous_tokens) if previous_tokens else 0
+    usage = Usage(tokens=tokens, limit=window, line=line, kind=kind)
+    changed_model = bool(model and previous_model and model != previous_model)
+    # "Switched" means the switch LOWERED the line — the case that can put a
+    # session past its compaction point without it having grown at all.
+    switched = False
+    if changed_model and not explicit:
+        try:
+            switched = compaction_line(tokens, model=previous_model)[0] > line
+        except Exception:
+            switched = False
+    added = max(0, tokens - previous_tokens) if previous_tokens and not changed_model else 0
     turns_left = None
     if added > 0:
-        turns_left = max(0, int((limit - tokens) // added))
+        turns_left = max(0, int((line - tokens) // added))
 
-    if usage.fraction >= urgent:
-        return Alert("urgent", usage, added, turns_left)
-    if usage.fraction >= warn:
+    reached = tokens / line if line > 0 else 0.0
+    if reached >= urgent:
+        return Alert("urgent", usage, added, turns_left, switched=switched)
+    if reached >= warn:
         return Alert("warn", usage, added, turns_left)
-    # Growth: a big jump matters even at a comfortable percentage, because it says
+    # Growth: a big jump matters even at a comfortable level, because it says
     # the next few turns will land where the thresholds above already fire. Only
     # worth saying if it actually implies running out soon.
-    if added >= surge_fraction * limit and turns_left is not None and turns_left <= 5:
+    if added >= surge_fraction * line and turns_left is not None and turns_left <= 5:
         return Alert("surge", usage, added, turns_left)
     return None
 
@@ -341,12 +496,29 @@ def render_alert(alert: Alert) -> str:
     be its own punchline.
     """
     u = alert.usage
-    head = f"[Clawness] Context {u.percent}% full ({u.tokens:,} of ~{u.limit:,} tokens)."
+    if u.kind == "window" or not u.line:
+        head = f"[Clawness] Context {u.percent}% full ({u.tokens:,} of ~{u.limit:,} tokens)."
+    else:
+        left = u.line - u.tokens
+        if left > 0:
+            head = (f"[Clawness] Context is at {u.tokens:,} tokens; this session "
+                    f"compacts at ~{u.line:,} (~{left:,} to go).")
+        else:
+            head = (f"[Clawness] Context is at {u.tokens:,} tokens, past the ~{u.line:,} "
+                    "point where this session compacts.")
+        if u.kind == "idle":
+            head += (f" Past ~{u.line:,}, Claude Code compacts it on the first message "
+                     "after a break of about an hour, so mention that a handoff before "
+                     "stepping away avoids it.")
+        if alert.switched:
+            head += (" The model switch lowered the compaction point, so this session "
+                     "is closer to it than it was a turn ago.")
 
     if alert.level == "urgent":
         body = (
-            "Tell the user plainly that this session is near its limit and a fresh "
-            "session will work better than continuing. Offer first to write a handoff "
+            "Tell the user plainly that this session is close to being compacted, which "
+            "summarises away detail, and that a fresh session will work better than "
+            "continuing. Offer first to write a handoff "
             "to .clawness/handoff.md (where you were, current state, next step) that "
             "the next session picks up and starts on by itself: on a yes, write it with "
             "'**Autostart:** yes', then tell them to type /clear or open a new session, "

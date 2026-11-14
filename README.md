@@ -317,22 +317,37 @@ missing and to use Read/Grep for the rest.
 
 ### Context watch (Claude Code, on by default)
 
-Long sessions get worse before they break, usually without warning. Clawness reads your
-session's transcript each prompt and tells you when to move on:
+Long sessions get worse before they break, and compaction summarises away detail you may
+still need. Clawness reads your session's transcript each prompt and warns you before your
+session compacts, not before the window is full. On a 1M-window model those are very
+different points.
 
-- **~70% full:** a brief mention that a fresh session may be worth it soon.
-- **~85% full:** a recommendation to start fresh, plus an offer to write a
+- **75% of the way to compaction:** a brief mention that a fresh session may be worth it soon.
+- **90% of the way:** a recommendation to start fresh, plus an offer to write a
   [handoff](#session-handoff-claude-code-on-by-default) and save any durable lesson to
   `.clawness/memory.md`.
-- **Filling fast:** a single turn that adds a big chunk of the window is flagged while you
-  still have room to act.
+- **Filling fast:** a single turn that adds a big chunk is flagged while you still have
+  room to act.
 
-Each level fires at most once per session. The token count is read from the transcript; the
-window *size* is inferred from the `[1m]` marker on your model and corrected upward if usage
-exceeds it. On a gateway or non-Claude model (GLM via OpenRouter, say), the window you give
-Claude Code with `CLAUDE_CODE_MAX_CONTEXT_TOKENS` is used, so you set it once. Set
-`CLAW_CONTEXT_LIMIT` if the guess is still wrong, or turn the watch off with
-`CLAW_NO_CONTEXT_WATCH=1`.
+**Where your session compacts.** On a 200k-window model, Claude Code compacts at about 167k.
+On a 1M-window model it would compact near 967k, but before that, once a session passes
+200k, the first message after a break of about an hour compacts it. So by default a 1M
+session is warned at 150k and urged to hand off at 180k, and a 200k session at about 125k
+and 150k. Clawness also follows Claude Code's own `CLAUDE_CODE_AUTO_COMPACT_WINDOW` (or
+`autoCompactWindow`), `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` and
+`CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, so you set them once.
+
+**It learns from your history.** In the background at session start, Clawness reads the
+compactions recorded in your past transcripts and keeps the lowest recent one per model in
+`~/.claude/clawness/compaction.json`. The file holds token counts and model ids only, never
+transcript text. Later sessions read only what was appended, so this takes milliseconds. A
+new model calibrates itself after its first compaction.
+
+Each level fires once per model per session, so after a `/model` switch you're warned
+again for the new model, and told outright if the switch put you closer to compacting. The
+window size comes from the model id, the `[1m]` marker, or the window you give a gateway
+model with `CLAUDE_CODE_MAX_CONTEXT_TOKENS`. Set `CLAW_CONTEXT_LIMIT` to go back to
+percentages of a fixed window, or turn the watch off with `CLAW_NO_CONTEXT_WATCH=1`.
 
 ### Session handoff (Claude Code, on by default)
 
@@ -905,7 +920,7 @@ clawness agents-md --write
 | **Rules** | 236 across 32 domains | Coding, science, ML, research, LLM and vulnerability-research standards, injected per prompt |
 | **Agents** | 7 sub-agents | Security red/blue team, code critic, test writer, perf auditor, refactor advisor, architecture challenger |
 | **Skills** | 16 slash commands | See [Slash Commands](#slash-commands) — `security-audit`, `vuln-hunt`, `vuln-report`, `review`, `test`, `perf`, `add`, `status`, `user-docs`, `messaging`, plus hygiene and maintainer commands |
-| **Hooks** | 13 | Rule injection, context watch, model-tier check, output compression, plan gate, access guard, trust ledger, handoff auto-start, and the session-start checks |
+| **Hooks** | 14 | Rule injection, context watch, compaction-history scan, model-tier check, output compression, plan gate, access guard, trust ledger, handoff auto-start, and the session-start checks |
 | **CLI** | 11 commands | query, init, stats, lint, bench, eval, scan, plan, agents-md, audit-rules, audit-skills |
 | **Installers** | bash + PowerShell | With matching uninstallers, for Windows/macOS/Linux |
 
@@ -977,10 +992,10 @@ you).
 | `CLAW_NO_MODEL_ADVISOR` | (unset) | Don't check the session's model tier (Claude Code) |
 | `CLAW_NO_CONTEXT_WATCH` | (unset) | Disable context-pressure warnings (Claude Code) |
 | `CLAW_NO_SAST_OFFER` | (unset) | Don't offer to install a SAST scanner on security-scan prompts |
-| `CLAW_CONTEXT_LIMIT` | (auto) | Your context window in tokens. Auto-detected, set explicitly if the guess is wrong |
-| `CLAW_CONTEXT_WARN` | `0.70` | Fraction of the window at which to mention context is filling |
-| `CLAW_CONTEXT_URGENT` | `0.85` | Fraction at which to recommend a fresh session |
-| `CLAW_CONTEXT_SURGE` | `0.12` | A single turn adding this fraction is flagged (when ≤5 turns of headroom remain) |
+| `CLAW_CONTEXT_LIMIT` | (auto) | A fixed window in tokens. Setting it switches the watch back to percentages of that window (70%/85%) instead of the distance to compaction |
+| `CLAW_CONTEXT_WARN` | `0.75` | Fraction of the way to compaction at which to mention context is filling |
+| `CLAW_CONTEXT_URGENT` | `0.90` | Fraction of the way to compaction at which to recommend a fresh session |
+| `CLAW_CONTEXT_SURGE` | `0.12` | A single turn adding this fraction of the way to compaction is flagged (when ≤5 turns of headroom remain) |
 | `CLAW_NO_HANDOFF` | (unset) | Don't pick up `.clawness/handoff.md` at session start |
 | `CLAW_HANDOFF_BUDGET` | `2000` | Max characters of the handoff injected (keeps the head) |
 | `CLAW_NO_HANDOFF_AUTOSTART` | (unset) | Never start work on an `Autostart`-marked handoff unasked |

@@ -42,10 +42,11 @@ try:
     from clawness.core import Clawness, load_rules, Rule, render_memory_block
     from clawness.session_state import (
         bump_prompt_count,
-        context_snapshot,
+        context_snapshot_with_model,
         memory_changed,
         should_alert_context,
         should_show_full,
+        take_compacted,
     )
 except Exception:
     # Dependencies not ready yet (e.g. the SessionStart bootstrap is still
@@ -235,9 +236,10 @@ def context_note(event: dict, cwd: str, session_id: str) -> str:
     if not found:
         return ""
     tokens, model = found
-    previous = context_snapshot(session_id, tokens)
-    alert = assess(tokens, previous_tokens=previous, model=model)
-    if not alert or not should_alert_context(session_id, alert.level):
+    previous, previous_model = context_snapshot_with_model(session_id, tokens, model)
+    alert = assess(tokens, previous_tokens=previous, model=model,
+                   previous_model=previous_model)
+    if not alert or not should_alert_context(session_id, alert.level, key=model):
         return ""
     return render_alert(alert)
 
@@ -303,7 +305,11 @@ def main() -> None:
     except ValueError:
         full_every = 5
     prompt_count = bump_prompt_count(session_id)
-    show_full = should_show_full(prompt_count, full_every)
+    # After a compaction the full text was summarised away, so the next prompt
+    # re-states it whatever the cadence says. take_compacted runs either way so
+    # the one-shot flag is always consumed.
+    compacted = take_compacted(session_id)
+    show_full = should_show_full(prompt_count, full_every) or compacted
 
     # --- Detect the project's stack (codebase-aware retrieval) ---
     # Off-stack language/framework rules then face a higher relevance floor, so a
@@ -363,7 +369,7 @@ def main() -> None:
     # Reads the session's own transcript to see how full the window is, and warns
     # once per level so a long session gets told BEFORE it degrades or auto-
     # compacts. Rides this hook rather than a separate one: it's a file tail plus
-    # arithmetic (~0.5ms), not worth another process spawn per prompt. Wrapped
+    # two small reads (~1.5ms), not worth another process spawn per prompt. Wrapped
     # whole — a session that can't be measured must never break the prompt.
     if not os.environ.get("CLAW_NO_CONTEXT_WATCH"):
         try:

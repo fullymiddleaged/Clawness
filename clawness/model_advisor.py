@@ -122,23 +122,45 @@ def normalize_tier(model: "str | None") -> "int | None":
     return None
 
 
-def read_settings_model() -> "str | None":
-    """The model recorded in Claude Code's settings, or None.
-
-    Used as the fallback when SessionStart's payload carries no `model` field —
-    the docs state it is optional. settings.local.json wins over settings.json,
-    matching Claude Code's own precedence.
-    """
+def read_settings() -> "list[dict]":
+    """Claude Code's user settings files, highest precedence first
+    (settings.local.json, then settings.json). Unreadable files are skipped.
+    Read once and hand to `read_setting` when several keys are needed."""
     config = Path(os.environ.get("CLAUDE_CONFIG_DIR") or (Path.home() / ".claude"))
+    layers = []
     for name in ("settings.local.json", "settings.json"):
         try:
             data = json.loads((config / name).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        model = data.get("model")
-        if isinstance(model, str) and model.strip():
-            return model
+        if isinstance(data, dict):
+            layers.append(data)
+    return layers
+
+
+def read_setting(key: str, layers: "list[dict] | None" = None):
+    """*key* from Claude Code's user settings, or None when unset everywhere.
+
+    settings.local.json wins over settings.json, matching Claude Code's own
+    precedence. An empty string counts as unset. Pass *layers* (from
+    `read_settings`) to avoid re-reading the files for each key.
+    """
+    for data in (read_settings() if layers is None else layers):
+        value = data.get(key)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            continue
+        return value
     return None
+
+
+def read_settings_model() -> "str | None":
+    """The model recorded in Claude Code's settings, or None.
+
+    Used as the fallback when SessionStart's payload carries no `model` field —
+    the docs state it is optional.
+    """
+    model = read_setting("model")
+    return model if isinstance(model, str) else None
 
 
 def assess(prompt: str, tier: "int | None") -> "Advice | None":

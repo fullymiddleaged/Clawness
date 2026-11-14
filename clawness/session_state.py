@@ -95,43 +95,106 @@ def memory_changed(session_id: str, memory_path: "str | Path") -> bool:
     return changed
 
 
-def context_snapshot(session_id: str, tokens: int) -> int:
-    """Record this prompt's context size and return the PREVIOUS one (0 if none).
+def context_snapshot_with_model(
+    session_id: str, tokens: int, model: "str | None" = None
+) -> "tuple[int, str | None]":
+    """Record this prompt's context size and model; return the PREVIOUS pair.
 
-    The delta between the two is the growth signal in `context_watch.assess`.
-    Any error returns 0, which reads as "no growth data" and suppresses only the
-    surge alert — the level thresholds still work off the absolute number."""
+    The token delta is the growth signal in `context_watch.assess`; a changed
+    model is how it notices a `/model` switch. Any error returns (0, None),
+    which reads as "no growth data, no switch" and suppresses only the surge
+    alert and the switch wording — the levels still work off the absolute
+    number."""
     if not session_id:
-        return 0
+        return 0, None
     state = _load(session_id)
     try:
         previous = int(state.get("context_tokens", 0))
     except (TypeError, ValueError):
         previous = 0
+    prev_model = state.get("context_model")
+    prev_model = prev_model if isinstance(prev_model, str) and prev_model else None
+    # A context that more than halved was compacted (or rewound): the session
+    # will fill again, so the levels already raised must be able to fire again.
+    # Without this a compacted session never warns a second time — it keeps its
+    # id, and with it the record that "urgent" was already said.
+    if previous and int(tokens) < previous // 2:
+        state.pop("context_alerts", None)
+        state.pop("context_alert", None)
     state["context_tokens"] = int(tokens)
+    if model:
+        state["context_model"] = str(model)
     _save(session_id, state)
-    return previous
+    return previous, prev_model
 
 
-def should_alert_context(session_id: str, level: str) -> bool:
-    """True if *level* hasn't been raised for this session yet; records it.
+def context_snapshot(session_id: str, tokens: int) -> int:
+    """Record this prompt's context size and return the PREVIOUS one (0 if none)."""
+    return context_snapshot_with_model(session_id, tokens)[0]
+
+
+def should_alert_context(session_id: str, level: str, key: "str | None" = None) -> bool:
+    """True if *level* hasn't been raised for this session and *key* yet; records it.
 
     Context alerts fire on a condition that stays true once reached — without
     this the same warning would repeat every prompt for the rest of the session,
     which is how a useful nudge turns into noise the user learns to ignore. An
     escalation (warn -> urgent) is still allowed through; a repeat is not.
 
+    *key* is the model: each model has its own compaction point, so a `/model`
+    switch re-arms the levels — being warned on a 1M model says nothing about
+    the 200k one you just moved to. A pre-1.21 state file kept a single string;
+    it reads as the record for the no-model key.
+
     Fails toward alerting: a missed warning is worse than a duplicated one."""
     if not session_id or not level:
         return True
     order = {"surge": 0, "warn": 1, "urgent": 2}
     state = _load(session_id)
-    seen = state.get("context_alert")
+    alerts = state.get("context_alerts")
+    if not isinstance(alerts, dict):
+        alerts = {}
+        legacy = state.get("context_alert")
+        if isinstance(legacy, str):
+            alerts[""] = legacy
+    k = key or ""
+    seen = alerts.get(k)
     if seen == level or (
         seen in order and level in order and order[level] <= order[seen]
     ):
         return False
-    state["context_alert"] = level
+    alerts[k] = level
+    state["context_alerts"] = alerts
+    state.pop("context_alert", None)
+    _save(session_id, state)
+    return True
+
+
+def mark_compacted(session_id: str) -> None:
+    """Record that this session was just compacted (SessionStart, source "compact").
+
+    Compaction summarises the earlier turns away, including the full mandatory
+    rules text and the memory entries shown at the session's start, but the
+    session keeps its id, so the cadence would carry on as if they were still
+    in context. This flags the next prompt for a full render (`take_compacted`),
+    forgets the memory mtime so its newest entries show again, and clears the
+    context alerts so the refilled session is warned again."""
+    if not session_id:
+        return
+    state = _load(session_id)
+    state["compacted"] = True
+    for key in ("memory_mtime", "context_alerts", "context_alert"):
+        state.pop(key, None)
+    _save(session_id, state)
+
+
+def take_compacted(session_id: str) -> bool:
+    """True once after `mark_compacted`, clearing the flag."""
+    if not session_id:
+        return False
+    state = _load(session_id)
+    if not state.pop("compacted", False):
+        return False
     _save(session_id, state)
     return True
 

@@ -220,17 +220,73 @@ def test_escalation_from_warn_to_urgent_still_speaks_up():
 
 def test_hook_reads_the_window_from_the_transcript_model():
     """No CLAW_CONTEXT_LIMIT, no settings: the transcript's model id alone decides.
-    180k is 90% of 200k but 18% of a native 1M window."""
+    At 140k a 200k-window model is past its warn line (0.75 x 167k limit
+    compaction) while a native 1M model is still short of its own (0.75 x the
+    200k idle-compaction floor = 150k)."""
     root = _project()
     env = {"CLAW_CONTEXT_LIMIT": "0", "CLAUDE_CODE_DISABLE_1M_CONTEXT": "0",
            "CLAUDE_CONFIG_DIR": tempfile.mkdtemp()}
     native = _run_hook("implement a feature", str(uuid.uuid4()), str(root), env,
-                       transcript=_transcript(180_000, "claude-opus-5-5"))
+                       transcript=_transcript(140_000, "claude-opus-5-5"))
     opt_in = _run_hook("implement a feature", str(uuid.uuid4()), str(root), env,
-                       transcript=_transcript(180_000, "claude-haiku-4-5"))
+                       transcript=_transcript(140_000, "claude-haiku-4-5"))
     assert native.returncode == 0, native.stderr
     assert "CLAWNESS CONTEXT" not in native.stdout
-    assert "CLAWNESS CONTEXT" in opt_in.stdout
+    assert "CLAWNESS CONTEXT" in opt_in.stdout and "compacts at ~167,000" in opt_in.stdout
+
+
+def test_a_native_1m_session_is_warned_before_idle_compaction():
+    """The 1.19.0 regression: a native 1M session was silent until 700k, but
+    Claude Code idle-compacts it past 200k. 180k is 90% of that line."""
+    root = _project()
+    env = {"CLAW_CONTEXT_LIMIT": "0", "CLAUDE_CODE_DISABLE_1M_CONTEXT": "0",
+           "CLAUDE_CONFIG_DIR": tempfile.mkdtemp()}
+    r = _run_hook("implement a feature", str(uuid.uuid4()), str(root), env,
+                  transcript=_transcript(180_000, "claude-opus-5-5"))
+    assert "CLAWNESS CONTEXT" in r.stdout
+    assert "compacts at ~200,000" in r.stdout and "break" in r.stdout
+    assert "fresh session" in r.stdout
+
+
+def test_a_model_switch_rearms_and_flags_the_lower_line():
+    """Warned on a 1M model, then /model to a 200k one at the same size: the
+    new model's levels are re-armed and the switch is named."""
+    root = _project()
+    sid = str(uuid.uuid4())
+    env = {"CLAW_CONTEXT_LIMIT": "0", "CLAUDE_CODE_DISABLE_1M_CONTEXT": "0",
+           "CLAUDE_CONFIG_DIR": tempfile.mkdtemp()}
+    first = _run_hook("one", sid, str(root), env,
+                      transcript=_transcript(185_000, "claude-opus-5-5"))
+    second = _run_hook("two", sid, str(root), env,
+                       transcript=_transcript(185_000, "claude-opus-4-6"))
+    assert "CLAWNESS CONTEXT" in first.stdout
+    assert "CLAWNESS CONTEXT" in second.stdout
+    assert "model switch lowered" in second.stdout
+
+
+def test_a_compaction_restates_the_mandatory_rules_next_prompt():
+    """Compaction summarises the full rules text away but keeps the session id,
+    so the cadence alone would leave only an id list for up to four prompts.
+    SessionStart(source=compact) flags the next prompt for a full render."""
+    import subprocess
+    root = _project()
+    sid = str(uuid.uuid4())
+    first = _run_hook("one", sid, str(root))
+    second = _run_hook("two", sid, str(root))
+    assert "# MANDATORY" in first.stdout
+    assert "MANDATORY (in context above, still binding):" in second.stdout
+
+    env = dict(os.environ)
+    env["CLAW_NO_STACK_NOTE"] = "1"  # the compaction flag must not depend on it
+    subprocess.run(
+        [sys.executable, str(REPO / "hooks" / "stack_detect.py")],
+        input=json.dumps({"session_id": sid, "cwd": str(root), "source": "compact"}),
+        capture_output=True, text=True, env=env, check=True,
+    )
+    third = _run_hook("three", sid, str(root))
+    fourth = _run_hook("four", sid, str(root))
+    assert "# MANDATORY" in third.stdout
+    assert "MANDATORY (in context above, still binding):" in fourth.stdout
 
 
 def test_context_watch_can_be_disabled():

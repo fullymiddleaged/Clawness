@@ -75,7 +75,11 @@ dependency**. No ML models, no services, no Docker.
    prompt after (default 5); other turns get a one-line id list — the rules stay just as
    binding, only their re-statement shrinks. State is a per-session JSON file in the OS
    temp dir (never the project), fails toward a full render on any error. Project
-   memory does NOT ride this cadence — see below.
+   memory does NOT ride this cadence — see below. **A compaction keeps the session id
+   but summarises the full text away**, so `stack_detect` calls `mark_compacted` on
+   SessionStart `source == "compact"` and the next prompt renders in full
+   (`take_compacted`), with memory's newest entries and the context alerts re-armed.
+   It rides `stack_detect` rather than a new hook, before that hook's opt-out.
 3. **Project memory** (`<project>/.clawness/memory.md`, logic in `clawness/memory.py`):
    a per-codebase lessons log, appended after the rules block. **Retrieved, not
    dumped** (since 1.2.0): `parse_memory` splits the file into `## Always` entries
@@ -126,8 +130,9 @@ dependency**. No ML models, no services, no Docker.
    reads the session's own transcript (`transcript_path` in the hook payload; falls
    back to reconstructing `<config>/projects/<slugified-cwd>/<session_id>.jsonl`) and
    warns the user *before* the window fills and quality degrades. Rides the existing
-   UserPromptSubmit hook rather than adding one — it's a file tail plus arithmetic
-   (~0.5ms), not worth another process spawn per prompt.
+   UserPromptSubmit hook rather than adding one — a file tail, one settings read and
+   the small learned-compaction cache (~1.5ms on Windows), not worth another process
+   spawn per prompt.
    - **Context size is read, not estimated.** The last assistant entry's
      `input_tokens + cache_creation_input_tokens + cache_read_input_tokens` IS the
      prompt that was just sent. Only the last 256KB of the file is read (a transcript
@@ -149,13 +154,42 @@ dependency**. No ML models, no services, no Docker.
      Claude Code's assumption for it. **Don't drop either middle tier**: without them a 1M
      session false-alarms all through 140k-200k (an Opus 5.5 session at 158k was told
      "79% full" before 1.19.0), which is exactly how users learn to ignore the warning.
-   - Levels: `warn` (70%, brief mention), `urgent` (85%, recommend a fresh session and
+   - **Thresholds are fractions of the COMPACTION LINE, not the window (1.21.0).**
+     Once 1.19.0 read native 1M windows correctly, 70%/85% meant 700k/850k and the
+     watch went silent. Yet all 15 of the maintainer's 1M-model compactions fired at
+     201k-525k: they were *idle* compactions (first message after a 67-534 minute break,
+     past `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, default 200k), and the ~967k limit was
+     never reached. On 200k models the limit compaction fired at ~167k, already
+     below the old 85% "urgent" level. `compaction_line` returns the lowest of
+     window - 33k (fits both documented points), Claude Code's auto-compact window,
+     setting or percentage override, and the learned point, then caps it at the idle
+     floor. It never consults a model list, so a bigger future window needs no change.
+     `CLAW_CONTEXT_LIMIT` keeps the old percentage-of-window path (as does compaction
+     switched off), and that's the only place 0.70/0.85 survive.
+   - **The learned point** (`clawness/compaction.py`, fed by `hooks/compaction_scan.py`,
+     async SessionStart) reads `compact_boundary` records from every transcript under
+     `<config>/projects` into `<config>/clawness/compaction.json`. It is global, not
+     per project, because history spans projects. It learns only `trigger == "auto"`
+     with <30 minutes since the last main-chain reply: learning idle compactions would
+     teach a 1M model a 201k "limit" it doesn't have. Per-file byte offsets mean no
+     byte is read twice; the cold scan of 459 MB took ~1s and later runs ~8ms; a 2s
+     budget bounds any run. The minimum of the last 5 samples ages out a one-off low
+     value, and `compaction_line` ignores a learned point under half the default, since
+     one recorded under `CLAUDE_CODE_DISABLE_1M_CONTEXT` would otherwise never age out.
+     The raw byte search also matches this file's own source when it's discussed in
+     a transcript, so every hit is parsed and checked; don't trust the byte match.
+   - Levels: `warn` (0.75 of the line), `urgent` (0.90, recommend a fresh session and
      offer a handoff + memory write), and `surge` — a single turn adding >=12% of the
-     window with <=5 turns of headroom left, so a session filling fast is flagged while
+     line with <=5 turns of headroom left, so a session filling fast is flagged while
      there's still room to act. Below `MIN_TOKENS_TO_REPORT` (20k) it never speaks.
-   - **Each level alerts at most once per session** (`should_alert_context`);
-     escalation warn→urgent passes, repeats don't. The condition stays true once
-     reached, so without dedup it would fire every prompt for the rest of the session.
+   - **Each level alerts at most once per session PER MODEL** (`should_alert_context`,
+     keyed by the transcript's model id); escalation warn→urgent passes, repeats don't.
+     The condition stays true once reached, so without dedup it would fire every prompt
+     for the rest of the session. Per-model because a `/model` switch moves the line: a
+     switch that lowers it is flagged (`Alert.switched`), and the surge delta is
+     dropped across a switch. A context that more than halves between prompts clears
+     the record (`context_snapshot_with_model`): the session was compacted or rewound
+     and will refill, and without the reset its second fill would pass in silence.
    - Fails silent on every path, opt-out `CLAW_NO_CONTEXT_WATCH`.
 5. **Session handoff** (`clawness/handoff.py` + `hooks/handoff_check.py`, SessionStart):
    the other half of the context watch. At ~85% full it offers to write
@@ -608,9 +642,12 @@ dependency**. No ML models, no services, no Docker.
   session-aware re-injection (`bump_prompt_count`, `memory_changed`, `should_show_full`),
   plus context-watch state (`context_snapshot`, `should_alert_context`).
 - `clawness/context_watch.py` — context-pressure watch (`read_context_tokens`,
-  `infer_limit`, `assess`, `render_alert`, `find_transcript`). `limit_from_settings`
-  delegates the settings read to `model_advisor.read_settings_model` (one source of
-  truth for "what model is configured?"), keeping only the `[1m]` reading here.
+  `infer_limit`, `compaction_line`, `assess`, `render_alert`, `find_transcript`).
+  Settings reads (`model`, `autoCompactWindow`, `autoCompactEnabled`) all go through
+  `model_advisor.read_setting`, one source of truth for Claude Code's settings files.
+- `clawness/compaction.py` — learned compaction points (`scan_history`, `scan_file`,
+  `learned_hard_point`); cache at `<config>/clawness/compaction.json`. Run by the
+  async `hooks/compaction_scan.py`, read per prompt by `compaction_line`.
 - `clawness/model_advisor.py` — model-tier advice (`normalize_tier`, `assess`,
   `should_advise`, `render_advice`, `read_settings_model`).
 - `clawness/sast.py` — SAST readiness for the suggested-actions line (`installed_scanners`,

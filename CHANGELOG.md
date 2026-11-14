@@ -5,6 +5,45 @@ All notable changes to Clawness will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.21.0] - 2026-11-14
+
+### Fixed
+
+- **The context watch warns you again before your session compacts.** Since 1.19.0 it
+  measured 1M-window models (Opus 4.7+, Sonnet 5+, Fable) against the full 1M, so it
+  stayed silent until 700k. Claude Code compacts those sessions far earlier: past 200k,
+  the first message after a break of about an hour compacts them. On 200k models the
+  old "urgent" level (170k) came after compaction (~167k). The watch now warns at 75%
+  and 90% of the way to where your session will actually compact: 150k and 180k on a
+  1M model, about 125k and 150k on a 200k one.
+- Haiku 5.5 is recognised as a native 1M-window model.
+- **A compacted session is warned again as it refills.** It keeps its session id, so the
+  warnings it had already received stayed "said" and the second fill passed in silence.
+- **The full rules come back right after a compaction.** Compaction summarises them away,
+  but the next few prompts showed only their ids until the regular full re-statement.
+  The first prompt after a compaction now shows them in full, with your newest memory
+  entries.
+
+### Added
+
+- **The context watch learns where your sessions compact.** In the background at
+  session start, Clawness reads the compactions recorded in your past transcripts and
+  keeps the lowest recent one per model in `~/.claude/clawness/compaction.json`. That
+  file holds token counts and model ids, never transcript text. Later sessions read only
+  new transcript data, so this takes milliseconds, and a new model calibrates itself
+  after its first compaction.
+- It follows Claude Code's own compaction settings: `CLAUDE_CODE_AUTO_COMPACT_WINDOW` /
+  `autoCompactWindow`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`,
+  `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS`, and compaction switched off.
+- After a `/model` switch you're warned again for the new model, and told outright if
+  the switch put you closer to compacting.
+
+### Changed
+
+- `CLAW_CONTEXT_WARN` / `CLAW_CONTEXT_URGENT` now mean a fraction of the way to
+  compaction (defaults 0.75 / 0.90). Setting `CLAW_CONTEXT_LIMIT` restores the old
+  percentage-of-window behaviour (70% / 85%).
+
 ## [1.20.0] - 2026-10-25
 
 ### Added

@@ -191,15 +191,17 @@ def test_disable_1m_env_turns_native_detection_off():
 
 def test_transcript_model_prevents_the_200k_false_alarm():
     # The live case that motivated this: an Opus 5.5 session at ~152k was told
-    # it was 76% full of an assumed 200k window.
+    # it was 76% full of an assumed 200k window. Since 1.21 the alert is keyed
+    # to the compaction line (200k idle floor on a 1M model), so 140k — 70% of
+    # that — is the quiet point that still separates the two windows.
     cfg = Path(tempfile.mkdtemp())
     with _Env(CLAUDE_CONFIG_DIR=str(cfg), CLAW_CONTEXT_LIMIT=None,
               CLAUDE_CODE_DISABLE_1M_CONTEXT=None):
         assert infer_limit(152_000, model="claude-opus-5-5") == 1_000_000
-        assert assess(152_000, 150_000, model="claude-opus-5-5") is None
+        assert assess(140_000, 138_000, model="claude-opus-5-5") is None
         # A model with an opt-in window still assumes the small one.
         assert infer_limit(152_000, model="claude-haiku-4-5") == 200_000
-        assert assess(152_000, 150_000, model="claude-haiku-4-5").level == "warn"
+        assert assess(140_000, 138_000, model="claude-haiku-4-5").level == "warn"
 
 
 _DECLARED_OFF = dict(CLAUDE_CODE_MAX_CONTEXT_TOKENS=None, DISABLE_COMPACT=None,
@@ -214,8 +216,9 @@ def test_declared_window_applies_to_a_non_claude_model():
                  "CLAUDE_CODE_MAX_CONTEXT_TOKENS": "400000"}):
         assert declared_window("z-ai/glm-5.3") == 400_000
         assert infer_limit(150_000, model="z-ai/glm-5.3") == 400_000
-        # 150k of 400k is 37% — under the 200k guess it would have been 75% (warn).
-        assert assess(150_000, 149_000, model="z-ai/glm-5.3") is None
+        # 400k window: the line is the 200k idle floor, and 140k is 70% of it.
+        # Under the 200k guess the line would be 167k, and 140k would warn.
+        assert assess(140_000, 139_000, model="z-ai/glm-5.3") is None
         # No usage record read yet: still honoured.
         assert declared_window(None) == 400_000
 
@@ -420,3 +423,162 @@ if __name__ == "__main__":
 def test_urgent_text_offers_an_autostart_handoff():
     out = render_alert(Alert("urgent", Usage(tokens=180_000, limit=200_000)))
     assert "**Autostart:** yes" in out and "/clear" in out
+
+
+# --- the compaction line (1.21) -------------------------------------------
+
+from clawness.context_watch import (  # noqa: E402
+    auto_compact_window, compaction_line, idle_floor,
+)
+
+_LINE_ENV = dict(
+    CLAW_CONTEXT_LIMIT=None, CLAUDE_CODE_DISABLE_1M_CONTEXT=None,
+    CLAUDE_CODE_MAX_CONTEXT_TOKENS=None, CLAUDE_CODE_AUTO_COMPACT_WINDOW=None,
+    CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=None, CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS=None,
+    DISABLE_COMPACT=None, DISABLE_AUTO_COMPACT=None,
+    CLAW_CONTEXT_WARN=None, CLAW_CONTEXT_URGENT=None,
+)
+
+
+def _line_env(settings: "dict | None" = None, **kw) -> _Env:
+    """A clean config dir (no learned cache, no settings) plus *kw*."""
+    cfg = Path(tempfile.mkdtemp())
+    if settings is not None:
+        (cfg / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
+    return _Env(**{**_LINE_ENV, "CLAUDE_CONFIG_DIR": str(cfg), **kw})
+
+
+def _learn(model: str, pre: int) -> None:
+    """Seed the learned-compaction cache under the current CLAUDE_CONFIG_DIR."""
+    from clawness import compaction as C
+    p = C.cache_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps({"v": 1, "files": {},
+                             "models": {model: {"samples": [pre]}}}), encoding="utf-8")
+
+
+def test_default_lines_for_each_window():
+    with _line_env():
+        assert compaction_line(50_000, window=200_000) == (167_000, "limit")
+        # A 1M window compacts at ~967k, but idle compaction caps it at 200k.
+        assert compaction_line(50_000, window=1_000_000) == (200_000, "idle")
+        assert compaction_line(50_000, model="claude-opus-5-5") == (200_000, "idle")
+        # A bigger future window needs no table entry.
+        assert compaction_line(50_000, window=2_000_000) == (200_000, "idle")
+
+
+def test_default_thresholds_land_before_compaction():
+    with _line_env():
+        assert assess(124_000, 123_000, model="claude-haiku-4-5") is None
+        assert assess(125_250, 124_000, model="claude-haiku-4-5").level == "warn"
+        assert assess(150_300, 149_000, model="claude-haiku-4-5").level == "urgent"
+        assert assess(149_000, 148_000, model="claude-opus-5-5") is None
+        assert assess(150_000, 149_000, model="claude-opus-5-5").level == "warn"
+        assert assess(180_000, 179_000, model="claude-opus-5-5").level == "urgent"
+
+
+def test_a_learned_point_lowers_the_line():
+    with _line_env():
+        _learn("claude-haiku-4-5", 150_000)
+        assert compaction_line(50_000, model="claude-haiku-4-5") == (150_000, "limit")
+
+
+def test_a_learned_point_far_below_the_window_is_ignored():
+    """Learned under CLAUDE_CODE_DISABLE_1M_CONTEXT, then the var was removed:
+    a 1M model must not stay stuck at 167k forever."""
+    with _line_env():
+        _learn("claude-opus-5-5", 167_000)
+        # 167k is under half the 967k hard point: ignored; idle floor governs.
+        assert compaction_line(50_000, model="claude-opus-5-5") == (200_000, "idle")
+
+
+def test_the_auto_compact_window_env_and_setting():
+    with _line_env(CLAUDE_CODE_AUTO_COMPACT_WINDOW="150k"):
+        assert auto_compact_window() == 150_000
+        assert compaction_line(50_000, model="claude-opus-5-5") == (150_000, "limit")
+    with _line_env(settings={"autoCompactWindow": 120_000}):
+        assert compaction_line(50_000, model="claude-opus-5-5") == (120_000, "limit")
+    # The env var beats the setting, and out-of-range values are ignored.
+    with _line_env(settings={"autoCompactWindow": 120_000},
+                   CLAUDE_CODE_AUTO_COMPACT_WINDOW="180000"):
+        assert auto_compact_window() == 180_000
+    with _line_env(CLAUDE_CODE_AUTO_COMPACT_WINDOW="50000"):
+        assert auto_compact_window() is None
+
+
+def test_the_percentage_override_only_lowers():
+    with _line_env(CLAUDE_AUTOCOMPACT_PCT_OVERRIDE="50"):
+        assert compaction_line(50_000, window=200_000) == (100_000, "limit")
+    with _line_env(CLAUDE_AUTOCOMPACT_PCT_OVERRIDE="100"):
+        assert compaction_line(50_000, window=200_000) == (167_000, "limit")
+
+
+def test_the_idle_floor_is_tunable_and_clamped():
+    with _line_env(CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS="300000"):
+        assert idle_floor() == 300_000
+        assert compaction_line(50_000, window=1_000_000) == (300_000, "idle")
+    with _line_env(CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS="20000"):
+        assert idle_floor() == 100_000          # "values below 100000 are raised"
+    with _line_env(CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS="junk"):
+        assert idle_floor() == 200_000
+
+
+def test_compaction_off_falls_back_to_the_window():
+    for kw in ({"DISABLE_COMPACT": "1"}, {"DISABLE_AUTO_COMPACT": "1"}):
+        with _line_env(**kw):
+            assert compaction_line(50_000, window=1_000_000) == (1_000_000, "window")
+    with _line_env(settings={"autoCompactEnabled": False}):
+        assert compaction_line(50_000, window=200_000) == (200_000, "window")
+        assert assess(140_000, 139_000, model="claude-haiku-4-5").level == "warn"
+
+
+def test_an_explicit_limit_keeps_the_old_percentage_behaviour():
+    with _line_env(CLAW_CONTEXT_LIMIT="1000000"):
+        assert assess(180_000, 179_000, model="claude-opus-5-5") is None
+        assert assess(700_000, 699_000, model="claude-opus-5-5").level == "warn"
+
+
+def test_haiku_5_5_is_a_native_1m_model():
+    with _line_env():
+        assert native_window("claude-haiku-5-5") == 1_000_000
+        assert native_window("claude-haiku-4-5") is None
+
+
+def test_the_idle_note_explains_breaks_and_the_distance_left():
+    with _line_env():
+        out = render_alert(assess(180_000, 179_000, model="claude-opus-5-5"))
+    assert "compacts at ~200,000" in out and "~20,000 to go" in out
+    assert "break" in out and "fresh session" in out
+
+
+def test_a_switch_to_a_smaller_model_is_flagged_and_skips_the_surge():
+    with _line_env():
+        a = assess(160_000, 158_000, model="claude-opus-4-6",
+                   previous_model="claude-opus-5-5")
+        assert a.level == "urgent" and a.switched and a.added == 0
+        assert "model switch lowered" in render_alert(a)
+        # Switching UP is not "lowered", even when still urgent.
+        b = assess(185_000, 184_000, model="claude-opus-5-5",
+                   previous_model="claude-opus-4-6")
+        assert b.level == "urgent" and not b.switched
+
+
+def test_surge_is_measured_against_the_line_not_the_window():
+    with _line_env():
+        # +60k at 100k on a 1M model: 1M-relative it's 6% (quiet), but the line
+        # is 200k, so 30% of it in one turn with ~1 turn left.
+        a = assess(100_000, 40_000, model="claude-opus-5-5")
+        assert a is not None and a.level == "surge" and a.turns_left == 1
+
+
+def test_alert_dedup_is_per_model():
+    sid = "ctx-test-" + os.urandom(6).hex()
+    assert should_alert_context(sid, "urgent", key="claude-opus-5-5") is True
+    assert should_alert_context(sid, "warn", key="claude-opus-5-5") is False
+    assert should_alert_context(sid, "warn", key="claude-opus-4-6") is True
+
+
+def test_past_the_line_says_so_instead_of_zero_to_go():
+    with _line_env():
+        out = render_alert(assess(232_454, 231_000, model="claude-opus-5-5"))
+    assert "past the ~200,000 point" in out and "to go" not in out
